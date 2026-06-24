@@ -1,5 +1,9 @@
+using System.Globalization;
+using System.Net;
+using System.Threading.RateLimiting;
 using Cai.Scoring;
 using Cai.Web.Components;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,8 +15,58 @@ var rubricsRoot = builder.Configuration["Rubrics:Root"]
     ?? Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "..", "rubrics"));
 builder.Services.AddSingleton(new RubricCatalogStore(rubricsRoot));
 
+// Behind the dgx1 nginx reverse proxy: trust X-Forwarded-* so the rate limiter partitions by the REAL client IP.
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.KnownNetworks.Clear();
+    o.KnownProxies.Clear(); // the proxy is a different host; accept the forwarded chain (we only use it for limiting, never auth)
+});
+
+// API rate limiting (public read API): 1/second AND 3/minute AND 15/day, per client IP, chained so a request must pass
+// all three. EXEMPT: loopback callers (the co-located Watchdog surveyor calls cai locally) and an optional partner key.
+// Only /api is limited — the UI and the client-side WASM calculator never hit it.
+var partnerKey = builder.Configuration["RateLimit:PartnerKey"];
+bool Exempt(HttpContext ctx) =>
+    (ctx.Connection.RemoteIpAddress is { } ip && IPAddress.IsLoopback(ip))
+    || (!string.IsNullOrEmpty(partnerKey) && ctx.Request.Headers["X-CAI-Partner"] == partnerKey);
+
+RateLimitPartition<string> Window(HttpContext ctx, string tag, int permit, TimeSpan window)
+{
+    if (!ctx.Request.Path.StartsWithSegments("/api") || Exempt(ctx))
+    {
+        return RateLimitPartition.GetNoLimiter("exempt");
+    }
+
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    return RateLimitPartition.GetFixedWindowLimiter($"{tag}:{ip}",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = permit, Window = window, QueueLimit = 0 });
+}
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.CreateChained(
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, "s", 1, TimeSpan.FromSeconds(1))),
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, "m", 3, TimeSpan.FromMinutes(1))),
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, "d", 15, TimeSpan.FromDays(1))));
+    options.OnRejected = async (ctx, ct) =>
+    {
+        ctx.HttpContext.Response.Headers.RetryAfter = "1";
+        if (ctx.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retry))
+        {
+            ctx.HttpContext.Response.Headers.RetryAfter = ((int)retry.TotalSeconds).ToString(CultureInfo.InvariantCulture);
+        }
+
+        await ctx.HttpContext.Response.WriteAsJsonAsync(
+            new { error = "rate limit exceeded — cache the rubric you use; see https://cai.canine.dev/api-reference" }, ct);
+    };
+});
+
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+app.UseRateLimiter();
 app.UseStaticFiles();
 app.UseAntiforgery();
 

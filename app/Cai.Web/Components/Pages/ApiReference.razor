@@ -12,6 +12,23 @@
 </div></div>
 
 <section><div class="wrap">
+    <h2>Rate limits</h2>
+    <p>To keep the standard free and available, <strong>every <code>/api</code> endpoint</strong> is rate-limited per
+        client IP:</p>
+    <ul>
+        <li><strong>1 request / second</strong></li>
+        <li><strong>3 requests / minute</strong></li>
+        <li><strong>15 requests / day</strong></li>
+    </ul>
+    <p>The limits chain — a request must satisfy all three. Over the limit returns <code>429 Too Many Requests</code>
+        with a <code>Retry-After</code> header. <strong>The rubric catalog is immutable per version, so cache the rubric
+        you use</strong> — you should never need to fetch a given version more than once. The client-side
+        <a href="/calculator">WASM calculator</a> runs entirely in your browser and is <em>not</em> rate-limited.</p>
+    <div class="callout"><p style="margin:0">The Watchdog surveyor (watchdog.canine.dev) calls these same public
+        endpoints, exempt from the limit as a co-located partner.</p></div>
+</div></section>
+
+<section><div class="wrap">
     <h2>Rubric catalog</h2>
 
     <h3>GET <code>/api/rubrics</code></h3>
