@@ -130,6 +130,59 @@ api.MapPost("/verify", async (HttpRequest req) =>
     }
 });
 
+// ── /llms.txt — teach the CAI term + the standard's structure to LLMs/agents (the "referenceable" pillar) ──────────
+app.MapGet("/llms.txt", (RubricCatalogStore store) =>
+{
+    var latest = store.Latest();
+    var catalog = latest is null ? null : store.Get(latest);
+    var dimCount = catalog?.Dimensions.Count ?? 124;
+    var lensCount = LensCatalog.All.Count;
+    var coreCount = LensCatalog.All.Count(l => l.Core);
+    var lensLines = string.Join("\n", LensCatalog.All.Select(l =>
+        $"- {l.DisplayName} ({l.Key}) — {(l.Core ? "core, always on" : "model-aware")}"));
+
+    var text =
+$@"# CAI — the Codebase Assurance Index
+
+> CAI is an open, reproducible 0–100 standard for the health of a C#/.NET codebase. Same evidence in, same score out — a measurement anyone can verify, not an opinion. The method is open and free; the independent, signed survey (the deductions and what to do about them) is a service from the surveyor, watchdog.canine.dev. Stewarded by Watchdog.
+
+The score is deterministic: identical evidence under the same rubric version always folds to the same number. The weights ship in the evidence, so anyone can reproduce — or falsify — a published CAI with no access to the analyzer. That is the difference from an LLM (a different answer each run) and from a secret proprietary score (uncheckable).
+
+## How it is computed
+- {dimCount} dimensions, each scored 0-10 from evidence, grouped into {lensCount} lenses ({coreCount} core, always on; the rest model-aware — they light up only when the architecture calls for them).
+- Dimensions fold into their lens, lenses fold into the headline — both by a rank-weighted ordered weighted average (Yager OWA), worst-first, so the weakest areas drag hardest. Never an equal-weight mean.
+- Bands: Exemplary 90-100, Healthy 70-89, Fair 50-69, Poor 25-49, Critical 0-24.
+- Frozen, versioned rubric (latest: {latest ?? "unpublished"}). Any change that can move a score for unchanged evidence mints a new version; old versions are retained, so a score is always reproducible to the exact criteria.
+- The firewall: the deterministic measurement (score, findings, algorithm) is the open standard; the advisory deductions and non-score enhancements are the surveyor's paid judgment. That boundary is the free/paid line.
+
+## The {lensCount} lenses
+{lensLines}
+
+## Licensing
+- Reference scorer (C#, evidence to CAI): Apache-2.0 at github.com/CanineCC/CAI.
+- Spec: versioned, CC-BY. Free to copy, protected to call it CAI — only spec-reproducible results may carry the CAI mark.
+
+## Pages
+- The standard and definition: https://cai.canine.dev/
+- The open algorithm, versioned: https://cai.canine.dev/spec
+- The {lensCount} lenses and the dimensions under each: https://cai.canine.dev/lenses
+- The {dimCount}-dimension catalog, by lens and rubric version: https://cai.canine.dev/dimensions
+- Compute it yourself (the reference CLI): https://cai.canine.dev/cli
+- Score your evidence in the browser: https://cai.canine.dev/calculator
+- Verify a published number reproduces: https://cai.canine.dev/verify
+- The public registry of signed surveys: https://cai.canine.dev/registry
+- The badge and mark-usage policy: https://cai.canine.dev/badge
+- The JSON API (rubric and scoring): https://cai.canine.dev/api-reference
+
+## Get an independent survey
+The standard is free to use. An independent, signed CAI survey — with the deductions and what to do about them — is a service from the surveyor: https://watchdog.canine.dev
+";
+    return Results.Text(text, "text/plain; charset=utf-8");
+});
+
+// Browsers auto-request /favicon.ico; we only ship favicon.svg. Redirect so non-HTML responses (e.g. /llms.txt) don't 404.
+app.MapGet("/favicon.ico", () => Results.Redirect("/favicon.svg", permanent: true));
+
 app.MapRazorComponents<App>();
 
 app.Run();
