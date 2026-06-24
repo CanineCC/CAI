@@ -70,7 +70,8 @@ table.lenses th { color: var(--ink-soft); font-weight: 600; }
 /* Bands */
 .bands { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
 .band { padding: 0.4rem 0.8rem; border-radius: 8px; font-weight: 600; font-size: 0.88rem; color: #fff; }
-.b-strong { background: #1a7f4b; } .b-fair { background: #2f7fb5; } .b-weak { background: #b9770a; } .b-poor { background: #c0392b; }
+.b-exemplary { background: #0E5C3A; } .b-strong { background: #3C8F59; } .b-adequate { background: #2f7fb5; }
+.b-weak { background: #CF6B3A; } .b-critical { background: #9C2D2A; }
 
 /* Footer — Watchdog stewardship lives here only */
 footer.site { padding: 2.5rem 0; color: var(--ink-soft); font-size: 0.9rem; }

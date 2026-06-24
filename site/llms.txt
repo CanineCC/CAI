@@ -11,7 +11,8 @@
 - A measurement, never a certification. The tool evidences the automatable slice; a named human attests the rest.
 
 ## Bands
-Strong 80–100 · Fair 60–79 · Weak 40–59 · Poor 0–39.
+Exemplary 90–100 · Strong 70–89 · Adequate 50–69 · Weak 25–49 · Critical 0–24 (fixed thresholds; a rubric version
+changes how the score is computed, never how a computed score is banded).
 
 ## Pages
 - [The Standard / spec](https://cai.canine.dev/spec.html) — the open algorithm, versioned.

@@ -77,6 +77,41 @@ f(commit, rubric-2026.08.15) → 73   # next year, same inputs, same output</pre
     <p><a class="btn" href="/lenses.html">See every lens and dimension →</a></p>
   </section>
 
+  <section id="evidence">
+    <h2>The evidence bundle</h2>
+    <p>A score is computed from an <strong>evidence bundle</strong> — the open, portable record of what was measured.
+      Producing a bundle (measuring the code) is the analyzer's job; <strong>scoring</strong> a bundle is open and
+      anyone can do it. A bundle carries the rubric version, the measured lenses with their 0–100 score and OWA weight,
+      and (for transparency) the per-dimension results.</p>
+    <pre>{
+  "rubricVersion": "rubric-2026.06.0",
+  "commit": "3f9a1c2",
+  "headlineScore": 72.2,
+  "lenses": [
+    { "lens": "securityCompliance",  "score": 58, "owaWeight": 0.24 },
+    { "lens": "maturity",            "score": 65, "owaWeight": 0.20 },
+    { "lens": "architecture",        "score": 72, "owaWeight": 0.18 },
+    { "lens": "codeHealth",          "score": 86, "owaWeight": 0.14 },
+    { "lens": "productionReadiness", "score": 80, "owaWeight": 0.12 },
+    { "lens": "accessibility",       "score": 90, "owaWeight": 0.06 },
+    { "lens": "performance",         "score": 88, "owaWeight": 0.06 }
+  ]
+}</pre>
+    <p>A dimension or lens measured at <strong>confidence 0 is absent</strong> from the bundle, never a raw 0.0 — "not
+      assessed" must never read as "failed".</p>
+
+    <h3>The fold</h3>
+    <p>The headline is a <strong>worst-first ordered-weighted average</strong> of the measured lenses:</p>
+    <pre>headline = Σ (lensScore × owaWeight)
+        = 58·0.24 + 65·0.20 + 72·0.18 + 86·0.14 + 80·0.12 + 90·0.06 + 88·0.06
+        = 72.2   →  Strong</pre>
+    <p>The weights are <strong>worst-first</strong>: the weakest lenses carry the most weight, so a codebase cannot
+      average a serious weakness away behind its strengths. Because the weights are published <em>inside the evidence</em>,
+      the fold is exact and reproducible by anyone — no access to the analyzer required. The
+      <a href="https://github.com/CanineCC/CAI">reference implementation (<code>scorer/</code>, Apache-2.0)</a> does
+      exactly this; <a href="/cli.html">run it yourself</a> or <a href="/verify.html">verify a published number</a>.</p>
+  </section>
+
   <section>
     <h2>We never score a line</h2>
     <p>Some of the most predictive signals are not in any single file — they are in how the code has changed over time. These are mined <strong>deterministically from git history</strong> and folded into the same number, through the Maturity and Architecture lenses:</p>
@@ -93,14 +128,18 @@ f(commit, rubric-2026.08.15) → 73   # next year, same inputs, same output</pre
 
   <section>
     <h2>The bands</h2>
-    <p>A raw 0–100 is placed into one of four bands. Bands are the human-readable summary; the underlying number is always available.</p>
+    <p>A raw 0–100 is placed into one of five fixed-valence bands (always worst→best in the same order, so the band is a
+      reading on its own). Bands are the human-readable summary; the underlying number is always available.</p>
     <div class="bands">
-      <div class="band b-strong"><strong>Strong</strong><span>80–100</span></div>
-      <div class="band b-fair"><strong>Fair</strong><span>60–79</span></div>
-      <div class="band b-weak"><strong>Weak</strong><span>40–59</span></div>
-      <div class="band b-poor"><strong>Poor</strong><span>0–39</span></div>
+      <div class="band b-exemplary"><strong>Exemplary</strong><span>90–100</span></div>
+      <div class="band b-strong"><strong>Strong</strong><span>70–89</span></div>
+      <div class="band b-adequate"><strong>Adequate</strong><span>50–69</span></div>
+      <div class="band b-weak"><strong>Weak</strong><span>25–49</span></div>
+      <div class="band b-critical"><strong>Critical</strong><span>0–24</span></div>
     </div>
-    <p class="muted">A contract floor of CAI ≥ 80 (<em>Strong</em>) means every always-on lens is Strong or better with no lens Critical — decomposable, not opaque.</p>
+    <p class="muted">A contract floor of CAI ≥ 70 (<em>Strong</em>) is a typical bar; the floor is the contract's to set.
+      The thresholds are part of the standard and don't move between rubric versions — a rubric version changes how the
+      score is computed, never how a computed score is banded.</p>
   </section>
 
   <section>

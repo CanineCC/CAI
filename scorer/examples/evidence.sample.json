@@ -1,0 +1,19 @@
+{
+  "rubricVersion": "rubric-2026.06.0",
+  "commit": "3f9a1c2",
+  "headlineScore": 72.2,
+  "lenses": [
+    { "lens": "securityCompliance",  "score": 58, "owaWeight": 0.24 },
+    { "lens": "maturity",            "score": 65, "owaWeight": 0.20 },
+    { "lens": "architecture",        "score": 72, "owaWeight": 0.18 },
+    { "lens": "codeHealth",          "score": 86, "owaWeight": 0.14 },
+    { "lens": "productionReadiness", "score": 80, "owaWeight": 0.12 },
+    { "lens": "accessibility",       "score": 90, "owaWeight": 0.06 },
+    { "lens": "performance",         "score": 88, "owaWeight": 0.06 }
+  ],
+  "dimensions": [
+    { "id": "D8",  "lens": "securityCompliance", "score": 4.0, "confidence": 0.9 },
+    { "id": "D15", "lens": "maturity",           "score": 6.5, "confidence": 0.8 },
+    { "id": "D5",  "lens": "architecture",       "score": 7.2, "confidence": 0.95 }
+  ]
+}

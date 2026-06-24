@@ -39,8 +39,15 @@
     <li><strong>Compare.</strong> Same evidence + same rubric ⇒ the same 0–100 and band. A mismatch is falsifiable proof
       the published number is wrong.</li>
   </ol>
-  <pre>cai verify ./survey-evidence --rubric 2026.08.15 --expect 82
-# → ✓ reproduced: CAI 82 (Strong) under rubric 2026.08.15</pre>
+  <pre># reproduce the headline the survey published, from its evidence bundle
+dotnet run --project Cai.Cli -- verify survey-evidence.json
+# → ✓ reproduced: CAI 72 (Strong) under rubric rubric-2026.06.0 (claimed 72, Δ0.00)
+
+# a number that doesn't follow from the evidence fails (exit 1)
+dotnet run --project Cai.Cli -- verify survey-evidence.json --expect 90
+# → ✗ MISMATCH: evidence folds to 72.20 but the bundle claims 90.00 (Δ17.80 > 0.50)</pre>
+  <p class="muted">The weights are published inside the evidence, so the fold is exact: same bundle ⇒ the same number,
+    for anyone, with no access to the analyzer.</p>
 </div></section>
 
 <section><div class="wrap">

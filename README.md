@@ -16,7 +16,26 @@ independent, signed *survey* (the deductions and what to do) is a service from t
 - **Reproducible**: same evidence + same rubric version ⇒ the same number. Falsifiable by design.
 - A **measurement, never a certification** — the tool evidences the automatable slice; a named human attests the rest.
 
-Bands: **Strong** 80–100 · **Fair** 60–79 · **Weak** 40–59 · **Poor** 0–39.
+Bands: **Exemplary** 90–100 · **Strong** 70–89 · **Adequate** 50–69 · **Weak** 25–49 · **Critical** 0–24.
+
+## The reference scorer (`/scorer`)
+
+The open, reproducible half of the standard, in C# (Apache-2.0). Measuring a codebase into an **evidence bundle** is
+the analyzer's job; **scoring** the bundle is open — the headline is a worst-first ordered-weighted average of the lens
+scores (`Σ lensScore × owaWeight`), banded. Because the weights are published in the evidence, anyone can reproduce or
+falsify a published number with no access to the engine.
+
+```
+cd scorer
+dotnet test                                                     # the scorer's own tests
+dotnet run --project Cai.Cli -- score  examples/evidence.sample.json
+dotnet run --project Cai.Cli -- verify examples/evidence.sample.json             # ✓ reproduced
+dotnet run --project Cai.Cli -- verify examples/evidence.sample.json --expect 90 # ✗ mismatch (exit 1)
+```
+
+`Cai.Scoring` is the library (bands, lenses, evidence bundle, the fold); `Cai.Cli` is the `cai` tool; `Cai.Tests`
+covers determinism, banding, the fold, and verify. The evidence-bundle format + the algorithm are documented at
+[cai.canine.dev/spec](https://cai.canine.dev/spec.html#evidence).
 
 ## The site (`/site`)
 

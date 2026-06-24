@@ -34,19 +34,26 @@
 
 <section><div class="wrap">
   <h2>How it works</h2>
-  <p class="muted">The pipeline is deterministic: a codebase (or a captured <em>evidence bundle</em>) goes in; dimensions
-    are measured, grouped by lens, and weighted under a frozen rubric version; one 0–100 comes out, with its band.</p>
-  <pre># clone the reference implementation
+  <p class="muted">The standard splits cleanly in two. <strong>Measuring</strong> a codebase into an
+    <a href="/spec.html#evidence">evidence bundle</a> (the per-lens scores + their weights) is the analyzer's job.
+    <strong>Scoring</strong> that bundle — folding the lenses worst-first into the 0–100 CAI and banding it — is open,
+    deterministic, and what this reference implementation does. So you can recompute and verify any published number from
+    its evidence, no engine required.</p>
+  <pre># build the reference scorer (C#, Apache-2.0)
 git clone https://github.com/CanineCC/CAI
+cd CAI/scorer
 
-# score a codebase under a pinned rubric version
-cai score ./my-repo --rubric 2026.08.15
+# score an evidence bundle
+dotnet run --project Cai.Cli -- score examples/evidence.sample.json
 
-# → CAI 82 (Strong) · rubric 2026.08.15
-#   reproducible: same code + same rubric version ⇒ same number</pre>
-  <p class="muted">The exact CLI surface is documented in the repository; this page is a pointer to the canonical
-    source. The point is the property, not the packaging: <strong>nothing about the number is hidden, and you never have
-    to take it on trust.</strong></p>
+# → CAI 72 (Strong)  ·  rubric rubric-2026.06.0
+#     securityCompliance  58.0   w0.240   13.92   ← worst lens, most weight
+#     maturity            65.0   w0.200   13.00
+#     ...   (the full lens fold is printed, nothing hidden)</pre>
+  <p class="muted">The headline is <code>Σ(lensScore × owaWeight)</code> — an ordered-weighted average that puts the most
+    weight on your <em>weakest</em> lens, so a real problem can't be averaged away behind strengths. The weights are
+    published in the evidence, so the fold is reproducible by anyone. <strong>Nothing about the number is hidden, and you
+    never have to take it on trust.</strong></p>
 </div></section>
 
 <section><div class="wrap">
