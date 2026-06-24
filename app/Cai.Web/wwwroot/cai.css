@@ -72,6 +72,12 @@ pre { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 
 .fig .ff-t { fill: var(--ink); font-family: var(--sans); font-size: 14px; font-weight: 600; }
 .fig .ff-tm { fill: var(--ink-soft); font-family: var(--sans); font-size: 12px; }
 
+/* Dimension catalog filter */
+.dim-toolbar { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin: 1.25rem 0 1.5rem; }
+.dim-toolbar input[type="search"] { flex: 1; min-width: 16rem; padding: 0.55rem 0.8rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font-size: 1rem; font-family: inherit; }
+.dim-toolbar input[type="search"]:focus { outline: none; border-color: var(--accent); }
+.dim-toolbar .count { color: var(--ink-soft); font-size: 0.9rem; white-space: nowrap; }
+
 /* Lens table */
 table.lenses { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: 0.94rem; }
 table.lenses th, table.lenses td { text-align: left; padding: 0.7rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }

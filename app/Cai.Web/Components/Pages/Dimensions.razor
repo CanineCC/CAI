@@ -31,26 +31,69 @@
             <span class="muted small">@_versions.Count published versions · <a href="/api/rubrics/@_catalog.RubricVersion/catalog">this catalog as JSON</a></span>
         </form>
 
+        <div class="dim-toolbar">
+            <input type="search" id="dim-filter" placeholder="Filter @(_catalog.Dimensions.Count) dimensions by name, ID, or what they measure…" aria-label="Filter dimensions" autocomplete="off" />
+            <span class="count" id="dim-count">@(_catalog.Dimensions.Count) dimensions</span>
+        </div>
+
         @foreach (var lens in _catalog.Lenses)
         {
             var dims = _catalog.InLens(lens.Key).ToList();
             if (dims.Count == 0) { continue; }
-            <h2 id="@lens.Key">@lens.Label <span class="muted" style="font-weight:400">· @dims.Count dimensions</span></h2>
-            <table class="lenses">
-                <thead><tr><th style="width:4.5rem">ID</th><th>Dimension</th><th>What it measures</th><th style="width:6rem">Evaluator</th></tr></thead>
-                <tbody>
-                    @foreach (var d in dims)
-                    {
-                        <tr>
-                            <td><code>@d.Id</code></td>
-                            <td>@d.Name @if (d.Family == "meta") { <span class="pill">meta</span> }</td>
-                            <td class="muted">@d.WhatItMeasures</td>
-                            <td>@(d.Evaluator == "llm" ? "LLM · advisory" : "tool")</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+            <div class="lens-block">
+                <h2 id="@lens.Key">@lens.Label <span class="muted" style="font-weight:400">· @dims.Count dimensions</span></h2>
+                <table class="lenses">
+                    <thead><tr><th style="width:4.5rem">ID</th><th>Dimension</th><th>What it measures</th><th style="width:6rem">Evaluator</th></tr></thead>
+                    <tbody>
+                        @foreach (var d in dims)
+                        {
+                            <tr>
+                                <td><code>@d.Id</code></td>
+                                <td>@d.Name @if (d.Family == "meta") { <span class="pill">meta</span> }</td>
+                                <td class="muted">@d.WhatItMeasures</td>
+                                <td>@(d.Evaluator == "llm" ? "LLM · advisory" : "tool")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
+
+        <p id="dim-nomatch" class="muted" hidden>No dimensions match that filter.</p>
+
+        <script>
+            (function () {
+                function setup() {
+                    var input = document.getElementById('dim-filter');
+                    if (!input || input.dataset.wired) { return; }
+                    input.dataset.wired = '1';
+                    var blocks = Array.prototype.slice.call(document.querySelectorAll('.lens-block'));
+                    var countEl = document.getElementById('dim-count');
+                    var noMatch = document.getElementById('dim-nomatch');
+                    var total = document.querySelectorAll('.lens-block tbody tr').length;
+                    function apply() {
+                        var q = input.value.trim().toLowerCase();
+                        var shown = 0;
+                        blocks.forEach(function (block) {
+                            var visible = 0;
+                            block.querySelectorAll('tbody tr').forEach(function (tr) {
+                                var match = q === '' || tr.textContent.toLowerCase().indexOf(q) !== -1;
+                                tr.hidden = !match;
+                                if (match) { visible++; }
+                            });
+                            block.hidden = visible === 0;
+                            shown += visible;
+                        });
+                        if (countEl) { countEl.textContent = q === '' ? (total + ' dimensions') : (shown + ' of ' + total + ' dimensions'); }
+                        if (noMatch) { noMatch.hidden = shown !== 0; }
+                    }
+                    input.addEventListener('input', apply);
+                    apply();
+                }
+                setup();
+                document.addEventListener('enhancedload', setup);
+            })();
+        </script>
     }
 </div></section>
 
