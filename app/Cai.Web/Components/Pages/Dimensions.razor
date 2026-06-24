@@ -43,7 +43,7 @@
             <div class="lens-block">
                 <h2 id="@lens.Key">@lens.Label <span class="muted" style="font-weight:400">· @dims.Count dimensions</span></h2>
                 <table class="lenses">
-                    <thead><tr><th style="width:4.5rem">ID</th><th>Dimension</th><th>What it measures</th><th style="width:6rem">Evaluator</th></tr></thead>
+                    <thead><tr><th style="width:4rem">ID</th><th>Dimension</th><th>What it measures</th><th>Why it matters</th><th style="width:5.5rem">Evaluator</th></tr></thead>
                     <tbody>
                         @foreach (var d in dims)
                         {
@@ -51,6 +51,7 @@
                                 <td><code>@d.Id</code></td>
                                 <td>@d.Name @if (d.Family == "meta") { <span class="pill">meta</span> }</td>
                                 <td class="muted">@d.WhatItMeasures</td>
+                                <td class="muted">@(Cai.Web.CaiDimConsequences.For(d.Id) ?? "")</td>
                                 <td>@(d.Evaluator == "llm" ? "LLM · advisory" : "tool")</td>
                             </tr>
                         }
