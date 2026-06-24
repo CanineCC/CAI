@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CAI specification — the open algorithm</title>
+  <meta name="description" content="The Codebase Assurance Index (CAI) specification: one reproducible 0–100 score for a C#/.NET codebase, computed deterministically from evidence under a frozen, versioned rubric. The open standard, version CAI-1.0.">
+  <link rel="stylesheet" href="/cai.css">
+</head>
+<body>
+
+<header class="site"><div class="wrap">
+  <a class="brand" href="/">CA<b>I</b></a>
+  <nav>
+    <a href="/spec.html" aria-current="page">The Standard</a>
+    <a href="/lenses.html">Lenses</a>
+    <a href="/cli.html">Compute it yourself</a>
+    <a href="/registry.html">Registry</a>
+    <a href="/verify.html">Verify</a>
+  </nav>
+  <a class="cta" href="https://watchdog.canine.dev">Get a survey →</a>
+</div></header>
+
+<main class="wrap">
+
+  <div class="hero">
+    <p class="eyebrow">Specification · CAI-1.0</p>
+    <h1>The CAI algorithm</h1>
+    <p class="lede">The Codebase Assurance Index is one reproducible 0–100 score for a whole C#/.NET codebase. It is computed deterministically from evidence under a frozen, versioned rubric — a measurement, not an opinion. Same code in, same rubric, same number out.</p>
+  </div>
+
+  <section>
+    <h2>Inputs → score</h2>
+    <p>The CAI is the output of a fixed pipeline. Nothing in it is a free-form opinion; every stage is defined by the rubric and reproducible by anyone holding the same inputs.</p>
+    <div class="cards">
+      <div class="card">
+        <h3>1 · Evidence</h3>
+        <p>A static analyzer reads the source and emits deterministic findings. Git history is mined in the same pass for behavioural signals. This is observed fact about the code — not a model's judgement.</p>
+      </div>
+      <div class="card">
+        <h3>2 · Dimensions</h3>
+        <p>Evidence is scored into roughly 120 named <em>dimensions</em>, each with a stable ID (e.g. <code>D5</code>) and a published rule. Each dimension is one tool measurement.</p>
+      </div>
+      <div class="card">
+        <h3>3 · Lenses</h3>
+        <p>Dimensions are grouped into <em>lenses</em> — Code Health, Architecture, Maturity, and so on — the unit a contract pins against.</p>
+      </div>
+      <div class="card">
+        <h3>4 · Weighted roll-up</h3>
+        <p>Lens scores are combined under the rubric's weights into a single 0–100, then placed in a band. Inapplicable lenses drop out and the weights re-normalise.</p>
+      </div>
+    </div>
+    <p class="muted">An advisory LLM read may annotate a small number of findings in plain English. By construction it sits outside this pipeline and can never move the headline number.</p>
+  </section>
+
+  <section>
+    <h2>The frozen rubric is versioned</h2>
+    <p>A score is meaningless without the ruler it was measured against. Every CAI is therefore reported together with the rubric version it was computed under — for example <span class="pill">rubric-2026.08.15</span>.</p>
+    <p>The core property of the standard is <strong>reproducibility</strong>: the same commit, scored under the same rubric version with the same advisory data, yields byte-for-byte the same number. Any change to a scoring rule that could move the score for unchanged code requires a rubric version bump — so a number is always re-derivable from a rule you can read.</p>
+    <pre>CAI = f(commit, rubric_version)
+
+f(commit, rubric-2026.08.15) → 73   # today
+f(commit, rubric-2026.08.15) → 73   # next year, same inputs, same output</pre>
+  </section>
+
+  <section>
+    <h2>Lenses &amp; dimensions</h2>
+    <p>The CAI is composed of approximately 120 dimensions grouped into lenses. Five <strong>core lenses</strong> are always on, because they apply to any C#/.NET codebase:</p>
+    <div class="cards">
+      <div class="card"><h3>Code Health</h3><p>Complexity, duplication, oversized types, dead code, test depth.</p></div>
+      <div class="card"><h3>Architecture</h3><p>Layering, dependency cycles, bounded-context leakage, change coupling.</p></div>
+      <div class="card"><h3>Maturity</h3><p>Evolution over time, hotspots, knowledge concentration and freshness.</p></div>
+      <div class="card"><h3>Production-Readiness</h3><p>Deployment automation, error handling, observability, idempotency.</p></div>
+      <div class="card"><h3>Security &amp; Compliance</h3><p>Known-vulnerable dependencies, committed secrets, injection guards, automatable controls.</p></div>
+    </div>
+    <p><strong>Model-aware lenses</strong> — Domain Modelling, Event-Driven, Event Sourcing, Accessibility, Performance — light up only when the architecture calls for them. A codebase is never penalised for a lens that does not apply, and a single lens reading <em>Critical</em> caps the headline so a serious failure cannot hide behind strong scores elsewhere.</p>
+    <p><a class="btn" href="/lenses.html">See every lens and dimension →</a></p>
+  </section>
+
+  <section>
+    <h2>We never score a line</h2>
+    <p>Some of the most predictive signals are not in any single file — they are in how the code has changed over time. These are mined <strong>deterministically from git history</strong> and folded into the same number, through the Maturity and Architecture lenses:</p>
+    <div class="cards">
+      <div class="card"><h3>Churn × complexity hotspots</h3><p>Files that change often and carry high complexity — the strongest maintenance-risk signal there is, over a rolling window.</p></div>
+      <div class="card"><h3>Hidden coupling</h3><p>Files that keep changing together across a module boundary with no code dependency — logical coupling static analysis is blind to.</p></div>
+      <div class="card"><h3>Bus factor / key-person</h3><p>Code whose living knowledge sits with a single author, by time-decayed authorship — key-person risk located, not guessed.</p></div>
+    </div>
+    <div class="callout">
+      <p><strong>Where history is shallow, these dimensions abstain rather than guess.</strong> No history, no measurement: an absent or shallow git log makes the affected dimensions report <em>not measured</em> and drop out of the roll-up — they are never filled with a fabricated value.</p>
+    </div>
+    <p class="muted">The standard evidences the automatable slice of codebase quality. It never certifies, and it never scores a line of code by reading it like a reviewer — every dimension is a rule over evidence.</p>
+  </section>
+
+  <section>
+    <h2>The bands</h2>
+    <p>A raw 0–100 is placed into one of four bands. Bands are the human-readable summary; the underlying number is always available.</p>
+    <div class="bands">
+      <div class="band b-strong"><strong>Strong</strong><span>80–100</span></div>
+      <div class="band b-fair"><strong>Fair</strong><span>60–79</span></div>
+      <div class="band b-weak"><strong>Weak</strong><span>40–59</span></div>
+      <div class="band b-poor"><strong>Poor</strong><span>0–39</span></div>
+    </div>
+    <p class="muted">A contract floor of CAI ≥ 80 (<em>Strong</em>) means every always-on lens is Strong or better with no lens Critical — decomposable, not opaque.</p>
+  </section>
+
+  <section>
+    <h2>Versioning policy</h2>
+    <p>The specification itself is versioned (this document is <span class="pill">CAI-1.0</span>), and so is the rubric. The two move independently: the spec defines the algorithm; the rubric instantiates the rules and weights the algorithm runs against.</p>
+    <div class="cards">
+      <div class="card">
+        <h3>Frozen for a contract</h3>
+        <p>An engagement can pin a repository to a frozen rubric version for the duration of a contract, so bidders price against fixed criteria. The ruler stops moving under the parties — any movement in the score is the asset changing, never the rubric.</p>
+      </div>
+      <div class="card">
+        <h3>Bumps are disclosed</h3>
+        <p>Any rule change that can move a score for unchanged code bumps the rubric version and is recorded in the changelog. A scoring change not reflected in the published spec fails CI.</p>
+      </div>
+      <div class="card">
+        <h3>Advisory data refreshes</h3>
+        <p>Vulnerability data refreshes even under a frozen rubric, so a newly published CVE can legitimately move a security finding. That is a real signal, disclosed — not a moved ruler.</p>
+      </div>
+      <div class="card">
+        <h3>Deviations are disclosed</h3>
+        <p>Where a survey applies a profile, suppression, or compliance declaration, it changes what the artifact <em>says</em>, never the CAI — and the deviation is stated on the face of the report.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="callout">
+    <h3>Don't take our word for it</h3>
+    <p>The algorithm is open and the score is reproducible. Run it yourself, or check a survey you've been handed against the published rubric.</p>
+    <div class="btns">
+      <a class="btn primary" href="/cli.html">Compute it yourself →</a>
+      <a class="btn" href="/verify.html">Verify a survey →</a>
+    </div>
+  </div>
+
+</main>
+
+<footer class="site"><div class="wrap">
+  <div><strong>Codebase Assurance Index</strong> — an open, reproducible standard. Apache-2.0.<br>
+    <span class="muted">Stewarded by <a href="https://watchdog.canine.dev">Watchdog</a>, the independent surveyor.</span></div>
+  <nav>
+    <a href="/spec.html">Spec</a><a href="/lenses.html">Lenses</a><a href="/cli.html">CLI</a>
+    <a href="/verify.html">Verify</a><a href="/registry.html">Registry</a><a href="/badge.html">Badge</a>
+    <a href="https://github.com/CanineCC/CAI">GitHub</a><a href="/llms.txt">llms.txt</a>
+  </nav>
+</div></footer>
+
+</body>
+</html>

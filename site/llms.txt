@@ -1,0 +1,26 @@
+# CAI — the Codebase Assurance Index
+
+> CAI is an open, reproducible 0–100 standard for the health of a C#/.NET codebase. Same code in, same score out — a
+> deterministic measurement anyone can verify. The method is open; the independent, signed survey (the judgment) is a
+> service provided by the surveyor, watchdog.canine.dev.
+
+## What CAI is
+- One 0–100 score for a whole codebase, computed from deterministic evidence under a FROZEN, versioned rubric.
+- Composed of ~120 dimensions grouped into ten lenses (five core, always on; the rest model-aware).
+- Reproducible: same evidence + same rubric version ⇒ the same number. Falsifiable by design.
+- A measurement, never a certification. The tool evidences the automatable slice; a named human attests the rest.
+
+## Bands
+Strong 80–100 · Fair 60–79 · Weak 40–59 · Poor 0–39.
+
+## Pages
+- [The Standard / spec](https://cai.canine.dev/spec.html) — the open algorithm, versioned.
+- [Lenses](https://cai.canine.dev/lenses.html) — the ten lenses: what each measures, why, what it protects against.
+- [Compute it yourself](https://cai.canine.dev/cli.html) — the reference implementation (github.com/CanineCC/CAI, Apache-2.0).
+- [Verify](https://cai.canine.dev/verify.html) — reproduce any CAI from its evidence; check the signature.
+- [Registry](https://cai.canine.dev/registry.html) — the public record of signed surveys.
+- [Badge](https://cai.canine.dev/badge.html) — the badge + honest mark-usage policy.
+
+## Related
+- The surveyor (the product, the paid judgment): https://watchdog.canine.dev
+- Reference implementation: https://github.com/CanineCC/CAI

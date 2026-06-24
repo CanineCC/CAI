@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verify — reproduce any CAI from its evidence</title>
+<meta name="description" content="The proof engine: take a signed survey and its evidence, run the open scorer, and get the same number. Reproducibility is the whole point.">
+<link rel="stylesheet" href="/cai.css">
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="brand" href="/">CA<b>I</b></a>
+  <nav>
+    <a href="/spec.html">The Standard</a>
+    <a href="/lenses.html">Lenses</a>
+    <a href="/cli.html">Compute it yourself</a>
+    <a href="/registry.html">Registry</a>
+    <a href="/verify.html" aria-current="page">Verify</a>
+  </nav>
+  <a class="cta" href="https://watchdog.canine.dev">Get a survey →</a>
+</div></header>
+
+<main>
+<div class="hero"><div class="wrap">
+  <p class="eyebrow">The proof engine</p>
+  <h1>Don't trust the number. Reproduce it.</h1>
+  <p class="lede">A CAI is a claim, and a claim is only as good as its reproducibility. Take a survey, take its evidence,
+    run the open scorer under the stated rubric version — and you should get the <strong>same number</strong>. If you
+    don't, the claim is wrong. That is the entire point of an open standard.</p>
+</div></div>
+
+<section><div class="wrap">
+  <h2>How to verify a survey</h2>
+  <ol>
+    <li><strong>Get the evidence + the rubric version.</strong> A published survey states the rubric version it was
+      scored under (e.g. <span class="pill">rubric-2026.08.15</span>) and links its evidence.</li>
+    <li><strong>Run the reference scorer</strong> from <a href="https://github.com/CanineCC/CAI">CanineCC/CAI</a> over
+      that evidence, pinned to the same rubric version.</li>
+    <li><strong>Compare.</strong> Same evidence + same rubric ⇒ the same 0–100 and band. A mismatch is falsifiable proof
+      the published number is wrong.</li>
+  </ol>
+  <pre>cai verify ./survey-evidence --rubric 2026.08.15 --expect 82
+# → ✓ reproduced: CAI 82 (Strong) under rubric 2026.08.15</pre>
+</div></section>
+
+<section><div class="wrap">
+  <h2>Signed, so attribution is checkable too</h2>
+  <p class="muted">A published survey is cryptographically <strong>signed</strong> by its issuer — so beyond reproducing
+    the number, you can confirm <em>who</em> attested it. The signature covers the content hash; the public key is
+    published; anyone can verify the signature independently. Openness proves the method; the signature proves the
+    author.</p>
+  <div class="callout">
+    <p style="margin:0">Every record in the <a href="/registry.html"><strong>registry</strong></a> can be verified this
+      way — number and author both. No logo wall, just falsifiable records.</p>
+  </div>
+</div></section>
+</main>
+
+<footer class="site"><div class="wrap">
+  <div><strong>Codebase Assurance Index</strong> — an open, reproducible standard. Apache-2.0.<br>
+    <span class="muted">Stewarded by <a href="https://watchdog.canine.dev">Watchdog</a>, the independent surveyor.</span></div>
+  <nav>
+    <a href="/spec.html">Spec</a><a href="/lenses.html">Lenses</a><a href="/cli.html">CLI</a>
+    <a href="/verify.html">Verify</a><a href="/registry.html">Registry</a><a href="/badge.html">Badge</a>
+    <a href="https://github.com/CanineCC/CAI">GitHub</a><a href="/llms.txt">llms.txt</a>
+  </nav>
+</div></footer>
+</body>
+</html>

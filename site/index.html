@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CAI — the Codebase Assurance Index · an open, reproducible standard</title>
+<meta name="description" content="CAI — an open, reproducible 0–100 standard for the health of a codebase. Same code in, same score out — a measurement anyone can verify.">
+<link rel="stylesheet" href="/cai.css">
+<script type="application/ld+json" src="/cai.jsonld"></script>
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="brand" href="/">CA<b>I</b></a>
+  <nav>
+    <a href="/spec.html">The Standard</a>
+    <a href="/lenses.html">Lenses</a>
+    <a href="/cli.html">Compute it yourself</a>
+    <a href="/registry.html">Registry</a>
+    <a href="/verify.html">Verify</a>
+  </nav>
+  <a class="cta" href="https://watchdog.canine.dev">Get a survey →</a>
+</div></header>
+
+<main>
+<div class="hero"><div class="wrap">
+  <p class="eyebrow">The open standard</p>
+  <h1>An open, reproducible 0–100 standard for the health of a codebase.</h1>
+  <p class="lede"><strong>Same code in, same score out</strong> — a measurement anyone can verify. The Codebase
+    Assurance Index (CAI) reduces a whole C#/.NET codebase to one deterministic number across ten lenses, computed from
+    a frozen, versioned rubric. No opinions, no black box.</p>
+  <div class="btns">
+    <a class="btn primary" href="/spec.html">Read the spec</a>
+    <a class="btn" href="/cli.html">Compute it yourself</a>
+    <a class="btn" href="/verify.html">Score your evidence →</a>
+  </div>
+</div></div>
+
+<section><div class="wrap">
+  <h2>Open · Verifiable · Referenced</h2>
+  <div class="trio">
+    <div class="card"><h3>Open</h3><p>The full algorithm is public and versioned — the ten lenses, the frozen rubric,
+      the bands. A reference implementation ships under Apache-2.0. Nothing about the number is hidden.</p></div>
+    <div class="card"><h3>Verifiable</h3><p>The score is deterministic. Given the same evidence and rubric version,
+      the scorer returns the same number — and you can run it yourself. A claim is only as good as its reproducibility.</p></div>
+    <div class="card"><h3>Referenced</h3><p>Surveys are signed and published to a public registry. A CAI on a contract,
+      a badge, or a due-diligence pack points back to a record anyone can check.</p></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2>The firewall: method open, judgment independent.</h2>
+  <p class="muted">The standard (the <em>how it's measured</em>) is open so anyone can reproduce a number. The judgment
+    — an <em>independent, signed survey</em> with the deductions and what to do — is a service. The line between them is
+    the firewall, and it's deliberate.</p>
+  <div class="firewall">
+    <div class="side"><strong>The standard — open</strong><br><span class="muted">algorithm · lenses · rubric · CLI · registry</span></div>
+    <div class="bar">│ firewall │</div>
+    <div class="side"><strong>The survey — independent</strong><br><span class="muted">deductions · what it means for you · a signed report</span></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2>Ten deterministic lenses.</h2>
+  <p class="muted">The CAI is composed of dimensions grouped by lens — each lens a measurement of the code as it stands,
+    never a judgement of the team. Core lenses are always on; model-aware lenses light up only when the architecture
+    calls for them.</p>
+  <p><a href="/lenses.html">See the ten lenses — what each measures, why it matters, what it protects against →</a></p>
+  <h3>The bands</h3>
+  <div class="bands">
+    <span class="band b-strong">Strong 80–100</span>
+    <span class="band b-fair">Fair 60–79</span>
+    <span class="band b-weak">Weak 40–59</span>
+    <span class="band b-poor">Poor 0–39</span>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2>A public record, not a logo wall.</h2>
+  <p class="muted">Every signed survey can be published, in full, to the registry — the evidence and the number, open to
+    inspection. Falsifiable by design: anyone can re-run the scorer against the evidence and get the same result.</p>
+  <p><a href="/registry.html">Browse the registry →</a> &nbsp;·&nbsp; <a href="/verify.html">Verify a survey yourself →</a></p>
+</div></section>
+
+<section><div class="wrap">
+  <div class="callout">
+    <h2 style="margin-top:0">Want the judgment, not just the number?</h2>
+    <p>The standard tells you <em>how</em> a codebase is measured. An <strong>independent, official survey</strong> from
+      Watchdog gives you the CAI <strong>plus the deductions</strong> — what's wrong, what it means for you, and what to
+      do — tailored to your role, in a signed report both sides of a deal can trust.</p>
+    <div class="btns"><a class="btn primary" href="https://watchdog.canine.dev">Get an independent survey → watchdog.canine.dev</a></div>
+  </div>
+</div></section>
+</main>
+
+<footer class="site"><div class="wrap">
+  <div><strong>Codebase Assurance Index</strong> — an open, reproducible standard. Apache-2.0.<br>
+    <span class="muted">Stewarded by <a href="https://watchdog.canine.dev">Watchdog</a>, the independent surveyor.</span></div>
+  <nav>
+    <a href="/spec.html">Spec</a><a href="/lenses.html">Lenses</a><a href="/cli.html">CLI</a>
+    <a href="/verify.html">Verify</a><a href="/registry.html">Registry</a><a href="/badge.html">Badge</a>
+    <a href="https://github.com/CanineCC/CAI">GitHub</a><a href="/llms.txt">llms.txt</a>
+  </nav>
+</div></footer>
+</body>
+</html>
