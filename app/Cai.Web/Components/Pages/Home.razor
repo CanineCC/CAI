@@ -3,6 +3,10 @@
 
 <PageTitle>CAI — the Codebase Assurance Index</PageTitle>
 
+<HeadContent>
+    <script type="application/ld+json">@((MarkupString)_glossaryJsonLd)</script>
+</HeadContent>
+
 <div class="hero"><div class="wrap">
     <p class="eyebrow">The open standard</p>
     <h1>An open, reproducible 0–100 standard for the health of a codebase.</h1>
@@ -39,11 +43,13 @@
 @code {
     private int _dimCount;
     private int _lensCount;
+    private string _glossaryJsonLd = "";
 
     protected override void OnInitialized()
     {
         var c = Store.Get(Store.Latest() ?? "");
         _dimCount = c?.Dimensions.Count ?? 0;
         _lensCount = c?.Lenses.Count ?? 0;
+        _glossaryJsonLd = Cai.Web.CaiGlossary.Build();
     }
 }

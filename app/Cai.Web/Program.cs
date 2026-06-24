@@ -173,12 +173,16 @@ The score is deterministic: identical evidence under the same rubric version alw
 - The public registry of signed surveys: https://cai.canine.dev/registry
 - The badge and mark-usage policy: https://cai.canine.dev/badge
 - The JSON API (rubric and scoring): https://cai.canine.dev/api-reference
+- The vocabulary as schema.org DefinedTermSet (JSON-LD): https://cai.canine.dev/glossary.jsonld
 
 ## Get an independent survey
 The standard is free to use. An independent, signed CAI survey — with the deductions and what to do about them — is a service from the surveyor: https://watchdog.canine.dev
 ";
     return Results.Text(text, "text/plain; charset=utf-8");
 });
+
+// The CAI vocabulary as a schema.org DefinedTermSet (JSON-LD) — the citable, machine-readable definition (referenceable pillar).
+app.MapGet("/glossary.jsonld", () => Results.Text(Cai.Web.CaiGlossary.Build(), "application/ld+json; charset=utf-8"));
 
 // Browsers auto-request /favicon.ico; we only ship favicon.svg. Redirect so non-HTML responses (e.g. /llms.txt) don't 404.
 app.MapGet("/favicon.ico", () => Results.Redirect("/favicon.svg", permanent: true));
