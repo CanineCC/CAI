@@ -61,6 +61,17 @@ pre { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 
 .firewall .bar { font-family: var(--mono); color: var(--accent); font-weight: 700; }
 @media (max-width: 40rem) { .firewall { grid-template-columns: 1fr; } .firewall .bar { writing-mode: initial; } }
 
+/* Firewall infographic (the deterministic open standard vs advisory) */
+.fig { margin: 1.5rem 0 0; }
+.fig svg { width: 100%; max-width: 760px; height: auto; display: block; margin: 0 auto; }
+.fig figcaption { max-width: 62ch; margin: 0.85rem auto 0; text-align: center; color: var(--ink-soft); font-size: 0.85rem; line-height: 1.55; }
+.fig .ff-box { fill: var(--bg-soft); stroke: var(--line); stroke-width: 1; }
+.fig .ff-box-dim { fill: none; stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 4; }
+.fig .ff-circle { fill: var(--bg); stroke: var(--accent); stroke-width: 1.5; }
+.fig .ff-firewall { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 2 5; opacity: 0.75; }
+.fig .ff-t { fill: var(--ink); font-family: var(--sans); font-size: 14px; font-weight: 600; }
+.fig .ff-tm { fill: var(--ink-soft); font-family: var(--sans); font-size: 12px; }
+
 /* Lens table */
 table.lenses { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: 0.94rem; }
 table.lenses th, table.lenses td { text-align: left; padding: 0.7rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
