@@ -1,0 +1,68 @@
+@page "/dimensions"
+@inject RubricCatalogStore Store
+
+<PageTitle>CAI — the dimension catalog</PageTitle>
+
+<div class="hero"><div class="wrap">
+    <p class="eyebrow">The catalog</p>
+    <h1>Every dimension the CAI measures.</h1>
+    <p class="lede">The standard is composed of <strong>@(_catalog?.Dimensions.Count ?? 0) dimensions</strong> across
+        <strong>@(_catalog?.Lenses.Count ?? 0) lenses</strong>. Each is a definition — what it measures and how it's
+        evaluated — pinned to a rubric version. This catalog <em>is</em> the standard's vocabulary; the
+        <a href="/spec">spec</a> documents how each folds into the score.</p>
+</div></div>
+
+<section><div class="wrap">
+    @if (_catalog is null)
+    {
+        <p class="muted">No rubric catalog is published on this host.</p>
+    }
+    else
+    {
+        <form method="get" class="rubric-pick">
+            <label>Rubric version:
+                <select name="v" onchange="this.form.submit()">
+                    @foreach (var ver in _versions)
+                    {
+                        <option value="@ver" selected="@(ver == _catalog.RubricVersion)">@ver</option>
+                    }
+                </select>
+            </label>
+            <span class="muted small">@_versions.Count published versions · <a href="/api/rubrics/@_catalog.RubricVersion/catalog">this catalog as JSON</a></span>
+        </form>
+
+        @foreach (var lens in _catalog.Lenses)
+        {
+            var dims = _catalog.InLens(lens.Key).ToList();
+            if (dims.Count == 0) { continue; }
+            <h2 id="@lens.Key">@lens.Label <span class="muted" style="font-weight:400">· @dims.Count dimensions</span></h2>
+            <table class="lenses">
+                <thead><tr><th style="width:4.5rem">ID</th><th>Dimension</th><th>What it measures</th><th style="width:6rem">Evaluator</th></tr></thead>
+                <tbody>
+                    @foreach (var d in dims)
+                    {
+                        <tr>
+                            <td><code>@d.Id</code></td>
+                            <td>@d.Name @if (d.Family == "meta") { <span class="pill">meta</span> }</td>
+                            <td class="muted">@d.WhatItMeasures</td>
+                            <td>@(d.Evaluator == "llm" ? "LLM · advisory" : "tool")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+</div></section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "v")] public string? V { get; set; }
+
+    private RubricCatalog? _catalog;
+    private IReadOnlyList<string> _versions = [];
+
+    protected override void OnParametersSet()
+    {
+        _versions = Store.Versions();
+        _catalog = Store.Get(V ?? Store.Latest() ?? "");
+    }
+}

@@ -1,16 +1,17 @@
 namespace Cai.Scoring;
 
 /// <summary>
-/// The five CAI bands. Canonical thresholds — a score lands in exactly one band. These match the Watchdog engine's
-/// published band table (RRatingBand): Exemplary ≥ 90, Strong ≥ 70, Adequate ≥ 50, Weak ≥ 25, else Critical. The bands
-/// are fixed-valence (always worst→best in the same order), so the band IS a reading, independent of any peer corpus.
+/// The five CAI bands — the canonical standard labels from the scoring spec (RatingScale.TierFor): Exemplary ≥ 90,
+/// Healthy ≥ 70, Fair ≥ 50, Poor ≥ 25, else Critical. (The Watchdog SaaS relabels these for buyers — Strong/Adequate/
+/// Weak — but the STANDARD uses the canonical names.) Fixed-valence (always worst→best in the same order), so the band
+/// IS a reading, independent of any peer corpus.
 /// </summary>
 public enum Band
 {
     Critical,
-    Weak,
-    Adequate,
-    Strong,
+    Poor,
+    Fair,
+    Healthy,
     Exemplary,
 }
 
@@ -21,9 +22,9 @@ public static class Bands
     public static Band For(double scoreZeroToOneHundred) => scoreZeroToOneHundred switch
     {
         >= 90 => Band.Exemplary,
-        >= 70 => Band.Strong,
-        >= 50 => Band.Adequate,
-        >= 25 => Band.Weak,
+        >= 70 => Band.Healthy,
+        >= 50 => Band.Fair,
+        >= 25 => Band.Poor,
         _ => Band.Critical,
     };
 

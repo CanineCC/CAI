@@ -1,0 +1,49 @@
+@page "/"
+@inject RubricCatalogStore Store
+
+<PageTitle>CAI — the Codebase Assurance Index</PageTitle>
+
+<div class="hero"><div class="wrap">
+    <p class="eyebrow">The open standard</p>
+    <h1>An open, reproducible 0–100 standard for the health of a codebase.</h1>
+    <p class="lede"><strong>Same code in, same score out</strong> — a measurement anyone can verify. The standard is
+        composed of <strong>@_dimCount dimensions</strong> across <strong>@_lensCount lenses</strong>, each pinned to a
+        versioned rubric. The method is open; the independent, signed survey is a service.</p>
+    <div class="btns">
+        <a class="btn primary" href="/spec">Read the spec</a>
+        <a class="btn" href="/dimensions">Browse the @_dimCount dimensions</a>
+        <a class="btn" href="/calculator">Score an evidence bundle →</a>
+    </div>
+</div></div>
+
+<section><div class="wrap">
+    <h2>Open · Verifiable · Referenced</h2>
+    <div class="trio">
+        <div class="card"><h3>Open</h3><p>The full catalog — @_dimCount dimensions, @_lensCount lenses — and the fold
+            are public and versioned. A reference scorer ships under Apache-2.0.</p></div>
+        <div class="card"><h3>Verifiable</h3><p>The score is deterministic. Same evidence + same rubric version ⇒ the
+            same number — and you can <a href="/calculator">run it yourself</a>.</p></div>
+        <div class="card"><h3>Referenced</h3><p>This site is the authority: the rubric catalogs are served by
+            <a href="/api/rubrics">API</a>, so a survey, a contract, or a badge points back to a checkable record.</p></div>
+    </div>
+    <h3>The bands</h3>
+    <div class="bands">
+        <span class="band b-exemplary">Exemplary 90–100</span>
+        <span class="band b-strong">Healthy 70–89</span>
+        <span class="band b-adequate">Fair 50–69</span>
+        <span class="band b-weak">Poor 25–49</span>
+        <span class="band b-critical">Critical 0–24</span>
+    </div>
+</div></section>
+
+@code {
+    private int _dimCount;
+    private int _lensCount;
+
+    protected override void OnInitialized()
+    {
+        var c = Store.Get(Store.Latest() ?? "");
+        _dimCount = c?.Dimensions.Count ?? 0;
+        _lensCount = c?.Lenses.Count ?? 0;
+    }
+}

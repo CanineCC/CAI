@@ -23,7 +23,7 @@ public sealed class CaiScorerTests
     {
         var s = CaiScorer.Score(Sample());
         Assert.Equal(72.2, s.Headline, precision: 6);
-        Assert.Equal(Band.Strong, s.Band);
+        Assert.Equal(Band.Healthy, s.Band);
     }
 
     [Fact]
@@ -54,10 +54,10 @@ public sealed class CaiScorerTests
     [Theory]
     [InlineData(95, Band.Exemplary)]
     [InlineData(90, Band.Exemplary)]
-    [InlineData(89.9, Band.Strong)]
-    [InlineData(70, Band.Strong)]
-    [InlineData(50, Band.Adequate)]
-    [InlineData(25, Band.Weak)]
+    [InlineData(89.9, Band.Healthy)]
+    [InlineData(70, Band.Healthy)]
+    [InlineData(50, Band.Fair)]
+    [InlineData(25, Band.Poor)]
     [InlineData(24.9, Band.Critical)]
     [InlineData(0, Band.Critical)]
     public void Bands_at_the_canonical_thresholds(double score, Band expected) =>
