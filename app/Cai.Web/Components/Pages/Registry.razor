@@ -1,4 +1,7 @@
 @page "/registry"
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpFactory
+@inject IConfiguration Config
 
 <PageTitle>CAI — the registry</PageTitle>
 
@@ -14,6 +17,20 @@
     </div>
 </div></div>
 
+@if (_stats is not null)
+{
+    <section><div class="wrap">
+        <h2>The scanned corpus, to date</h2>
+        <p class="muted">cai.canine.dev defines the standard; the independent surveyor runs the scans. The scale measured
+            so far — aggregate totals only, no per-repo identity:</p>
+        <div class="cards">
+            <div class="card"><h3>@_stats.LocScanned.ToString("N0") lines</h3><p>of source code measured.</p></div>
+            <div class="card"><h3>@_stats.ScanCompletions.ToString("N0") scans</h3><p>completed and scored.</p></div>
+        </div>
+        <p class="muted">Figures served live by the surveyor (<a href="https://watchdog.canine.dev">watchdog.canine.dev</a>).</p>
+    </div></section>
+}
+
 <section><div class="wrap">
     <h2>What's in a record</h2>
     <div class="cards">
@@ -28,3 +45,25 @@
         (<a href="https://watchdog.canine.dev/publicreports">watchdog.canine.dev/publicreports</a>); the standard defines
         the record format so any issuer's surveys are checkable the same way.</p>
 </div></section>
+
+@code {
+    private ScanStats? _stats;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Server-side, best-effort: show the surveyor's aggregate scale; the standard page still renders if it's down.
+        try
+        {
+            var baseUrl = (Config["Watchdog:BaseUrl"] ?? "https://watchdog.canine.dev").TrimEnd('/');
+            var http = HttpFactory.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(3);
+            _stats = await http.GetFromJsonAsync<ScanStats>($"{baseUrl}/api/public/scan-stats");
+        }
+        catch
+        {
+            _stats = null;
+        }
+    }
+
+    private sealed record ScanStats(long LocScanned, long ScanCompletions, long UniqueRepos);
+}

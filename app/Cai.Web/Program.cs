@@ -9,6 +9,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents();
 
+// Server-side fetch of the surveyor's public aggregate scan stats (LoC scanned + completed scans) for /registry —
+// the standard shows the scanned-corpus SCALE; the survey records themselves stay on the surveyor (data ownership).
+// Base URL is configurable (Watchdog:BaseUrl), defaulting to production; the page degrades gracefully if unreachable.
+builder.Services.AddHttpClient();
+
 // cai.canine.dev OWNS the rubric catalogs (the versioned, archived standard). Resolve their root from config, else the
 // repo's /rubrics dir relative to the app — so it runs from a clone with no extra setup.
 var rubricsRoot = builder.Configuration["Rubrics:Root"]
