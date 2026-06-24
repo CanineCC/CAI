@@ -78,6 +78,11 @@ pre { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 
 .dim-toolbar input[type="search"]:focus { outline: none; border-color: var(--accent); }
 .dim-toolbar .count { color: var(--ink-soft); font-size: 0.9rem; white-space: nowrap; }
 
+/* Lens cards (what it measures · why it matters · what it protects against) */
+.lens-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.5rem; }
+.lens-card-head h3 { margin: 0; font-size: 1.05rem; }
+.lens-card p { font-size: 0.95rem; }
+
 /* Lens table */
 table.lenses { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: 0.94rem; }
 table.lenses th, table.lenses td { text-align: left; padding: 0.7rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }

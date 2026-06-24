@@ -18,20 +18,30 @@
     }
     else
     {
-        <table class="lenses">
-            <thead><tr><th>Lens</th><th>Dimensions</th><th>Kind</th></tr></thead>
-            <tbody>
-                @foreach (var lens in _catalog.Lenses)
-                {
-                    var n = _catalog.InLens(lens.Key).Count();
-                    <tr>
-                        <td><a href="/dimensions#@lens.Key"><strong>@lens.Label</strong></a></td>
-                        <td>@n</td>
-                        <td>@(Core.Contains(lens.Key) ? "core — always on" : "model-aware")</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+        <p>Each lens below: <strong>what it measures</strong> (the dimensions under it), <strong>why it matters</strong>,
+            and <strong>what it protects against</strong>.</p>
+        <div class="cards">
+            @foreach (var lens in _catalog.Lenses)
+            {
+                var n = _catalog.InLens(lens.Key).Count();
+                var protects = Cai.Web.CaiLensProse.For(lens.Key);
+                <div class="card lens-card">
+                    <div class="lens-card-head">
+                        <h3><a href="/dimensions#@lens.Key">@lens.Label</a></h3>
+                        <span class="pill">@(Core.Contains(lens.Key) ? "core · always on" : "model-aware")</span>
+                    </div>
+                    @if (protects is not null)
+                    {
+                        <p>@protects</p>
+                    }
+                    else
+                    {
+                        <p class="muted">Measured only when the architecture calls for it.</p>
+                    }
+                    <p style="margin:0.5rem 0 0"><a href="/dimensions#@lens.Key">@n dimensions it measures →</a></p>
+                </div>
+            }
+        </div>
         <p class="muted">Every lens is computed when its subject exists; a lens with no measurable subject is excluded
             (never counted as zero). A lens reading <em>Critical</em> caps its displayed band — a serious failure can't
             hide behind strong scores elsewhere.</p>
