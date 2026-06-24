@@ -1,19 +1,21 @@
 {
-  "rubricVersion": "rubric-2026.06.0",
+  "rubricVersion": "rubric-2026.08.15",
   "commit": "3f9a1c2",
-  "headlineScore": 72.2,
-  "lenses": [
-    { "lens": "securityCompliance",  "score": 58, "owaWeight": 0.24 },
-    { "lens": "maturity",            "score": 65, "owaWeight": 0.20 },
-    { "lens": "architecture",        "score": 72, "owaWeight": 0.18 },
-    { "lens": "codeHealth",          "score": 86, "owaWeight": 0.14 },
-    { "lens": "productionReadiness", "score": 80, "owaWeight": 0.12 },
-    { "lens": "accessibility",       "score": 90, "owaWeight": 0.06 },
-    { "lens": "performance",         "score": 88, "owaWeight": 0.06 }
-  ],
   "dimensions": [
-    { "id": "D8",  "lens": "securityCompliance", "score": 4.0, "confidence": 0.9 },
-    { "id": "D15", "lens": "maturity",           "score": 6.5, "confidence": 0.8 },
-    { "id": "D5",  "lens": "architecture",       "score": 7.2, "confidence": 0.95 }
+    { "id": "D1",  "lens": "codeHealth",          "score": 7.5, "confidence": 0.95 },
+    { "id": "D3",  "lens": "codeHealth",          "score": 8.2, "confidence": 0.95 },
+    { "id": "D8",  "lens": "codeHealth",          "score": 6.4, "confidence": 0.90 },
+    { "id": "D17", "lens": "codeHealth",          "score": 8.8, "confidence": 0.90 },
+    { "id": "D5",  "lens": "architecture",        "score": 7.1, "confidence": 0.95 },
+    { "id": "D7",  "lens": "architecture",        "score": 8.4, "confidence": 0.90 },
+    { "id": "D15", "lens": "maturity",            "score": 6.0, "confidence": 0.85 },
+    { "id": "D16", "lens": "maturity",            "score": 7.2, "confidence": 0.80 },
+    { "id": "D30", "lens": "productionReadiness", "score": 7.6, "confidence": 0.90 },
+    { "id": "D33", "lens": "productionReadiness", "score": 8.1, "confidence": 0.90 },
+    { "id": "D12", "lens": "securityCompliance",  "score": 5.5, "confidence": 0.95 },
+    { "id": "D13", "lens": "securityCompliance",  "score": 8.9, "confidence": 0.95 },
+    { "id": "AC1", "lens": "accessibility",       "score": 8.5, "confidence": 0.85 },
+    { "id": "P1",  "lens": "performance",         "score": 8.0, "confidence": 0.80 },
+    { "id": "D21", "lens": "codeHealth",          "score": 7.0, "confidence": 0.70, "advisory": true }
   ]
 }

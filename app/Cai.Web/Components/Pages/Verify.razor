@@ -5,82 +5,34 @@
 <div class="hero"><div class="wrap">
     <p class="eyebrow">The proof engine</p>
     <h1>Don't trust the number. Reproduce it.</h1>
-    <p class="lede">A CAI is a claim, and a claim is only as good as its reproducibility. Paste a survey's evidence
-        bundle (it states the rubric version and carries the lens weights); the open scorer recomputes the headline and
-        checks it against the published number. A mismatch is falsifiable proof the number doesn't follow from the evidence.</p>
+    <p class="lede">A CAI is a claim, and a claim is only as good as its reproducibility. Because an evidence bundle
+        carries the measured dimensions (and a survey states its rubric version), <strong>anyone</strong> can recompute
+        the headline and check it against the published number — with no access to the analyzer.</p>
 </div></div>
 
 <section><div class="wrap">
-    <EditForm FormName="verify" Model="Op" OnValidSubmit="DoVerify">
-        <p><label class="muted small" for="ev">Evidence bundle (JSON, including <code>headlineScore</code>)</label></p>
-        <textarea id="ev" name="Op.Json" rows="12" style="width:100%;font-family:var(--mono);font-size:.85rem;">@Op.Json</textarea>
-        <p><label>Or override the expected headline: <input name="Op.Expect" type="number" step="0.01" value="@Op.Expect" style="width:8rem"></label></p>
-        <button class="btn primary" type="submit">Reproduce it</button>
-    </EditForm>
-
-    @if (_error is not null)
-    {
-        <div class="callout" style="border-color:var(--crit)"><strong>Couldn't verify:</strong> @_error</div>
-    }
-    else if (_result is not null)
-    {
-        @if (_result.Reproduced)
-        {
-            <div class="callout"><strong>✓ Reproduced.</strong> The evidence folds to @($"{_result.Computed:0}")
-                (claimed @($"{_result.Claimed:0}"), Δ@($"{_result.Delta:0.00}")). The published number follows from the evidence.</div>
-        }
-        else
-        {
-            <div class="callout" style="border-color:var(--crit)"><strong>✗ Mismatch.</strong> The evidence folds to
-                @($"{_result.Computed:0.00}") but the bundle claims @($"{_result.Claimed:0.00}")
-                (Δ@($"{_result.Delta:0.00}") &gt; @($"{_result.Tolerance:0.00}")). The published number does not follow from the evidence.</div>
-        }
-    }
+    <h2>How to verify a published survey</h2>
+    <ol>
+        <li><strong>Get the evidence bundle.</strong> A published survey links its evidence and states the rubric
+            version it was scored under (e.g. <span class="pill">rubric-2026.08.15</span>).</li>
+        <li><strong>Recompute.</strong> Fold its dimensions through the open scorer — the
+            <a href="/calculator">calculator</a> does exactly this, and when the bundle carries a published
+            <code>headlineScore</code> it shows the reproduction verdict inline (✓ / ✗). Or run the
+            <a href="https://github.com/CanineCC/CAI">reference CLI</a>:
+            <code>cai verify survey-evidence.json</code>.</li>
+        <li><strong>Compare.</strong> Same dimensions + same rubric ⇒ the same number. A mismatch is falsifiable proof
+            the published number doesn't follow from the evidence.</li>
+    </ol>
+    <div class="btns">
+        <a class="btn primary" href="/calculator">Open the calculator / verifier →</a>
+        <a class="btn" href="/spec#evidence">The evidence format</a>
+    </div>
 </div></section>
 
-@code {
-    [SupplyParameterFromForm] public VerifyForm? Op { get; set; }
-
-    private VerifyResult? _result;
-    private string? _error;
-
-    public sealed class VerifyForm
-    {
-        public string? Json { get; set; }
-        public double? Expect { get; set; }
-    }
-
-    protected override void OnInitialized() => Op ??= new();
-
-    private void DoVerify()
-    {
-        _result = null;
-        _error = null;
-        if (string.IsNullOrWhiteSpace(Op!.Json))
-        {
-            _error = "Paste an evidence bundle first.";
-            return;
-        }
-
-        try
-        {
-            var bundle = EvidenceBundle.Parse(Op.Json);
-            if (Op.Expect is { } e)
-            {
-                bundle = bundle with { HeadlineScore = e };
-            }
-
-            if (bundle.HeadlineScore is null)
-            {
-                _error = "The bundle has no headlineScore and no expected value was given — nothing to verify against.";
-                return;
-            }
-
-            _result = CaiScorer.Verify(bundle);
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
-    }
-}
+<section><div class="wrap">
+    <h2>Signed, so attribution is checkable too</h2>
+    <p class="muted">Beyond reproducing the number, a published survey is cryptographically <strong>signed</strong> by
+        its issuer — so you can confirm <em>who</em> attested it. The signature covers the content hash; the public key
+        is published; anyone can verify the signature independently. Openness proves the method; the signature proves the
+        author.</p>
+</div></section>

@@ -21,12 +21,14 @@ public sealed record EvidenceBundle
     /// Optional: a bundle may carry only the lenses and let the scorer compute the headline fresh.</summary>
     [JsonPropertyName("headlineScore")] public double? HeadlineScore { get; init; }
 
-    /// <summary>The measured lenses, each with its 0–100 score and its OWA weight (share of the headline). Only the
-    /// lenses a run actually measured appear.</summary>
-    [JsonPropertyName("lenses")] public IReadOnlyList<LensScore> Lenses { get; init; } = [];
-
-    /// <summary>Per-dimension results (transparency / drill-down). Not required to reproduce the headline.</summary>
+    /// <summary>The measured dimensions (0–10 each) — the PRIMARY evidence. The scorer folds these into lens scores and
+    /// then the headline. A dimension measured at confidence 0 must be ABSENT, never a raw 0.0.</summary>
     [JsonPropertyName("dimensions")] public IReadOnlyList<DimensionScore> Dimensions { get; init; } = [];
+
+    /// <summary>Pre-computed lens scores — the FALLBACK input when a bundle carries no dimensions (e.g. a thin sidecar).
+    /// When present with OWA weights, they reproduce a published headline exactly; otherwise the across-lens fold derives
+    /// the weights. Ignored when <see cref="Dimensions"/> is non-empty (the dimensions are folded instead).</summary>
+    [JsonPropertyName("lenses")] public IReadOnlyList<LensScore> Lenses { get; init; } = [];
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -49,11 +51,16 @@ public sealed record LensScore(
     [property: JsonPropertyName("score")] double Score,
     [property: JsonPropertyName("owaWeight")] double OwaWeight);
 
-/// <summary>One dimension's measured result (0–10), with the confidence it was measured at. A dimension measured at
-/// confidence 0 is NOT measured — it must be ABSENT from the bundle, never a raw 0.0 (that would read as "failed"
-/// instead of "not assessed").</summary>
+/// <summary>One dimension's measured result (0–10), with the confidence it was measured at and whether it's an
+/// LLM-advisory dimension. A dimension measured at confidence 0 is NOT measured — it must be ABSENT from the bundle,
+/// never a raw 0.0 (that would read as "failed" instead of "not assessed"). An advisory dimension is excluded from the
+/// deterministic number.</summary>
 public sealed record DimensionScore(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("lens")] string Lens,
     [property: JsonPropertyName("score")] double ScoreZeroToTen,
-    [property: JsonPropertyName("confidence")] double Confidence);
+    [property: JsonPropertyName("confidence")] double Confidence)
+{
+    /// <summary>True for an LLM-scored dimension — advisory, excluded from the deterministic fold. Absent ⇒ false.</summary>
+    [JsonPropertyName("advisory")] public bool Advisory { get; init; }
+}

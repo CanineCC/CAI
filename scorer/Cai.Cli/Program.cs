@@ -43,12 +43,18 @@ try
     if (command == "score")
     {
         var s = CaiScorer.Score(bundle);
-        Console.WriteLine($"CAI {s.Headline:0} ({s.Band.Label()})  ·  rubric {Rubric(bundle)}");
+        Console.WriteLine($"CAI {s.Headline:0.0} ({s.Band.Label()})  ·  rubric {Rubric(bundle)}");
         Console.WriteLine();
-        Console.WriteLine($"  {"lens",-22}{"score",7}{"weight",9}{"contribution",15}");
-        foreach (var c in s.Contributions.OrderByDescending(c => c.Contribution))
+        Console.WriteLine($"  {"lens",-22}{"score",7}{"band",-12}{"dims",6}{"weight",9}{"contrib",10}");
+        foreach (var l in s.Lenses.OrderByDescending(l => l.Contribution))
         {
-            Console.WriteLine($"  {c.Lens,-22}{c.Score,7:0.0}{c.Weight,9:0.000}{c.Contribution,15:0.00}");
+            var band = l.Band.Label() + (l.CriticalGated ? "*" : "");
+            Console.WriteLine($"  {l.Lens,-22}{l.Score,7:0.0}  {band,-12}{l.DimensionCount,4}{l.Weight,9:0.000}{l.Contribution,10:0.00}");
+        }
+
+        if (s.Lenses.Any(l => l.CriticalGated))
+        {
+            Console.WriteLine("\n  * band capped at Fair — a dimension below 4.0/10 critical-gates the lens.");
         }
 
         return 0;

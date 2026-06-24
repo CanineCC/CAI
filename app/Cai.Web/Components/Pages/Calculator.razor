@@ -1,21 +1,21 @@
 @page "/calculator"
-@inject RubricCatalogStore Store
 
 <PageTitle>CAI — calculator</PageTitle>
 
 <div class="hero"><div class="wrap">
     <p class="eyebrow">Compute it yourself</p>
     <h1>Score an evidence bundle.</h1>
-    <p class="lede">Paste an <a href="/spec#evidence">evidence bundle</a> — the measured dimensions and lenses — and
-        the open scorer folds it into the CAI, worst-first, entirely in the open. Producing the bundle is the analyzer's
-        job; scoring it is this, and anyone can reproduce it.</p>
+    <p class="lede">Paste an <a href="/spec#evidence">evidence bundle</a> — the measured dimensions — and the open
+        scorer folds them into lens scores and then the CAI, worst-first, in the open. Producing the bundle is the
+        analyzer's job; scoring it is this. If the bundle also carries a published <code>headlineScore</code>, the
+        result is checked against it — so this page is the calculator <em>and</em> the verifier.</p>
 </div></div>
 
 <section><div class="wrap">
     <EditForm FormName="calc" Model="Op" OnValidSubmit="DoScore">
-        <p><label class="muted small" for="ev">Evidence bundle (JSON)</label></p>
+        <p><label class="muted small" for="ev">Evidence bundle (JSON) — dimensions, each scored 0–10</label></p>
         <textarea id="ev" name="Op.Json" rows="14" style="width:100%;font-family:var(--mono);font-size:.85rem;"
-                  placeholder='{ "rubricVersion": "...", "lenses": [ { "lens": "codeHealth", "score": 86, "owaWeight": 0.14 }, ... ] }'>@Op.Json</textarea>
+                  placeholder='{ "rubricVersion": "...", "dimensions": [ { "id": "D1", "lens": "codeHealth", "score": 7.5, "confidence": 0.95 }, ... ] }'>@Op?.Json</textarea>
         <div class="btns">
             <button class="btn primary" type="submit">Compute the CAI</button>
             <button class="btn" type="submit" name="Op.Sample" value="true">Load the sample bundle</button>
@@ -28,18 +28,44 @@
     }
     else if (_score is not null)
     {
-        <h2 style="margin-top:2rem">CAI @($"{_score.Headline:0}") <span class="band b-@BandClass(_score.Band)">@_score.Band.Label()</span></h2>
-        <p class="muted">rubric @(_score.RubricVersion is { Length: > 0 } r ? r : "(unstated)") · headline =
-            Σ(lensScore × weight) = @($"{_score.Headline:0.00}")</p>
-        <table class="lenses">
-            <thead><tr><th>Lens</th><th>Score</th><th>Weight</th><th>Contribution</th></tr></thead>
-            <tbody>
-                @foreach (var c in _score.Contributions.OrderByDescending(c => c.Contribution))
+        <h2 style="margin-top:2rem">CAI @($"{_score.Headline:0.0}") <span class="band b-@BandClass(_score.Band)">@_score.Band.Label()</span></h2>
+        <p class="muted">rubric @(_score.RubricVersion is { Length: > 0 } r ? r : "(unstated)") · the headline is the
+            worst-first ordered-weighted average of the lens scores.</p>
+
+        @if (_verify is not null)
+        {
+            <div class="callout" style="@(_verify.Reproduced ? "" : "border-color:var(--crit)")">
+                @if (_verify.Reproduced)
                 {
-                    <tr><td>@c.Lens</td><td>@($"{c.Score:0.0}")</td><td>@($"{c.Weight:0.000}")</td><td>@($"{c.Contribution:0.00}")</td></tr>
+                    <strong>✓ Reproduced.</strong> @:The published headline @($"{_verify.Claimed:0.0}") follows from this evidence (Δ@($"{_verify.Delta:0.00}")).
+                }
+                else
+                {
+                    <strong>✗ Mismatch.</strong> @:This evidence folds to @($"{_verify.Computed:0.0}"), but the bundle claims @($"{_verify.Claimed:0.0}") (Δ@($"{_verify.Delta:0.00}")).
+                }
+            </div>
+        }
+
+        <table class="lenses">
+            <thead><tr><th>Lens</th><th>Score</th><th>Band</th><th>Dims</th><th>Weight</th><th>Contribution</th></tr></thead>
+            <tbody>
+                @foreach (var l in _score.Lenses.OrderByDescending(l => l.Contribution))
+                {
+                    <tr>
+                        <td>@l.Lens</td>
+                        <td>@($"{l.Score:0.0}")</td>
+                        <td><span class="band b-@BandClass(l.Band)" style="font-size:.78rem">@l.Band.Label()</span>@(l.CriticalGated ? " *" : "")</td>
+                        <td>@l.DimensionCount</td>
+                        <td>@($"{l.Weight:0.000}")</td>
+                        <td>@($"{l.Contribution:0.00}")</td>
+                    </tr>
                 }
             </tbody>
         </table>
+        @if (_score.Lenses.Any(l => l.CriticalGated))
+        {
+            <p class="muted small">* band capped at Fair — a dimension below 4.0/10 critical-gates the lens (the gate changes the band, never the number).</p>
+        }
     }
 </div></section>
 
@@ -47,6 +73,7 @@
     [SupplyParameterFromForm] public CalcForm? Op { get; set; }
 
     private CaiScore? _score;
+    private VerifyResult? _verify;
     private string? _error;
 
     public sealed class CalcForm
@@ -60,16 +87,22 @@
     private void DoScore()
     {
         _score = null;
+        _verify = null;
         _error = null;
         if (Op!.Sample || string.IsNullOrWhiteSpace(Op.Json))
         {
-            Op.Json = SampleJson();
+            Op.Json = SampleJson;
             if (Op.Sample) { return; } // just populate the textarea
         }
 
         try
         {
-            _score = CaiScorer.Score(EvidenceBundle.Parse(Op.Json!));
+            var bundle = EvidenceBundle.Parse(Op.Json!);
+            _score = CaiScorer.Score(bundle);
+            if (bundle.HeadlineScore is not null)
+            {
+                _verify = CaiScorer.Verify(bundle);
+            }
         }
         catch (Exception e)
         {
@@ -82,19 +115,23 @@
         Band.Exemplary => "exemplary", Band.Healthy => "strong", Band.Fair => "adequate", Band.Poor => "weak", _ => "critical",
     };
 
-    private string SampleJson() =>
+    private const string SampleJson =
         """
         {
           "rubricVersion": "rubric-2026.08.15",
-          "headlineScore": 72.2,
-          "lenses": [
-            { "lens": "securityCompliance",  "score": 58, "owaWeight": 0.24 },
-            { "lens": "maturity",            "score": 65, "owaWeight": 0.20 },
-            { "lens": "architecture",        "score": 72, "owaWeight": 0.18 },
-            { "lens": "codeHealth",          "score": 86, "owaWeight": 0.14 },
-            { "lens": "productionReadiness", "score": 80, "owaWeight": 0.12 },
-            { "lens": "accessibility",       "score": 90, "owaWeight": 0.06 },
-            { "lens": "performance",         "score": 88, "owaWeight": 0.06 }
+          "dimensions": [
+            { "id": "D1",  "lens": "codeHealth",          "score": 7.5, "confidence": 0.95 },
+            { "id": "D3",  "lens": "codeHealth",          "score": 8.2, "confidence": 0.95 },
+            { "id": "D8",  "lens": "codeHealth",          "score": 6.4, "confidence": 0.90 },
+            { "id": "D5",  "lens": "architecture",        "score": 7.1, "confidence": 0.95 },
+            { "id": "D7",  "lens": "architecture",        "score": 8.4, "confidence": 0.90 },
+            { "id": "D15", "lens": "maturity",            "score": 6.0, "confidence": 0.85 },
+            { "id": "D16", "lens": "maturity",            "score": 7.2, "confidence": 0.80 },
+            { "id": "D30", "lens": "productionReadiness", "score": 7.6, "confidence": 0.90 },
+            { "id": "D12", "lens": "securityCompliance",  "score": 5.5, "confidence": 0.95 },
+            { "id": "D13", "lens": "securityCompliance",  "score": 8.9, "confidence": 0.95 },
+            { "id": "AC1", "lens": "accessibility",       "score": 8.5, "confidence": 0.85 },
+            { "id": "P1",  "lens": "performance",         "score": 8.0, "confidence": 0.80 }
           ]
         }
         """;
