@@ -1,0 +1,22 @@
+[Unit]
+Description=CAI — cai.canine.dev (the open standard: rubric API + UI + scorer)
+Documentation=https://github.com/CanineCC/CAI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jimmy
+Group=jimmy
+WorkingDirectory=/home/jimmy/apps/cai-web/app
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://0.0.0.0:8090
+Environment=HOME=/home/jimmy
+Environment=Rubrics__Root=/home/jimmy/apps/cai-web/rubrics
+ExecStart=/usr/bin/dotnet /home/jimmy/apps/cai-web/app/Cai.Web.dll
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target

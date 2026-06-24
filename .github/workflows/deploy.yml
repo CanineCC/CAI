@@ -1,0 +1,54 @@
+name: Deploy cai.canine.dev
+
+# Mirrors the watchdog deploy: a self-hosted runner ON canine-wrx1 verifies the build, publishes the app + rubrics to
+# /home/jimmy/apps/cai-web, then bounces cai-web.service (~1s). VERIFY before stopping anything, so a broken build is a
+# safe no-op. SSL is terminated by nginx on canine-dgx1 (unchanged by a code deploy).
+#
+# Requires a self-hosted runner registered for CanineCC/CAI on canine-wrx1 (label: self-hosted). The systemd unit +
+# nginx vhost live in deploy/ for reference.
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", "scorer/**", "rubrics/**", ".github/workflows/deploy.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-cai-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      # VERIFY (the old service keeps serving; any failure here = safe no-op).
+      - name: Verify build (Release)
+        run: dotnet build app/Cai.Web -c Release
+
+      - name: Test the scorer
+        run: dotnet test scorer/Cai.Tests -c Release
+
+      # PUBLISH into a staging dir, sync the rubrics, swap, bounce.
+      - name: Publish
+        run: |
+          set -euo pipefail
+          rm -rf /home/jimmy/apps/cai-web/app.next
+          dotnet publish app/Cai.Web -c Release -o /home/jimmy/apps/cai-web/app.next
+          rsync -a --delete rubrics/ /home/jimmy/apps/cai-web/rubrics/
+          rm -rf /home/jimmy/apps/cai-web/app.prev
+          [ -d /home/jimmy/apps/cai-web/app ] && mv /home/jimmy/apps/cai-web/app /home/jimmy/apps/cai-web/app.prev || true
+          mv /home/jimmy/apps/cai-web/app.next /home/jimmy/apps/cai-web/app
+          sudo systemctl restart cai-web.service
+
+      - name: Health check (roll back on failure)
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8090/api/rubrics || true)
+            [ "$code" = "200" ] && { echo "cai-web healthy"; exit 0; }
+            sleep 1
+          done
+          echo "::error::cai-web did not come healthy — rolling back"
+          [ -d /home/jimmy/apps/cai-web/app.prev ] && { rm -rf /home/jimmy/apps/cai-web/app; mv /home/jimmy/apps/cai-web/app.prev /home/jimmy/apps/cai-web/app; sudo systemctl restart cai-web.service; }
+          exit 1
