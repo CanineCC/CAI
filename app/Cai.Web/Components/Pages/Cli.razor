@@ -1,0 +1,85 @@
+@page "/cli"
+
+<PageTitle>CAI — compute it yourself (the reference CLI)</PageTitle>
+
+<div class="hero"><div class="wrap">
+    <p class="eyebrow">Compute it yourself</p>
+    <h1>The reference implementation.</h1>
+    <p class="lede">The scoring half of CAI is open. <code>cai</code> is the reference scorer in C# (Apache-2.0):
+        it reads an <a href="/spec#evidence">evidence bundle</a>, folds the lenses worst-first into the 0–100 CAI,
+        and bands it — the same arithmetic the standard defines. Because the weights ship in the evidence, anyone can
+        reproduce — or falsify — a published number with no access to the analyzer.</p>
+    <p><a class="cta" href="https://github.com/CanineCC/CAI">github.com/CanineCC/CAI →</a></p>
+</div></div>
+
+<section><div class="wrap">
+    <h2>What it is</h2>
+    <p>One small repository, three projects:</p>
+    <ul>
+        <li><strong><code>Cai.Scoring</code></strong> — the library: the bands, the ten lenses, the evidence-bundle
+            format, and the worst-first ordered-weighted fold.</li>
+        <li><strong><code>Cai.Cli</code></strong> — the <code>cai</code> command-line tool (<code>score</code> and
+            <code>verify</code>).</li>
+        <li><strong><code>Cai.Tests</code></strong> — determinism, banding, the fold, and verify, so the reference stays
+            honest.</li>
+    </ul>
+    <p>It is the <strong>proof engine</strong>: Watchdog publishes a signed survey <em>with its evidence</em> → you run
+        <code>cai</code> over that evidence → you get the identical score. The judgment is a service; the number is a
+        fact you can check yourself.</p>
+    <div class="callout"><p style="margin:0">Measuring a codebase <em>into</em> an evidence bundle is the analyzer's
+        job (closed, the product). <strong>Scoring the bundle is open</strong> — that's this tool.</p></div>
+</div></section>
+
+<section><div class="wrap">
+    <h2>Run it</h2>
+    <p>It needs only the .NET SDK and a clone of the repo — no keys, no network:</p>
+    <pre>git clone https://github.com/CanineCC/CAI
+cd CAI/scorer
+
+dotnet test                                                          # the scorer's own tests
+dotnet run --project Cai.Cli -- score  examples/evidence.sample.json
+dotnet run --project Cai.Cli -- verify examples/evidence.sample.json</pre>
+    <p class="muted">Builds to a <code>cai</code> binary; the usage below shows it as <code>cai</code>.</p>
+</div></section>
+
+<section><div class="wrap">
+    <h2>Usage</h2>
+
+    <h3><code>cai score &lt;evidence.json&gt;</code></h3>
+    <p class="muted">Fold an evidence bundle into the CAI + the per-lens roll-up.</p>
+    <pre>$ cai score examples/evidence.sample.json
+
+CAI 69.6 (Fair)  ·  rubric rubric-2026.08.15
+
+  lens                    score band          dims   weight   contrib
+  maturity                 65.1 Fair             18    0.457     29.77
+  securityCompliance       71.0 Healthy          22    0.214     15.19
+  codeHealth               74.3 Healthy          31    0.143     10.62
+  …</pre>
+
+    <h3><code>cai verify &lt;evidence.json&gt; [--expect N]</code></h3>
+    <p class="muted">Reproduce a published headline. The bundle carries <code>headlineScore</code>; or pass
+        <code>--expect N</code> to check against a number you were told.</p>
+    <pre>$ cai verify examples/evidence.sample.json
+✓ reproduced: CAI 70 (Healthy) under rubric rubric-2026.08.15 (claimed 70, Δ0.04)
+
+$ cai verify examples/evidence.sample.json --expect 90
+✗ MISMATCH: evidence folds to 69.56 but the bundle claims 90.00 (Δ20.44 > 0.50)</pre>
+
+    <h3>Exit codes</h3>
+    <ul>
+        <li><code>0</code> — scored, or verified and reproduced.</li>
+        <li><code>1</code> — verify mismatch (the claimed number does not reproduce). Wire it into CI.</li>
+        <li><code>2</code> — usage or I/O error (missing file, unparseable bundle).</li>
+    </ul>
+</div></section>
+
+<section><div class="wrap">
+    <h2>Or don't install anything</h2>
+    <p>The same fold runs in your browser — paste a bundle into the <a href="/calculator">calculator</a> (WASM,
+        nothing leaves your machine, no rate limit), or call the <a href="/api-reference">JSON API</a>. The algorithm
+        itself is documented on <a href="/spec">the spec</a>; <a href="/verify">Verify</a> walks the
+        reproduce-a-published-number flow end to end.</p>
+    <div class="callout"><p style="margin:0">Free to copy, protected to call it CAI: the code is Apache-2.0; only
+        spec-reproducible results may carry the CAI mark (see <a href="/badge">the badge policy</a>).</p></div>
+</div></section>
