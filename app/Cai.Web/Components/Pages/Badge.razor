@@ -11,6 +11,55 @@
 </div></div>
 
 <section><div class="wrap">
+    <h2>The badge</h2>
+    <p>A small SVG carrying the headline CAI and its band, in the standard's canonical colours. Issued from a signed
+        survey, it links straight to the verifiable record:</p>
+    <p>
+        <a href="https://watchdog.canine.dev/api/oss/OWNER/REPO/report" aria-label="example CAI badge: 78, Healthy">
+        <svg xmlns="http://www.w3.org/2000/svg" width="150" height="20" role="img" aria-label="CAI: 78 · Healthy">
+            <linearGradient id="g" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
+            <rect rx="3" width="150" height="20" fill="#555"/>
+            <rect rx="3" x="44" width="106" height="20" fill="#3C8F59"/>
+            <rect rx="3" width="150" height="20" fill="url(#g)"/>
+            <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11">
+                <text x="22" y="14">CAI</text>
+                <text x="97" y="14">78 · Healthy</text>
+            </g>
+        </svg>
+        </a>
+    </p>
+    <p class="muted">Band colours follow the five canonical bands
+        (<span style="color:#0E5C3A;font-weight:600">Exemplary</span> ·
+        <span style="color:#3C8F59;font-weight:600">Healthy</span> ·
+        <span style="color:#AD8217;font-weight:600">Fair</span> ·
+        <span style="color:#CF6B3A;font-weight:600">Poor</span> ·
+        <span style="color:#9C2D2A;font-weight:600">Critical</span>) — the live badge fills its score and band from the
+        survey, so it always agrees with the published number.</p>
+</div></section>
+
+<section><div class="wrap">
+    <h2>Embed it</h2>
+    <p>The badge SVG is served by the issuer at a canonical, cacheable endpoint. Point it at your repo and link it to the
+        survey — swap <code>OWNER/REPO</code> for yours:</p>
+
+    <h3>Markdown (README)</h3>
+    <pre>[![CAI](https://watchdog.canine.dev/api/oss/OWNER/REPO/badge.svg)](https://watchdog.canine.dev/api/oss/OWNER/REPO/report)</pre>
+
+    <h3>HTML</h3>
+    <pre>&lt;a href="https://watchdog.canine.dev/api/oss/OWNER/REPO/report"&gt;
+  &lt;img src="https://watchdog.canine.dev/api/oss/OWNER/REPO/badge.svg" alt="CAI"&gt;
+&lt;/a&gt;</pre>
+
+    <h3>reStructuredText</h3>
+    <pre>.. image:: https://watchdog.canine.dev/api/oss/OWNER/REPO/badge.svg
+   :target: https://watchdog.canine.dev/api/oss/OWNER/REPO/report
+   :alt: CAI</pre>
+
+    <div class="callout"><p style="margin:0">The image endpoint is immutable per published run and caches well; the link
+        target is the survey, so the badge is never a bare number — one click reaches the verifiable record.</p></div>
+</div></section>
+
+<section><div class="wrap">
     <h2>The rules</h2>
     <div class="cards">
         <div class="card"><h3>Must link to a record</h3><p>A badge links to the specific signed survey it represents —
