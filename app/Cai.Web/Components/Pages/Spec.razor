@@ -1,0 +1,92 @@
+@page "/spec"
+@inject RubricCatalogStore Store
+
+<PageTitle>CAI specification — the open algorithm</PageTitle>
+
+<div class="hero"><div class="wrap">
+    <p class="eyebrow">Specification · @(_catalog?.RubricVersion ?? "rubric")</p>
+    <h1>The CAI algorithm.</h1>
+    <p class="lede">One reproducible 0–100 for a whole C#/.NET codebase, computed deterministically from measured
+        evidence under a frozen, versioned rubric. The rubric this page describes is pinned below — older versions are
+        archived, so a score is always reproducible to the exact definitions it was computed under.</p>
+    @if (_versions.Count > 0)
+    {
+        <form method="get" class="rubric-pick">
+            <label>Rubric version:
+                <select name="v" onchange="this.form.submit()">
+                    @foreach (var ver in _versions)
+                    {
+                        <option value="@ver" selected="@(ver == _catalog?.RubricVersion)">@ver</option>
+                    }
+                </select>
+            </label>
+            <span class="muted small">@_versions.Count archived versions · <a href="/api/rubrics/@(_catalog?.RubricVersion)/catalog">catalog JSON</a></span>
+        </form>
+    }
+</div></div>
+
+<section><div class="wrap">
+    <h2>How the numbers fold up</h2>
+    <p>Each of the @(_catalog?.Dimensions.Count ?? 124) <strong>dimensions</strong> scores <strong>0–10</strong>, by
+        documented per-dimension formulas (density-scored, not volume-scored — the same finding count scores better in a
+        larger codebase). Dimensions roll into their <strong>lens</strong>; the lenses fold into the headline. Both folds
+        are a rank-weighted <strong>ordered weighted average</strong> (Yager OWA) — never an equal-weight mean.</p>
+    <ul>
+        <li><strong>Within a lens</strong> — the i-th worst dimension weighs <code>q^(i-1)</code> with <code>q = 0.75</code>.
+            A lens carries many dimensions, so the gentler decay keeps the rest earning their score instead of collapsing to the minimum.</li>
+        <li><strong>Across lenses</strong> — the headline weighs the i-th worst lens <code>q^(i-1)</code> with
+            <code>q = 0.55</code> (≈46% on the worst of six lenses, ≈2% on the best). A weak area drags the score it feeds
+            instead of being averaged away; a lens with no data is excluded, never counted as zero.</li>
+        <li><strong>Critical gate</strong> — a measured, non-advisory contributor below <code>4.0/10</code> caps its
+            lens's displayed band at <em>Fair</em>. The gate changes the band, never the number.</li>
+    </ul>
+    <p class="muted">Model-assisted (LLM) dimensions are <strong>advisory</strong> — excluded from the deterministic
+        number, shown band-only. Same commit + same rubric ⇒ the same score, byte-for-byte.</p>
+</div></section>
+
+<section id="evidence"><div class="wrap">
+    <h2>The evidence bundle</h2>
+    <p>A score is computed from an <strong>evidence bundle</strong> — the open, portable record of what was measured.
+        It carries the rubric version, the measured lenses (score + OWA weight), and the per-dimension results. Producing
+        a bundle is the analyzer's job; <a href="/calculator">scoring one</a> is open. A dimension measured at confidence
+        0 is <strong>absent</strong>, never a raw 0.0 — "not assessed" must not read as "failed".</p>
+    <pre>{
+  "rubricVersion": "@(_catalog?.RubricVersion ?? "rubric-2026.08.15")",
+  "headlineScore": 72.2,
+  "lenses": [
+    { "lens": "securityCompliance", "score": 58, "owaWeight": 0.24 },
+    { "lens": "maturity",           "score": 65, "owaWeight": 0.20 },
+    ...
+  ]
+}</pre>
+    <p>Because the weights are published <em>inside the evidence</em>, the fold is exact and reproducible by anyone —
+        no access to the analyzer required. <a href="https://github.com/CanineCC/CAI">The reference scorer</a> does
+        exactly this.</p>
+</div></section>
+
+<section><div class="wrap">
+    <h2>The bands</h2>
+    <p class="muted">A 0–100 lands in one of five fixed-valence bands (the canonical <code>RatingScale.TierFor</code>
+        table). Thresholds are part of the standard and don't move between rubric versions.</p>
+    <div class="bands">
+        <span class="band b-exemplary">Exemplary 90–100</span>
+        <span class="band b-strong">Healthy 70–89</span>
+        <span class="band b-adequate">Fair 50–69</span>
+        <span class="band b-weak">Poor 25–49</span>
+        <span class="band b-critical">Critical 0–24</span>
+    </div>
+    <div class="btns"><a class="btn" href="/dimensions">The dimension catalog →</a><a class="btn" href="/verify">Verify a published number</a></div>
+</div></section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "v")] public string? V { get; set; }
+
+    private RubricCatalog? _catalog;
+    private IReadOnlyList<string> _versions = [];
+
+    protected override void OnParametersSet()
+    {
+        _versions = Store.Versions();
+        _catalog = Store.Get(V ?? Store.Latest() ?? "");
+    }
+}

@@ -1,0 +1,52 @@
+@page "/lenses"
+@inject RubricCatalogStore Store
+
+<PageTitle>CAI — the lenses</PageTitle>
+
+<div class="hero"><div class="wrap">
+    <p class="eyebrow">The lenses</p>
+    <h1>Health, measured through @(_catalog?.Lenses.Count ?? 10) lenses.</h1>
+    <p class="lede">Each lens is a deterministic measurement of the code as it stands — never a judgement of the team.
+        The CAI groups its @(_catalog?.Dimensions.Count ?? 124) dimensions under these lenses; five are <strong>core</strong>
+        (always on), the rest <strong>model-aware</strong> (they light up only when the architecture calls for them).</p>
+</div></div>
+
+<section><div class="wrap">
+    @if (_catalog is null)
+    {
+        <p class="muted">No rubric catalog is published on this host.</p>
+    }
+    else
+    {
+        <table class="lenses">
+            <thead><tr><th>Lens</th><th>Dimensions</th><th>Kind</th></tr></thead>
+            <tbody>
+                @foreach (var lens in _catalog.Lenses)
+                {
+                    var n = _catalog.InLens(lens.Key).Count();
+                    <tr>
+                        <td><a href="/dimensions#@lens.Key"><strong>@lens.Label</strong></a></td>
+                        <td>@n</td>
+                        <td>@(Core.Contains(lens.Key) ? "core — always on" : "model-aware")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="muted">Every lens is computed when its subject exists; a lens with no measurable subject is excluded
+            (never counted as zero). A lens reading <em>Critical</em> caps its displayed band — a serious failure can't
+            hide behind strong scores elsewhere.</p>
+        <div class="btns">
+            <a class="btn primary" href="/dimensions">Browse all @_catalog.Dimensions.Count dimensions →</a>
+            <a class="btn" href="/spec">How they fold into the score</a>
+        </div>
+    }
+</div></section>
+
+@code {
+    private static readonly HashSet<string> Core =
+        ["codeHealth", "architecture", "maturity", "productionReadiness", "securityCompliance"];
+
+    private RubricCatalog? _catalog;
+
+    protected override void OnInitialized() => _catalog = Store.Get(Store.Latest() ?? "");
+}
