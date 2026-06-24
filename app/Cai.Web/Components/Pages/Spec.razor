@@ -44,6 +44,20 @@
         number, shown band-only. Same commit + same rubric ⇒ the same score, byte-for-byte.</p>
 </div></section>
 
+<section><div class="wrap">
+    <h2>Read from the git history — four dimensions the source alone can't show</h2>
+    <p>Some of the most predictive signals aren't in any single file — they're in how the code has changed over time.
+        These are mined <strong>deterministically</strong> from git history (by tool, never the LLM) and fold into the same
+        CAI through the Maturity and Architecture lenses. No history, no measurement: where history is shallow or absent,
+        these dimensions <strong>abstain rather than guess</strong> (a confidence-0 dimension is absent, never a raw 0).</p>
+    <div class="cards">
+        <div class="card"><h3>Hotspots — churn × complexity</h3><p>Files that change often and carry high complexity — the most predictive maintenance-risk signal there is, scored over a rolling window.</p></div>
+        <div class="card"><h3>Knowledge concentration — bus factor</h3><p>Files whose living knowledge sits with a single author (time-decayed authorship) — key-person risk, located rather than guessed at.</p></div>
+        <div class="card"><h3>Knowledge freshness</h3><p>Core logic everyone who understood has gone quiet on — the orphaned-module risk a snapshot of today's source can't see.</p></div>
+        <div class="card"><h3>Change coupling</h3><p>Files that keep changing together across a module boundary despite no code dependency — hidden, logical coupling static analysis is blind to.</p></div>
+    </div>
+</div></section>
+
 <section id="evidence"><div class="wrap">
     <h2>The evidence bundle</h2>
     <p>A score is computed from an <strong>evidence bundle</strong> — the open, portable record of what was measured.
@@ -76,6 +90,22 @@
         <span class="band b-critical">Critical 0–24</span>
     </div>
     <div class="btns"><a class="btn" href="/dimensions">The dimension catalog →</a><a class="btn" href="/verify">Verify a published number</a></div>
+</div></section>
+
+<section><div class="wrap">
+    <h2>What lowers the CAI — and what never can</h2>
+    <p>The score isn't a black box. Here's what actually costs points, by lens — and, just as important, what never moves
+        the number.</p>
+    <div class="cards">
+        <div class="card"><h3>Code Health</h3><p>Tangled, heavily-branching methods; copy-pasted logic; oversized God-classes; dead scaffolding; thin or absent tests.</p></div>
+        <div class="card"><h3>Architecture</h3><p>Layering violations and dependency cycles; a bounded context leaking its internals; hidden change-coupling across a boundary.</p></div>
+        <div class="card"><h3>Production-Readiness</h3><p>No deployment automation, swallowed exceptions, missing observability; an event consumer with no idempotency guard.</p></div>
+        <div class="card"><h3>Security &amp; Compliance</h3><p>A live CVE in a dependency, a committed secret, a missing injection guard, an unmet automatable control.</p></div>
+    </div>
+    <div class="callout"><p style="margin:0"><strong>What does NOT lower it:</strong> anything the advisory LLM read says,
+        and anything <em>you</em> control — a compliance declaration, a suppressed finding, your acceptance criteria. Those
+        change what a report <em>says</em>, never the CAI. That's the firewall — and it's what makes the number
+        independent.</p></div>
 </div></section>
 
 @code {
