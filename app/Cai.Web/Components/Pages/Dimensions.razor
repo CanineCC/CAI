@@ -28,8 +28,19 @@
                     }
                 </select>
             </label>
+            @if (!string.IsNullOrEmpty(Lens))
+            {
+                <input type="hidden" name="lens" value="@Lens" />
+            }
             <span class="muted small">@_versions.Count published versions · <a href="/api/rubrics/@_catalog.RubricVersion/catalog">this catalog as JSON</a></span>
         </form>
+
+        @if (!string.IsNullOrEmpty(Lens))
+        {
+            var matched = _catalog.Lenses.FirstOrDefault(l => string.Equals(l.Key, Lens, StringComparison.OrdinalIgnoreCase));
+            <p class="lens-filter-note">Showing only the <strong>@(matched?.Label ?? Lens)</strong> lens.
+                <a href="@($"/dimensions{(V is null ? "" : $"?v={V}")}")">Show all @_catalog.Dimensions.Count dimensions →</a></p>
+        }
 
         <div class="dim-toolbar">
             <input type="search" id="dim-filter" placeholder="Filter @(_catalog.Dimensions.Count) dimensions by name, ID, or what they measure…" aria-label="Filter dimensions" autocomplete="off" />
@@ -38,6 +49,7 @@
 
         @foreach (var lens in _catalog.Lenses)
         {
+            if (!string.IsNullOrEmpty(Lens) && !string.Equals(lens.Key, Lens, StringComparison.OrdinalIgnoreCase)) { continue; }
             var dims = _catalog.InLens(lens.Key).ToList();
             if (dims.Count == 0) { continue; }
             <div class="lens-block">
@@ -100,6 +112,7 @@
 
 @code {
     [SupplyParameterFromQuery(Name = "v")] public string? V { get; set; }
+    [SupplyParameterFromQuery(Name = "lens")] public string? Lens { get; set; }
 
     private RubricCatalog? _catalog;
     private IReadOnlyList<string> _versions = [];
