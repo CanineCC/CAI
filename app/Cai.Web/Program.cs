@@ -110,7 +110,25 @@ api.MapPost("/score", async (HttpRequest req) =>
             cai = Math.Round(s.Headline, 2),
             band = s.Band.Label(),
             rubricVersion = s.RubricVersion,
-            lenses = s.Contributions.Select(c => new { c.Lens, c.Score, c.Weight, c.Contribution }),
+            aggregate = Math.Round(s.Aggregate, 2),
+            categoryMean = s.CategoryMean is { } m ? Math.Round(m, 2) : (double?)null,
+            coherenceNote = s.CoherenceNote,
+            lenses = s.Lenses.Select(l => new
+            {
+                l.Lens,
+                score = Math.Round(l.Score, 2),
+                band = l.Band.Label(),
+                criticalGated = l.CriticalGated,
+                weight = Math.Round(l.Weight, 4),
+                contribution = Math.Round(l.Contribution, 2),
+            }),
+            categories = s.Categories.Select(c => new
+            {
+                c.Category,
+                c.Lens,
+                score = c.Score is { } cs ? Math.Round(cs, 2) : (double?)null,
+                c.DimensionCount,
+            }),
         });
     }
     catch (Exception e)

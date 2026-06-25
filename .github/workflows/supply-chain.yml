@@ -1,0 +1,84 @@
+name: Supply-chain (SBOM · sign · provenance)
+
+# Builds cai-web the same way deploy.yml does, then attaches supply-chain integrity to the build artifact:
+#   - an SPDX SBOM of the published output (anchore/sbom-action → syft)
+#   - a keyless cosign signature over the artifact + SBOM (records to the public Sigstore/Rekor transparency log)
+#   - SLSA build provenance (actions/attest-build-provenance)
+# Every action is pinned to a commit SHA (# comment shows the tag it maps to). Build-only: this never touches the live
+# cai-web.service — deploy.yml owns the swap + bounce. Runs on the same self-hosted runner (the .NET 10 toolchain is
+# already there); it serializes behind a deploy rather than racing it.
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", "scorer/**", "rubrics/**", ".github/workflows/supply-chain.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write       # GitHub OIDC → keyless cosign + provenance attestation
+  attestations: write   # actions/attest-build-provenance writes to the attestation store
+
+concurrency:
+  group: supply-chain-cai-main
+  cancel-in-progress: true
+
+env:
+  DIST: dist
+  TARBALL: cai-web-${{ github.sha }}.tar.gz
+  SBOM: cai-web-${{ github.sha }}.spdx.json
+
+jobs:
+  attest:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Publish (Release)
+        run: |
+          set -euo pipefail
+          rm -rf "$DIST"
+          dotnet publish app/Cai.Web -c Release -o "$DIST"
+
+      - name: Package artifact
+        run: tar -czf "$TARBALL" -C "$DIST" .
+
+      - name: Generate SBOM (SPDX)
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0.24.0
+        with:
+          path: ${{ env.DIST }}
+          format: spdx-json
+          output-file: ${{ env.SBOM }}
+          artifact-name: ${{ env.SBOM }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5  # v3.10.1
+
+      - name: Sign artifact + SBOM (keyless)
+        run: |
+          set -euo pipefail
+          cosign sign-blob --yes \
+            --output-signature "$TARBALL.sig" \
+            --output-certificate "$TARBALL.pem" \
+            "$TARBALL"
+          cosign sign-blob --yes \
+            --output-signature "$SBOM.sig" \
+            --output-certificate "$SBOM.pem" \
+            "$SBOM"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f  # v3.2.0
+        with:
+          subject-path: ${{ env.TARBALL }}
+
+      - name: Upload signed artifact + signatures
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: cai-web-${{ github.sha }}
+          path: |
+            ${{ env.TARBALL }}
+            ${{ env.TARBALL }}.sig
+            ${{ env.TARBALL }}.pem
+            ${{ env.SBOM }}.sig
+            ${{ env.SBOM }}.pem
+          if-no-files-found: error
+          retention-days: 90

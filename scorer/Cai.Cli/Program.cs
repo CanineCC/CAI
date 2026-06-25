@@ -49,7 +49,7 @@ try
         foreach (var l in s.Lenses.OrderByDescending(l => l.Contribution))
         {
             var band = l.Band.Label() + (l.CriticalGated ? "*" : "");
-            Console.WriteLine($"  {l.Lens,-22}{l.Score,7:0.0}  {band,-12}{l.DimensionCount,4}{l.Weight,9:0.000}{l.Contribution,10:0.00}");
+            Console.WriteLine($"  {l.Lens,-22}{l.Score,7:0.0}  {band,-12}{l.ItemCount,4}{l.Weight,9:0.000}{l.Contribution,10:0.00}");
         }
 
         if (s.Lenses.Any(l => l.CriticalGated))
