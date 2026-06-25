@@ -27,7 +27,7 @@
                 var protects = Cai.Web.CaiLensProse.For(lens.Key);
                 <div class="card lens-card">
                     <div class="lens-card-head">
-                        <h3><a href="/dimensions#@lens.Key">@lens.Label</a></h3>
+                        <h3><a href="/dimensions?lens=@lens.Key">@lens.Label</a></h3>
                         <span class="pill">@(Core.Contains(lens.Key) ? "core · always on" : "model-aware")</span>
                     </div>
                     @if (protects is not null)
@@ -38,7 +38,7 @@
                     {
                         <p class="muted">Measured only when the architecture calls for it.</p>
                     }
-                    <p style="margin:0.5rem 0 0"><a href="/dimensions#@lens.Key">@n dimensions it measures →</a></p>
+                    <p style="margin:0.5rem 0 0"><a href="/dimensions?lens=@lens.Key">@n dimensions it measures →</a></p>
                 </div>
             }
         </div>
