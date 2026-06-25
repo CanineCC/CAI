@@ -16,7 +16,7 @@ independent, signed *survey* (the deductions and what to do) is a service from t
 - **Reproducible**: same evidence + same rubric version ⇒ the same number. Falsifiable by design.
 - A **measurement, never a certification** — the tool evidences the automatable slice; a named human attests the rest.
 
-Bands: **Exemplary** 90–100 · **Healthy** 70–89 · **Fair** 50–69 · **Poor** 25–49 · **Critical** 0–24.
+Bands: **Exemplary** 90–100 · **Strong** 70–89 · **Adequate** 50–69 · **Weak** 25–49 · **Critical** 0–24.
 
 ## The reference scorer (`/scorer`)
 

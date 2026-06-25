@@ -156,7 +156,7 @@ The score is deterministic: identical evidence under the same rubric version alw
 ## How it is computed
 - {dimCount} dimensions, each scored 0-10 from evidence, grouped into {lensCount} lenses ({coreCount} core, always on; the rest model-aware — they light up only when the architecture calls for them).
 - Dimensions fold into their lens, lenses fold into the headline — both by a rank-weighted ordered weighted average (Yager OWA), worst-first, so the weakest areas drag hardest. Never an equal-weight mean.
-- Bands: Exemplary 90-100, Healthy 70-89, Fair 50-69, Poor 25-49, Critical 0-24.
+- Bands: Exemplary 90-100, Strong 70-89, Adequate 50-69, Weak 25-49, Critical 0-24.
 - Frozen, versioned rubric (latest: {latest ?? "unpublished"}). Any change that can move a score for unchanged evidence mints a new version; old versions are retained, so a score is always reproducible to the exact criteria.
 - The firewall: the deterministic measurement (score, findings, algorithm) is the open standard; the advisory deductions and non-score enhancements are the surveyor's paid judgment. That boundary is the free/paid line.
 

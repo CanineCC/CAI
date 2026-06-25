@@ -24,7 +24,7 @@ public static class CaiGlossary
         new("dimension", "Dimension", null,
             "A single measured aspect of a codebase, scored 0–10 from evidence. Dimensions roll up into their lens."),
         new("band", "Band", null,
-            "The qualitative tier a CAI falls into: Exemplary (90–100), Healthy (70–89), Fair (50–69), Poor (25–49), Critical (0–24). A fixed worst-to-best valence ladder."),
+            "The qualitative tier a CAI falls into: Exemplary (90–100), Strong (70–89), Adequate (50–69), Weak (25–49), Critical (0–24). A fixed worst-to-best valence ladder."),
         new("evidence-bundle", "Evidence bundle", null,
             "The open input record a CAI is computed from: the measured dimensions and the rank weights, not the source code. Anyone can fold a bundle through the open scorer to reproduce the score."),
         new("rubric-version", "Rubric version", null,
