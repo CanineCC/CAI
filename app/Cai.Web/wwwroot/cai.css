@@ -102,5 +102,5 @@ footer.site a { color: var(--ink-soft); }
 footer.site nav { display: flex; gap: 1rem; flex-wrap: wrap; }
 .callout { background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
 
-.lens-filter-note { margin: 0 0 1rem; padding: .6rem .9rem; border-radius: 8px; background: var(--surface-2, #f4f6f8); font-size: .95rem; }
-.lens-filter-note a { font-weight: 600; }
+.lens-filter-note { margin: 0 0 1rem; padding: .6rem .9rem; border-radius: 8px; background: var(--bg-soft); color: var(--ink); border: 1px solid var(--line); font-size: .95rem; }
+.lens-filter-note a { font-weight: 600; color: var(--accent); }
