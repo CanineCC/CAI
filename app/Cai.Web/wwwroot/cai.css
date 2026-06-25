@@ -104,3 +104,8 @@ footer.site nav { display: flex; gap: 1rem; flex-wrap: wrap; }
 
 .lens-filter-note { margin: 0 0 1rem; padding: .6rem .9rem; border-radius: 8px; background: var(--bg-soft); color: var(--ink); border: 1px solid var(--line); font-size: .95rem; }
 .lens-filter-note a { font-weight: 600; color: var(--accent); }
+
+/* Parent-studio byline (footer): Canine badge as a currentColor mask + link to canine.dev. */
+.canine-by { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.6rem; color: var(--ink-soft); font-size: 0.85rem; }
+.canine-by:hover { color: var(--ink); text-decoration: none; }
+.canine-badge { display: inline-block; width: 16px; height: 18px; background: currentColor; -webkit-mask: url("/brand/canine-badge-flat.svg") no-repeat center / contain; mask: url("/brand/canine-badge-flat.svg") no-repeat center / contain; }
