@@ -8,7 +8,7 @@ namespace Cai.Scoring;
 /// criticality (a prototype's "Strong" line is lower than a mission-critical service's). This is the single source of
 /// truth for the cutlines; clients ship these so engine + UI band identically.
 /// </summary>
-public static class QualityBarBands
+internal static class QualityBarBands
 {
     // Production baseline cutoffs (top-down), identical to Bands.For.
     private const double ExemplaryAt = 90.0, HealthyAt = 70.0, FairAt = 50.0, PoorAt = 25.0;

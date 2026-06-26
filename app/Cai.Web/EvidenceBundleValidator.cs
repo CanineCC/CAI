@@ -6,7 +6,7 @@ namespace Cai.Web;
 /// <summary>Inbound validation (S1) for the public <c>/api/score</c> + <c>/api/verify</c> endpoints: reject a malformed
 /// evidence bundle before it reaches the deterministic scorer. Mirrors the bundle's documented invariants — a rubric
 /// version is required, and every dimension/meta score, confidence and coverage must sit in its valid range.</summary>
-public sealed class EvidenceBundleValidator : AbstractValidator<EvidenceBundle>
+internal sealed class EvidenceBundleValidator : AbstractValidator<EvidenceBundle>
 {
     public EvidenceBundleValidator()
     {

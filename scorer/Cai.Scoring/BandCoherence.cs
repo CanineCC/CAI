@@ -6,7 +6,7 @@ namespace Cai.Scoring;
 /// ("largest drag, prioritise here") cannot band Exemplary on the cover. The NUMBER is unchanged (lens weighting is a
 /// deliberate product decision); only the label stops over-promising.
 /// </summary>
-public static class BandCoherence
+internal static class BandCoherence
 {
     /// <summary>The headline band capped at one band above the worst measured category, with a human note when the cap
     /// bit. <paramref name="measuredCategoryScores"/> are the 0–100 scores of the categories that produced data (null

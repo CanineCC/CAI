@@ -7,7 +7,7 @@ namespace Cai.Scoring;
 /// possible), so the lens rolls up to ~100 on a trivially-structured repo. This floor stops "true but trivial" from
 /// reading as Exemplary structure, and drops the lens entirely when there is genuinely nothing to grade.
 /// </summary>
-public static class ArchitectureSurfaceFloor
+internal static class ArchitectureSurfaceFloor
 {
     /// <summary>A repo needs at least this many production projects before cross-project architecture metrics carry
     /// real signal. Below it (with too little production LoC) the lens is CAPPED, never zeroed.</summary>

@@ -7,7 +7,7 @@ namespace Cai.Scoring;
 /// five is not dragged as if that dimension were a whole lens). The category a dimension sits in decides which lens it
 /// feeds — there is no per-dimension weighting (a dimension's influence is its category, a category's is its lens).
 /// </summary>
-public enum DimensionCategory
+internal enum DimensionCategory
 {
     /// <summary>Intrinsic code quality (complexity, smells, readability) — feeds the Code Health lens.</summary>
     CodeQuality,
@@ -38,7 +38,7 @@ public enum DimensionCategory
 }
 
 /// <summary>Maps a scoring category to its lens and parses the wire name a bundle carries.</summary>
-public static class Categories
+internal static class Categories
 {
     /// <summary>The lens a category feeds (the rubric's category→lens map). Architecture is its own lens so an
     /// over-engineered-but-low-coupling codebase shows a weak Architecture slice while Code Health stays high; docs +

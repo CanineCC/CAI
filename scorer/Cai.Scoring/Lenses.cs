@@ -50,7 +50,7 @@ public static class LensCatalog
     /// (<see cref="QualityBarBands"/>). Foundational code/architecture stay near-strict even for a prototype;
     /// operational maturity/readiness follow the bar fully; safety (security) stays near-strict everywhere; everything
     /// else (the conditional lenses) takes a moderate factor.</summary>
-    public static LensGroup GroupOf(string key) => key switch
+    internal static LensGroup GroupOf(string key) => key switch
     {
         "codeHealth" or "architecture" => LensGroup.Foundational,
         "maturity" or "productionReadiness" => LensGroup.Operational,
@@ -62,7 +62,7 @@ public static class LensCatalog
 /// <summary>How strongly a lens's red/amber/green band thresholds follow the quality bar — the bar moves the band
 /// lines, never the score (a prototype need not be documented, but its code should still basically work, and even a
 /// prototype must not leak secrets).</summary>
-public enum LensGroup
+internal enum LensGroup
 {
     /// <summary>Code Health + Architecture — stay near-strict even for a prototype (the basics must hold regardless).</summary>
     Foundational,
