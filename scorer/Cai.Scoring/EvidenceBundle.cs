@@ -77,7 +77,7 @@ public sealed record EvidenceBundle
 /// the measurement reached, the confidence it was measured at, and whether it's an LLM-advisory dimension. A dimension
 /// measured at confidence 0 is NOT measured — it must be ABSENT from the bundle, never a raw 0.0 (that would read as
 /// "failed" instead of "not assessed"). An advisory dimension is shown band-only and excluded from the number.</summary>
-public sealed record DimensionScore(
+public readonly record struct DimensionScore(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("category")] string Category,
     [property: JsonPropertyName("score")] double ScoreZeroToTen,
@@ -93,7 +93,7 @@ public sealed record DimensionScore(
 
 /// <summary>One meta-dimension's measured result: its 0–10 score (null ⇒ not measured) and the lens it feeds directly.
 /// Advisory and null-scored meta-dimensions are excluded from the number.</summary>
-public sealed record MetaDimensionScore(
+public readonly record struct MetaDimensionScore(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("lens")] string Lens,
     [property: JsonPropertyName("score")] double? ScoreZeroToTen)
@@ -104,7 +104,7 @@ public sealed record MetaDimensionScore(
 
 /// <summary>One lens's pre-computed contribution for the thin-sidecar fallback: its 0–100 score and its OWA weight (the
 /// worst-first share of the headline this lens carries). Present weights sum to 1.</summary>
-public sealed record LensInput(
+public readonly record struct LensInput(
     [property: JsonPropertyName("lens")] string Lens,
     [property: JsonPropertyName("score")] double Score,
     [property: JsonPropertyName("owaWeight")] double OwaWeight);
