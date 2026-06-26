@@ -1,0 +1,42 @@
+name: Accessibility
+
+# Accessibility enforcement (AC7): build + run the site, then scan the key pages with pa11y-ci (axe + HTML_CodeSniffer,
+# WCAG2AA) so regressions surface in CI. Reported, not gated (continue-on-error) — a known issue shouldn't block a
+# deploy, but it stays visible. Runs on a GitHub-hosted runner (public repo); all actions pinned to commit SHAs.
+on:
+  push:
+    branches: [main]
+    paths: ["app/Cai.Web/**", ".pa11yci", ".github/workflows/a11y.yml"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pa11y:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9  # v4.3.1
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: '20'
+
+      - name: Start the site
+        run: |
+          set -euo pipefail
+          dotnet run --project app/Cai.Web -c Release --urls http://127.0.0.1:8090 &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8090/health >/dev/null && { echo "up"; break; }
+            sleep 2
+          done
+
+      - name: Run pa11y-ci
+        continue-on-error: true
+        run: npx --yes pa11y-ci
