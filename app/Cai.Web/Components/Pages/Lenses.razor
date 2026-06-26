@@ -27,7 +27,7 @@
                 var protects = Cai.Web.CaiLensProse.For(lens.Key);
                 <div class="card lens-card">
                     <div class="lens-card-head">
-                        <h3><a href="/dimensions?lens=@lens.Key">@lens.Label</a></h3>
+                        <h2><a href="/dimensions?lens=@lens.Key">@lens.Label</a></h2>
                         <span class="pill">@(Core.Contains(lens.Key) ? "core · always on" : "model-aware")</span>
                     </div>
                     @if (protects is not null)

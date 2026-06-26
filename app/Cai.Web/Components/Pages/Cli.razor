@@ -45,7 +45,7 @@ dotnet run --project Cai.Cli -- verify examples/evidence.sample.json</pre>
 <section><div class="wrap">
     <h2>Usage</h2>
 
-    <h3><code>cai score &lt;evidence.json&gt;</code></h3>
+    <h3>cai score <code>&lt;evidence.json&gt;</code></h3>
     <p class="muted">Fold an evidence bundle into the CAI + the per-lens roll-up.</p>
     <pre>$ cai score examples/evidence.sample.json
 
@@ -57,7 +57,7 @@ CAI 69.6 (Adequate)  ·  rubric rubric-2026.08.15
   codeHealth               74.3 Strong           31    0.143     10.62
   …</pre>
 
-    <h3><code>cai verify &lt;evidence.json&gt; [--expect N]</code></h3>
+    <h3>cai verify <code>&lt;evidence.json&gt; [--expect N]</code></h3>
     <p class="muted">Reproduce a published headline. The bundle carries <code>headlineScore</code>; or pass
         <code>--expect N</code> to check against a number you were told.</p>
     <pre>$ cai verify examples/evidence.sample.json
