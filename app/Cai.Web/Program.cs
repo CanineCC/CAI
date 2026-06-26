@@ -145,6 +145,20 @@ app.Use(async (context, next) =>
     await next();
 });
 
+// Map the API access guard's throw-on-violation to 403 (C2). The guard itself is called explicitly by each API handler.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next().ConfigureAwait(false);
+    }
+    catch (ApiAccess.ForbiddenException ex)
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new { error = ex.Message }).ConfigureAwait(false);
+    }
+});
+
 app.UseRateLimiter();
 app.UseStaticFiles();
 app.UseAntiforgery();
@@ -162,12 +176,16 @@ app.MapHealthChecks("/health").AllowAnonymous();
 var api = app.MapGroup("/api");
 
 // The published rubric versions, newest first.
-api.MapGet("/rubrics", [AllowAnonymous] (RubricCatalogStore store) =>
-    Results.Ok(new { latest = store.Latest(), versions = store.Versions() }));
+api.MapGet("/rubrics", [AllowAnonymous] (HttpContext http, RubricCatalogStore store) =>
+{
+    ApiAccess.EnsureAllowed(http);
+    return Results.Ok(new { latest = store.Latest(), versions = store.Versions() });
+});
 
 // A version's full catalog — the 124 dimensions × 10 lenses it defines. "latest" resolves to the newest.
-api.MapGet("/rubrics/{version}/catalog", [AllowAnonymous] (string version, RubricCatalogStore store) =>
+api.MapGet("/rubrics/{version}/catalog", [AllowAnonymous] (string version, HttpContext http, RubricCatalogStore store) =>
 {
+    ApiAccess.EnsureAllowed(http);
     var resolved = version == "latest" ? store.Latest() : version;
     if (resolved is null)
     {
@@ -181,8 +199,9 @@ api.MapGet("/rubrics/{version}/catalog", [AllowAnonymous] (string version, Rubri
 });
 
 // Score an evidence bundle — the open, reproducible fold. POST the bundle JSON; get the CAI + per-lens contributions.
-api.MapPost("/score", [AllowAnonymous] async (HttpRequest req, IValidator<EvidenceBundle> validator, ILogger<Program> log) =>
+api.MapPost("/score", [AllowAnonymous] async (HttpRequest req, HttpContext http, IValidator<EvidenceBundle> validator, ILogger<Program> log) =>
 {
+    ApiAccess.EnsureAllowed(http);
     try
     {
         using var reader = new StreamReader(req.Body);
@@ -229,8 +248,9 @@ api.MapPost("/score", [AllowAnonymous] async (HttpRequest req, IValidator<Eviden
 });
 
 // Verify a published headline reproduces from its evidence.
-api.MapPost("/verify", [AllowAnonymous] async (HttpRequest req, IValidator<EvidenceBundle> validator, ILogger<Program> log) =>
+api.MapPost("/verify", [AllowAnonymous] async (HttpRequest req, HttpContext http, IValidator<EvidenceBundle> validator, ILogger<Program> log) =>
 {
+    ApiAccess.EnsureAllowed(http);
     try
     {
         using var reader = new StreamReader(req.Body);
