@@ -119,7 +119,7 @@ builder.Services.AddRateLimiter(options =>
         }
 
         await ctx.HttpContext.Response.WriteAsJsonAsync(
-            new { error = "rate limit exceeded — cache the rubric you use; see https://cai.canine.dev/api-reference" }, ct);
+            new { error = "rate limit exceeded — cache the rubric you use; see https://cai.canine.dev/api-reference" }, ct).ConfigureAwait(false);
     };
 });
 
@@ -156,16 +156,17 @@ app.UseAuthorization();
 app.MapHealthChecks("/health").AllowAnonymous();
 
 // ── The standard API (what the Watchdog surveyor and anyone else calls) ───────────────────────────────────────────
-// The whole API is intentionally public (a read-only, rate-limited standard) — opt out of the default-deny fallback
-// policy (C2). Authorization is default-closed; this is the deliberate, explicit public surface.
-var api = app.MapGroup("/api").AllowAnonymous();
+// The whole API is intentionally public (a read-only, rate-limited standard). Each endpoint opts out of the default-deny
+// fallback policy with an explicit [AllowAnonymous] attribute (C2) — authorization is default-closed; this is the
+// deliberate, documented public surface.
+var api = app.MapGroup("/api");
 
 // The published rubric versions, newest first.
-api.MapGet("/rubrics", (RubricCatalogStore store) =>
+api.MapGet("/rubrics", [AllowAnonymous] (RubricCatalogStore store) =>
     Results.Ok(new { latest = store.Latest(), versions = store.Versions() }));
 
 // A version's full catalog — the 124 dimensions × 10 lenses it defines. "latest" resolves to the newest.
-api.MapGet("/rubrics/{version}/catalog", (string version, RubricCatalogStore store) =>
+api.MapGet("/rubrics/{version}/catalog", [AllowAnonymous] (string version, RubricCatalogStore store) =>
 {
     var resolved = version == "latest" ? store.Latest() : version;
     if (resolved is null)
@@ -180,13 +181,13 @@ api.MapGet("/rubrics/{version}/catalog", (string version, RubricCatalogStore sto
 });
 
 // Score an evidence bundle — the open, reproducible fold. POST the bundle JSON; get the CAI + per-lens contributions.
-api.MapPost("/score", async (HttpRequest req, IValidator<EvidenceBundle> validator, ILogger<Program> log) =>
+api.MapPost("/score", [AllowAnonymous] async (HttpRequest req, IValidator<EvidenceBundle> validator, ILogger<Program> log) =>
 {
     try
     {
         using var reader = new StreamReader(req.Body);
-        var bundle = EvidenceBundle.Parse(await reader.ReadToEndAsync());
-        var validation = await validator.ValidateAsync(bundle);
+        var bundle = EvidenceBundle.Parse(await reader.ReadToEndAsync().ConfigureAwait(false));
+        var validation = await validator.ValidateAsync(bundle).ConfigureAwait(false);
         if (!validation.IsValid)
         {
             log.LogWarning("Rejected /score bundle ({Count} error(s))", validation.Errors.Count);
@@ -228,13 +229,13 @@ api.MapPost("/score", async (HttpRequest req, IValidator<EvidenceBundle> validat
 });
 
 // Verify a published headline reproduces from its evidence.
-api.MapPost("/verify", async (HttpRequest req, IValidator<EvidenceBundle> validator, ILogger<Program> log) =>
+api.MapPost("/verify", [AllowAnonymous] async (HttpRequest req, IValidator<EvidenceBundle> validator, ILogger<Program> log) =>
 {
     try
     {
         using var reader = new StreamReader(req.Body);
-        var bundle = EvidenceBundle.Parse(await reader.ReadToEndAsync());
-        var validation = await validator.ValidateAsync(bundle);
+        var bundle = EvidenceBundle.Parse(await reader.ReadToEndAsync().ConfigureAwait(false));
+        var validation = await validator.ValidateAsync(bundle).ConfigureAwait(false);
         if (!validation.IsValid)
         {
             log.LogWarning("Rejected /verify bundle ({Count} error(s))", validation.Errors.Count);
@@ -252,7 +253,7 @@ api.MapPost("/verify", async (HttpRequest req, IValidator<EvidenceBundle> valida
 });
 
 // ── /llms.txt — teach the CAI term + the standard's structure to LLMs/agents (the "referenceable" pillar) ──────────
-app.MapGet("/llms.txt", (RubricCatalogStore store) =>
+app.MapGet("/llms.txt", [AllowAnonymous] (RubricCatalogStore store) =>
 {
     var latest = store.Latest();
     var catalog = latest is null ? null : store.Get(latest);
@@ -300,13 +301,13 @@ The score is deterministic: identical evidence under the same rubric version alw
 The standard is free to use. An independent, signed CAI survey — with the deductions and what to do about them — is a service from the surveyor: https://watchdog.canine.dev
 ";
     return Results.Text(text, "text/plain; charset=utf-8");
-}).AllowAnonymous();
+});
 
 // The CAI vocabulary as a schema.org DefinedTermSet (JSON-LD) — the citable, machine-readable definition (referenceable pillar).
-app.MapGet("/glossary.jsonld", () => Results.Text(Cai.Web.CaiGlossary.Build(), "application/ld+json; charset=utf-8")).AllowAnonymous();
+app.MapGet("/glossary.jsonld", [AllowAnonymous] () => Results.Text(Cai.Web.CaiGlossary.Build(), "application/ld+json; charset=utf-8"));
 
 // Browsers auto-request /favicon.ico; we only ship favicon.svg. Redirect so non-HTML responses (e.g. /llms.txt) don't 404.
-app.MapGet("/favicon.ico", () => Results.Redirect("/favicon.svg", permanent: true)).AllowAnonymous();
+app.MapGet("/favicon.ico", [AllowAnonymous] () => Results.Redirect("/favicon.svg", permanent: true));
 
 // The standard's UI (static-SSR Blazor). Public — opt out of the default-deny fallback policy (C2).
 app.MapRazorComponents<App>().AllowAnonymous();
