@@ -1,0 +1,32 @@
+name: CodeQL
+
+# Static application security testing (P3): scan the C# code with CodeQL on every change to main and on PRs, so likely
+# security bugs surface as code-scanning alerts. Uses build-mode "none" (no compile needed) to stay fast and SDK-agnostic.
+# Free for this public repo. Every action is pinned to a commit SHA.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@dd903d2e4f5405488e5ef1422510ee31c8b32357  # v3.36.2
+        with:
+          languages: csharp
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@dd903d2e4f5405488e5ef1422510ee31c8b32357  # v3.36.2
+        with:
+          category: "/language:csharp"

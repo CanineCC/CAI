@@ -1,0 +1,17 @@
+version: 2
+
+# Dependency scanning (P3): Dependabot watches NuGet packages and the GitHub Actions we pin, opening PRs for security
+# and version updates so the supply chain stays current. Pairs with the SHA-pinning — Dependabot bumps a pin deliberately
+# rather than a floating tag drifting silently.
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
