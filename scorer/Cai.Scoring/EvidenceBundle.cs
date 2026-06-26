@@ -63,10 +63,13 @@ public sealed record EvidenceBundle
         WriteIndented = true,
     };
 
+    /// <summary>Parse a bundle from its JSON wire form (case-insensitive, comments tolerated). Throws
+    /// <see cref="JsonException"/> on malformed input or a null result. Round-trips with <see cref="ToJson"/>.</summary>
     public static EvidenceBundle Parse(string json) =>
         JsonSerializer.Deserialize<EvidenceBundle>(json, Options)
         ?? throw new JsonException("Evidence bundle deserialized to null.");
 
+    /// <summary>Serialize this bundle to its indented JSON wire form — the inverse of <see cref="Parse"/>.</summary>
     public string ToJson() => JsonSerializer.Serialize(this, Options);
 }
 

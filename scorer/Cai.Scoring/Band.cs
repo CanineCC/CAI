@@ -9,13 +9,23 @@ namespace Cai.Scoring;
 /// </summary>
 public enum Band
 {
+    /// <summary>Below 25 — the floor band; displayed as "Critical".</summary>
     Critical,
+
+    /// <summary>25–49; displayed as "Weak".</summary>
     Poor,
+
+    /// <summary>50–69; displayed as "Adequate".</summary>
     Fair,
+
+    /// <summary>70–89; displayed as "Strong".</summary>
     Healthy,
+
+    /// <summary>90 and above — the top band; displayed as "Exemplary".</summary>
     Exemplary,
 }
 
+/// <summary>Bands a 0–100 score and maps each positional rank token to its published display word.</summary>
 public static class Bands
 {
     /// <summary>The band for a 0–100 score. The thresholds are the standard; do not vary them by rubric version

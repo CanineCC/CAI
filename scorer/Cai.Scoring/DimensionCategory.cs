@@ -9,14 +9,31 @@ namespace Cai.Scoring;
 /// </summary>
 public enum DimensionCategory
 {
+    /// <summary>Intrinsic code quality (complexity, smells, readability) — feeds the Code Health lens.</summary>
     CodeQuality,
+
+    /// <summary>Structural design (coupling, layering, boundaries) — its own Architecture lens.</summary>
     Architecture,
+
+    /// <summary>Test presence, coverage and quality — feeds the Production-Readiness lens.</summary>
     Testing,
+
+    /// <summary>Dependency hygiene (currency, vulnerabilities, bloat) — feeds the Production-Readiness lens.</summary>
     Dependencies,
+
+    /// <summary>Presence-only security signals (no deep scan) — feeds the Production-Readiness lens.</summary>
     Security,
+
+    /// <summary>Documentation presence and quality — feeds the Maturity lens.</summary>
     Docs,
+
+    /// <summary>Repository-history signals (churn, ownership, hotspots) — feeds the Maturity lens.</summary>
     GitMining,
+
+    /// <summary>Self-declared / explicit technical debt (TODO/FIXME, debt markers) — feeds the Code Health lens.</summary>
     ExplicitDebt,
+
+    /// <summary>Deep-scan security &amp; compliance findings — its own Security &amp; Compliance lens.</summary>
     SecurityCompliance,
 }
 

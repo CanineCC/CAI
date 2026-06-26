@@ -9,6 +9,8 @@ public sealed record Lens(string Key, string DisplayName, bool Core);
 /// rubric version weights them, an evidence bundle reports the ones a run actually measured.</summary>
 public static class LensCatalog
 {
+    /// <summary>The ten lenses in canonical order: the five CORE lenses first, then the five MODEL-AWARE ones. This
+    /// order is the stable display + sort order (see <see cref="Order"/>).</summary>
     public static readonly IReadOnlyList<Lens> All =
     [
         new("codeHealth", "Code Health", Core: true),
@@ -23,8 +25,10 @@ public static class LensCatalog
         new("performance", "Performance", Core: false),
     ];
 
+    /// <summary>Whether <paramref name="key"/> is one of the catalog's lens keys (exact, ordinal match).</summary>
     public static bool IsKnown(string key) => All.Any(l => string.Equals(l.Key, key, StringComparison.Ordinal));
 
+    /// <summary>The lens for a wire key, or null when the key isn't in the catalog (ordinal match).</summary>
     public static Lens? Find(string key) => All.FirstOrDefault(l => string.Equals(l.Key, key, StringComparison.Ordinal));
 
     /// <summary>The catalog index of a lens (its stable display order), or <see cref="int.MaxValue"/> for an unknown
@@ -58,4 +62,17 @@ public static class LensCatalog
 /// <summary>How strongly a lens's red/amber/green band thresholds follow the quality bar — the bar moves the band
 /// lines, never the score (a prototype need not be documented, but its code should still basically work, and even a
 /// prototype must not leak secrets).</summary>
-public enum LensGroup { Foundational, Operational, Safety, Default }
+public enum LensGroup
+{
+    /// <summary>Code Health + Architecture — stay near-strict even for a prototype (the basics must hold regardless).</summary>
+    Foundational,
+
+    /// <summary>Maturity + Production-Readiness — follow the quality bar fully (a prototype is held to a leaner standard).</summary>
+    Operational,
+
+    /// <summary>Security &amp; Compliance — stays near-strict everywhere (even a prototype must not leak secrets).</summary>
+    Safety,
+
+    /// <summary>Everything else (the conditional, model-aware lenses) — takes a moderate follow-the-bar factor.</summary>
+    Default,
+}

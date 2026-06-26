@@ -7,7 +7,14 @@ public sealed record CategoryResult(string Category, string Lens, double? Score,
 /// <summary>One lens's result in a CAI: the rolled-up 0–100 score, its band (quality-bar-adjusted, capped at Fair when
 /// critical-gated), whether a critical contributor gated it, how many items folded into it, and its share of the
 /// headline (worst-first OWA weight, and weight×score contribution).</summary>
-public sealed record LensResult(string Lens, double Score, Band Band, bool CriticalGated, int ItemCount, double Weight, double Contribution);
+public sealed record LensResult(string Lens, double Score, Band Band, bool CriticalGated, int ItemCount, double Weight, double Contribution)
+{
+    /// <summary>The ids of the measured, non-advisory contributors that scored Critical (&lt; <see cref="CaiScorer.CriticalGate"/>
+    /// effective) and so capped this lens's band at Fair — e.g. <c>["C1", "D15"]</c>. Empty when the lens is ungated.
+    /// Carried so a consumer can name WHY the band was capped ("gated by C1") rather than show an anonymous flag; the
+    /// gate changes the band, never the score.</summary>
+    public IReadOnlyList<string> CriticalContributors { get; init; } = [];
+}
 
 /// <summary>A computed CAI: the 0–100 headline, its (coherence-capped) band, the rubric version, the per-lens roll-up,
 /// the per-category breakdown, the legacy equal-weight aggregate, the unweighted category mean, and the coherence note
@@ -129,7 +136,7 @@ public static class CaiScorer
         }
 
         // ── Stage 2: fold each lens (worst-first OWA q=0.75 over its categories + meta), then floor Architecture.
-        var folded = new List<(string Lens, double? Score, int Items, bool Gated)>();
+        var folded = new List<(string Lens, double? Score, int Items, IReadOnlyList<string> Gated)>();
         foreach (var lens in LensCatalog.All.Select(l => l.Key))
         {
             var items = new List<double>();
@@ -149,7 +156,9 @@ public static class CaiScorer
                 lensScore = ArchitectureSurfaceFloor.Apply(lensScore, bundle.AnalyzableProjects, bundle.ProductionLoc);
             }
 
-            var gated = lensScore is not null && gatedByLens.TryGetValue(lens, out var ids) && ids.Count > 0;
+            // The critical contributors gate the band only while the lens still HAS a score (a dropped lens has no band
+            // to cap). Their ids ride through so a consumer can name the gate ("gated by C1").
+            var gated = lensScore is not null && gatedByLens.TryGetValue(lens, out var ids) ? ids : [];
             folded.Add((lens, lensScore, items.Count, gated));
         }
 
@@ -165,7 +174,11 @@ public static class CaiScorer
         var lensResults = measuredLenses.Zip(weights, (l, w) =>
         {
             var band = QualityBarBands.ForLens(l.Score, bundle.QualityBar, l.Lens);
-            return new LensResult(l.Lens, l.Score, CapBand(band, l.Gated), l.Gated, l.Items, w, l.Score * w);
+            var gated = l.Gated.Count > 0;
+            return new LensResult(l.Lens, l.Score, CapBand(band, gated), gated, l.Items, w, l.Score * w)
+            {
+                CriticalContributors = l.Gated,
+            };
         }).ToList();
 
         var headline = lensResults.Sum(r => r.Contribution);

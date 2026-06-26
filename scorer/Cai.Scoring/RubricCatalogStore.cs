@@ -12,6 +12,8 @@ public sealed class RubricCatalogStore
     private readonly Dictionary<string, RubricCatalog> _cache = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
 
+    /// <summary>Create a store rooted at <paramref name="root"/> — the directory holding one
+    /// <c>&lt;rubricVersion&gt;/rubric-catalog.json</c> subfolder per published version.</summary>
     public RubricCatalogStore(string root) => _root = root;
 
     /// <summary>The rubric versions present, newest first (lexical sort works for the date-stamped names).</summary>

@@ -160,6 +160,28 @@ public sealed class CaiScorerTests
         Assert.Equal(Band.Fair, ch.Band);
     }
 
+    [Fact]
+    public void Critical_gate_names_the_contributors_that_capped_the_lens()
+    {
+        // The gate must say WHICH contributors capped the band ("gated by x"), not just that it was gated — so the id
+        // of every measured, non-advisory Critical (< 4.0) contributor rides through on the lens.
+        var ch = Lens(CaiScorer.Score(Bundle(
+            Dim("x", DimensionCategory.CodeQuality, 3.5),
+            Dim("y", DimensionCategory.CodeQuality, 2.0),
+            Dim("z", DimensionCategory.CodeQuality, 10))), "codeHealth");
+        Assert.Equal(["x", "y"], ch.CriticalContributors.OrderBy(s => s));
+    }
+
+    [Fact]
+    public void An_ungated_lens_lists_no_critical_contributors()
+    {
+        var ch = Lens(CaiScorer.Score(Bundle(
+            Dim("x", DimensionCategory.CodeQuality, 8),
+            Dim("y", DimensionCategory.CodeQuality, 9))), "codeHealth");
+        Assert.False(ch.CriticalGated);
+        Assert.Empty(ch.CriticalContributors);
+    }
+
     // ── Stage 3: headline, quality bar, coherence ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -228,6 +250,27 @@ public sealed class CaiScorerTests
         Assert.Equal(1.0, w.Sum(), 9);
         Assert.True(w[1] > w[2] && w[2] > w[0]);
     }
+
+    [Fact]
+    public void Owa_is_monotonic_improving_any_item_never_lowers_the_result()
+    {
+        var baseline = CaiScorer.RankWeightedOwa([40.0, 70.0, 90.0], CaiScorer.AcrossLensQ);
+        Assert.True(CaiScorer.RankWeightedOwa([45.0, 70.0, 90.0], CaiScorer.AcrossLensQ) > baseline);
+        Assert.True(CaiScorer.RankWeightedOwa([40.0, 75.0, 90.0], CaiScorer.AcrossLensQ) > baseline);
+        Assert.True(CaiScorer.RankWeightedOwa([40.0, 70.0, 95.0], CaiScorer.AcrossLensQ) > baseline);
+    }
+
+    [Fact]
+    public void Owa_worst_item_dominates_but_does_not_mask_the_rest()
+    {
+        // Worst-heaviest, but not min(): [90,30] sits strictly between the worst (30) and the mean (60).
+        var owa = CaiScorer.RankWeightedOwa([90.0, 30.0], CaiScorer.AcrossLensQ);
+        Assert.True(owa > 30.0 && owa < 60.0);
+    }
+
+    [Fact]
+    public void Owa_of_equal_items_is_the_common_value() =>
+        Assert.Equal(80.0, CaiScorer.RankWeightedOwa([80.0, 80.0, 80.0], CaiScorer.AcrossLensQ), 9);
 
     [Fact]
     public void Golden_vector_reproduces_a_real_published_headline()
