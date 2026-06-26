@@ -55,8 +55,9 @@
         try
         {
             var baseUrl = (Config["Watchdog:BaseUrl"] ?? "https://watchdog.canine.dev").TrimEnd('/');
-            var http = HttpFactory.CreateClient();
-            http.Timeout = TimeSpan.FromSeconds(3);
+            // The "watchdog" client carries the standard resilience pipeline (timeout + retry + circuit breaker), so a
+            // slow/failing surveyor can't stall this server-side render.
+            var http = HttpFactory.CreateClient("watchdog");
             _stats = await http.GetFromJsonAsync<ScanStats>($"{baseUrl}/api/public/scan-stats");
         }
         catch

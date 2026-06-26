@@ -2,8 +2,15 @@ using System.Globalization;
 using System.Net;
 using System.Threading.RateLimiting;
 using Cai.Scoring;
+using Cai.Web;
 using Cai.Web.Components;
+using FluentValidation;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.HttpOverrides;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,13 +19,48 @@ builder.Services.AddRazorComponents();
 // Server-side fetch of the surveyor's public aggregate scan stats (LoC scanned + completed scans) for /registry —
 // the standard shows the scanned-corpus SCALE; the survey records themselves stay on the surveyor (data ownership).
 // Base URL is configurable (Watchdog:BaseUrl), defaulting to production; the page degrades gracefully if unreachable.
-builder.Services.AddHttpClient();
+// The named "watchdog" client carries a standard resilience pipeline (timeout + retry-with-backoff + circuit breaker)
+// so a slow or failing surveyor can never stall the /registry render — timeouts are tightened for an SSR best-effort
+// call (the page renders without the stats rather than hanging on a dependency).
+builder.Services.AddHttpClient("watchdog").AddStandardResilienceHandler(o =>
+{
+    o.AttemptTimeout.Timeout = TimeSpan.FromSeconds(2);
+    o.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(5);
+    o.Retry.MaxRetryAttempts = 2;
+});
 
 // cai.canine.dev OWNS the rubric catalogs (the versioned, archived standard). Resolve their root from config, else the
 // repo's /rubrics dir relative to the app — so it runs from a clone with no extra setup.
 var rubricsRoot = builder.Configuration["Rubrics:Root"]
     ?? Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "..", "rubrics"));
 builder.Services.AddSingleton(new RubricCatalogStore(rubricsRoot));
+
+// ── Observability (P2): ILogger is on by default; add OpenTelemetry tracing + metrics and a readiness health check so
+// the app is diagnosable in production. The OTLP exporter only activates when OTEL_EXPORTER_OTLP_ENDPOINT is set, so an
+// environment with no collector gets no failed-export noise.
+builder.Services.AddHealthChecks().AddCheck<RubricsHealthCheck>("rubrics");
+
+var otel = builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService("cai-web"))
+    .WithTracing(t => t.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation())
+    .WithMetrics(m => m.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddRuntimeInstrumentation());
+if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+{
+    otel.UseOtlpExporter();
+}
+
+// Inbound validation (S1): the public /score + /verify endpoints take an evidence bundle off the wire — validate its
+// shape (rubric version present, scores/confidence/coverage in range) before it reaches the deterministic scorer.
+builder.Services.AddScoped<IValidator<EvidenceBundle>, EvidenceBundleValidator>();
+
+// Secure-cookie hygiene (S1): the only cookie the app sets is the antiforgery token — mark it Secure/HttpOnly/SameSite.
+// Behind the TLS-terminating dgx1 proxy, UseForwardedHeaders (below) makes the request read as HTTPS so it actually flows.
+builder.Services.AddAntiforgery(o =>
+{
+    o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    o.Cookie.HttpOnly = true;
+    o.Cookie.SameSite = SameSiteMode.Strict;
+});
 
 // Behind the dgx1 nginx reverse proxy: trust X-Forwarded-* so the rate limiter partitions by the REAL client IP.
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
@@ -70,10 +112,33 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+app.Logger.LogInformation("CAI web starting — rubrics root {RubricsRoot}", rubricsRoot);
+
 app.UseForwardedHeaders();
+
+// Security response headers (S1): defense in depth on every response, even though the dgx1 nginx proxy could also set
+// them. The CSP is permissive enough for the static-SSR pages + the in-browser calculator (inline styles/scripts, WASM)
+// while still locking down framing, base-uri and object/embed.
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "SAMEORIGIN";
+    headers["Referrer-Policy"] = "no-referrer";
+    headers["Content-Security-Policy"] =
+        "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; " +
+        "img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
+        "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; connect-src 'self'";
+    await next();
+});
+
 app.UseRateLimiter();
 app.UseStaticFiles();
 app.UseAntiforgery();
+
+// Readiness probe (P2): /health is 200 only when the rubric catalog store has versions to serve. Exempt from the API
+// rate limiter (it is not under /api). The deploy workflow polls this before swapping the live app.
+app.MapHealthChecks("/health");
 
 // ── The standard API (what the Watchdog surveyor and anyone else calls) ───────────────────────────────────────────
 var api = app.MapGroup("/api");
@@ -98,12 +163,19 @@ api.MapGet("/rubrics/{version}/catalog", (string version, RubricCatalogStore sto
 });
 
 // Score an evidence bundle — the open, reproducible fold. POST the bundle JSON; get the CAI + per-lens contributions.
-api.MapPost("/score", async (HttpRequest req) =>
+api.MapPost("/score", async (HttpRequest req, IValidator<EvidenceBundle> validator, ILogger<Program> log) =>
 {
     try
     {
         using var reader = new StreamReader(req.Body);
         var bundle = EvidenceBundle.Parse(await reader.ReadToEndAsync());
+        var validation = await validator.ValidateAsync(bundle);
+        if (!validation.IsValid)
+        {
+            log.LogWarning("Rejected /score bundle ({Count} error(s))", validation.Errors.Count);
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
         var s = CaiScorer.Score(bundle);
         return Results.Ok(new
         {
@@ -133,22 +205,31 @@ api.MapPost("/score", async (HttpRequest req) =>
     }
     catch (Exception e)
     {
+        log.LogWarning(e, "Malformed /score payload");
         return Results.BadRequest(new { error = e.Message });
     }
 });
 
 // Verify a published headline reproduces from its evidence.
-api.MapPost("/verify", async (HttpRequest req) =>
+api.MapPost("/verify", async (HttpRequest req, IValidator<EvidenceBundle> validator, ILogger<Program> log) =>
 {
     try
     {
         using var reader = new StreamReader(req.Body);
         var bundle = EvidenceBundle.Parse(await reader.ReadToEndAsync());
+        var validation = await validator.ValidateAsync(bundle);
+        if (!validation.IsValid)
+        {
+            log.LogWarning("Rejected /verify bundle ({Count} error(s))", validation.Errors.Count);
+            return Results.ValidationProblem(validation.ToDictionary());
+        }
+
         var v = CaiScorer.Verify(bundle);
         return Results.Ok(new { reproduced = v.Reproduced, computed = Math.Round(v.Computed, 2), claimed = v.Claimed, delta = Math.Round(v.Delta, 2), tolerance = v.Tolerance });
     }
     catch (Exception e)
     {
+        log.LogWarning(e, "Malformed /verify payload");
         return Results.BadRequest(new { error = e.Message });
     }
 });
