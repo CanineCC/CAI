@@ -6,6 +6,7 @@ using Cai.Web;
 using Cai.Web.Components;
 using FluentValidation;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
@@ -57,10 +58,22 @@ builder.Services.AddScoped<IValidator<EvidenceBundle>, EvidenceBundleValidator>(
 // Behind the TLS-terminating dgx1 proxy, UseForwardedHeaders (below) makes the request read as HTTPS so it actually flows.
 builder.Services.AddAntiforgery(o =>
 {
-    o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    // SameAsRequest, not Always: behind the TLS-terminating proxy real traffic reads as HTTPS (UseForwardedHeaders) so
+    // the Secure flag is set for browsers, but a plain-HTTP request (loopback health check, a misrouted internal call)
+    // won't throw "not an SSL request" while rendering an antiforgery-protected form.
+    o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     o.Cookie.HttpOnly = true;
     o.Cookie.SameSite = SameSiteMode.Strict;
 });
+
+// Access control (C2): secure-by-default. The fallback authorization policy DENIES any endpoint that does not
+// explicitly opt out — so a future endpoint is protected unless deliberately made public. Every endpoint on this open,
+// read-only standard site is then explicitly .AllowAnonymous(): the public API *is* the product, gated by rate limiting
+// (not identity). The value is that the default flips from open to closed, so a new protected surface can't be added by
+// omission.
+builder.Services.AddAuthentication();
+builder.Services.AddAuthorizationBuilder()
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
 // Behind the dgx1 nginx reverse proxy: trust X-Forwarded-* so the rate limiter partitions by the REAL client IP.
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
@@ -135,13 +148,17 @@ app.Use(async (context, next) =>
 app.UseRateLimiter();
 app.UseStaticFiles();
 app.UseAntiforgery();
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Readiness probe (P2): /health is 200 only when the rubric catalog store has versions to serve. Exempt from the API
 // rate limiter (it is not under /api). The deploy workflow polls this before swapping the live app.
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health").AllowAnonymous();
 
 // ── The standard API (what the Watchdog surveyor and anyone else calls) ───────────────────────────────────────────
-var api = app.MapGroup("/api");
+// The whole API is intentionally public (a read-only, rate-limited standard) — opt out of the default-deny fallback
+// policy (C2). Authorization is default-closed; this is the deliberate, explicit public surface.
+var api = app.MapGroup("/api").AllowAnonymous();
 
 // The published rubric versions, newest first.
 api.MapGet("/rubrics", (RubricCatalogStore store) =>
@@ -283,14 +300,15 @@ The score is deterministic: identical evidence under the same rubric version alw
 The standard is free to use. An independent, signed CAI survey — with the deductions and what to do about them — is a service from the surveyor: https://watchdog.canine.dev
 ";
     return Results.Text(text, "text/plain; charset=utf-8");
-});
+}).AllowAnonymous();
 
 // The CAI vocabulary as a schema.org DefinedTermSet (JSON-LD) — the citable, machine-readable definition (referenceable pillar).
-app.MapGet("/glossary.jsonld", () => Results.Text(Cai.Web.CaiGlossary.Build(), "application/ld+json; charset=utf-8"));
+app.MapGet("/glossary.jsonld", () => Results.Text(Cai.Web.CaiGlossary.Build(), "application/ld+json; charset=utf-8")).AllowAnonymous();
 
 // Browsers auto-request /favicon.ico; we only ship favicon.svg. Redirect so non-HTML responses (e.g. /llms.txt) don't 404.
-app.MapGet("/favicon.ico", () => Results.Redirect("/favicon.svg", permanent: true));
+app.MapGet("/favicon.ico", () => Results.Redirect("/favicon.svg", permanent: true)).AllowAnonymous();
 
-app.MapRazorComponents<App>();
+// The standard's UI (static-SSR Blazor). Public — opt out of the default-deny fallback policy (C2).
+app.MapRazorComponents<App>().AllowAnonymous();
 
 app.Run();
