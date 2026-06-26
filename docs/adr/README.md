@@ -18,5 +18,6 @@ old one rather than editing history.
 | [0005](0005-verify-before-swap-deploy.md) | Verify-before-swap in-place deploy with health-check rollback | Accepted |
 | [0006](0006-supply-chain-attestation.md) | Supply-chain attestation for build artifacts | Accepted |
 | [0007](0007-repository-solution-file.md) | A repository solution file for whole-graph analysis | Accepted |
+| [0008](0008-api-access-control.md) | Default-deny authorization with an open public API | Accepted |
 
 See [../architecture.md](../architecture.md) for the high-level shape these decisions produce.
