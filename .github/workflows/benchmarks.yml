@@ -1,0 +1,34 @@
+name: Benchmarks
+
+# Performance guard (PF1): run the BenchmarkDotNet suite so a regression in the deterministic scoring fold is visible
+# rather than silent. Triggered on changes to the scorer/benchmarks and on demand; a Short job keeps CI time bounded.
+# Runs on a GitHub-hosted runner (the repo is public). Every action is pinned to a commit SHA.
+on:
+  push:
+    branches: [main]
+    paths: ["scorer/Cai.Scoring/**", "benchmarks/**", ".github/workflows/benchmarks.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9  # v4.3.1
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Run benchmarks (short job)
+        run: dotnet run -c Release --project benchmarks/Cai.Benchmarks -- --filter '*' --job short --exporters json markdown
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        if: always()
+        with:
+          name: benchmark-results
+          path: BenchmarkDotNet.Artifacts/**
+          if-no-files-found: ignore

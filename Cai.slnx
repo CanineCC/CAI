@@ -2,6 +2,9 @@
   <Folder Name="/app/">
     <Project Path="app/Cai.Web/Cai.Web.csproj" />
   </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Cai.Benchmarks/Cai.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/scorer/">
     <Project Path="scorer/Cai.Cli/Cai.Cli.csproj" />
     <Project Path="scorer/Cai.Scoring/Cai.Scoring.csproj" />

@@ -30,7 +30,7 @@ if (!File.Exists(path))
 EvidenceBundle bundle;
 try
 {
-    bundle = EvidenceBundle.Parse(await File.ReadAllTextAsync(path));
+    bundle = EvidenceBundle.Parse(await File.ReadAllTextAsync(path).ConfigureAwait(false));
 }
 catch (Exception e)
 {
