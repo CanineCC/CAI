@@ -1,0 +1,47 @@
+name: publish-scoring
+
+# Publishes the Cai.Scoring reference scorer as a NuGet package to GitHub Packages (free for this public repo), so
+# analyzers like Watchdog fold an evidence bundle through the SAME implementation instead of re-deriving the math.
+# Trigger by pushing a tag like `scoring-v0.1.0` (the version is taken from the tag), or run manually.
+
+on:
+  push:
+    tags: ['scoring-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (e.g. 0.1.0)'
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME#scoring-v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pack
+        run: dotnet pack scorer/Cai.Scoring/Cai.Scoring.csproj -c Release -o nupkg -p:Version=${{ steps.ver.outputs.version }}
+
+      - name: Push to GitHub Packages
+        run: >
+          dotnet nuget push "nupkg/*.nupkg"
+          --source "https://nuget.pkg.github.com/CanineCC/index.json"
+          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --skip-duplicate

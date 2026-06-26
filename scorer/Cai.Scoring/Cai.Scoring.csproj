@@ -7,4 +7,36 @@
     <AssemblyName>Cai.Scoring</AssemblyName>
     <RootNamespace>Cai.Scoring</RootNamespace>
   </PropertyGroup>
+
+  <!-- NuGet package: the open CAI reference scorer. Published to GitHub Packages (CanineCC), free for the public
+       CanineCC/CAI repo, so any analyzer (Watchdog included) folds an evidence bundle through the SAME implementation
+       rather than re-deriving the math. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Cai.Scoring</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Canine Development</Authors>
+    <Company>Canine Development</Company>
+    <Description>The CAI (Codebase Assurance Index) open reference scorer: folds an evidence bundle (per-dimension scores + meta-dimensions + surface metrics) through the rubric — confidence-weighted categories, worst-first OWA lenses, the architecture surface floor, quality-bar bands, critical gating and the coherence cap — into the 0–100 headline and ten lens scores. Deterministic and reproducible: same evidence + same rubric ⇒ the same number.</Description>
+    <PackageProjectUrl>https://cai.canine.dev</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/CanineCC/CAI</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>cai;codebase-assurance-index;scoring;code-quality;rubric;owa</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
 </Project>
