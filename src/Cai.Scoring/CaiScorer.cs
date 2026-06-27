@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace Cai.Scoring;
 
 /// <summary>One category's roll-up: its confidence-weighted 0–100 score (null when nothing deterministic measured it),
@@ -235,11 +237,44 @@ public static class CaiScorer
     /// longer penalises the score).</summary>
     private static double Effective(DimensionScore d) => d.ScoreZeroToTen * d.Coverage;
 
-    /// <summary>The worst-first OWA value of <paramref name="scores"/> with decay <paramref name="q"/>.</summary>
+    /// <summary>Largest fold we keep entirely on the stack; a rare larger one rents from <see cref="ArrayPool{T}"/>
+    /// rather than burdening the GC. Real lenses carry ~15 items and the headline ~6–8, so the stack path is the norm.</summary>
+    private const int OwaStackMax = 64;
+
+    /// <summary>The worst-first OWA value of <paramref name="scores"/> with decay <paramref name="q"/>. The hot path of
+    /// the fold (one call per lens, one for the headline): computes the weights into a stack/pooled scratch buffer and
+    /// folds in a single pass, allocating nothing on the heap for the common small case.</summary>
     public static double RankWeightedOwa(IReadOnlyList<double> scores, double q)
     {
-        var w = OwaWeights(scores, q);
-        return scores.Zip(w, (s, wi) => s * wi).Sum();
+        ArgumentNullException.ThrowIfNull(scores);
+        var n = scores.Count;
+        if (n == 0)
+        {
+            return 0.0;
+        }
+
+        if (n <= OwaStackMax)
+        {
+            Span<double> s = stackalloc double[n];
+            Span<double> w = stackalloc double[n];
+            CopyTo(scores, s);
+            ComputeOwaWeights(s, q, w);
+            return Fold(s, w);
+        }
+
+        var rented = ArrayPool<double>.Shared.Rent(n * 2);
+        try
+        {
+            Span<double> s = rented.AsSpan(0, n);
+            Span<double> w = rented.AsSpan(n, n);
+            CopyTo(scores, s);
+            ComputeOwaWeights(s, q, w);
+            return Fold(s, w);
+        }
+        finally
+        {
+            ArrayPool<double>.Shared.Return(rented);
+        }
     }
 
     /// <summary>The worst-first OWA weight vector for <paramref name="scores"/>: rank worst→best, the rank-r item weighs
@@ -253,15 +288,103 @@ public static class CaiScorer
             return [];
         }
 
-        var order = Enumerable.Range(0, n).OrderBy(i => scores[i]).ThenBy(i => i).ToList(); // worst first
-        var raw = new double[n];
-        for (var rank = 0; rank < n; rank++)
+        var weights = new double[n];
+        if (n <= OwaStackMax)
         {
-            raw[order[rank]] = Math.Pow(q, rank);
+            Span<double> s = stackalloc double[n];
+            CopyTo(scores, s);
+            ComputeOwaWeights(s, q, weights);
+            return weights;
         }
 
-        var total = raw.Sum();
-        return raw.Select(w => w / total).ToList();
+        var rented = ArrayPool<double>.Shared.Rent(n);
+        try
+        {
+            Span<double> s = rented.AsSpan(0, n);
+            CopyTo(scores, s);
+            ComputeOwaWeights(s, q, weights);
+            return weights;
+        }
+        finally
+        {
+            ArrayPool<double>.Shared.Return(rented);
+        }
+    }
+
+    /// <summary>Write the worst-first OWA weights of <paramref name="scores"/> into <paramref name="weights"/> (aligned
+    /// to input order). Ranks worst→best with a stable insertion sort (equal scores keep input order — matching the old
+    /// LINQ <c>OrderBy().ThenBy(i)</c>), assigns <c>q^rank</c>, and normalizes in input order so the result is identical
+    /// to the previous list-based fold to the last bit.</summary>
+    private static void ComputeOwaWeights(ReadOnlySpan<double> scores, double q, Span<double> weights)
+    {
+        var n = scores.Length;
+        int[]? rentedOrder = n > OwaStackMax ? ArrayPool<int>.Shared.Rent(n) : null;
+        Span<int> order = rentedOrder is null ? stackalloc int[n] : rentedOrder.AsSpan(0, n);
+        try
+        {
+            for (var i = 0; i < n; i++)
+            {
+                order[i] = i;
+            }
+
+            // Stable insertion sort, worst (lowest score) first; a strict '>' leaves equal scores in input order.
+            for (var i = 1; i < n; i++)
+            {
+                var cur = order[i];
+                var key = scores[cur];
+                var j = i - 1;
+                while (j >= 0 && scores[order[j]] > key)
+                {
+                    order[j + 1] = order[j];
+                    j--;
+                }
+
+                order[j + 1] = cur;
+            }
+
+            for (var rank = 0; rank < n; rank++)
+            {
+                weights[order[rank]] = Math.Pow(q, rank);
+            }
+
+            var total = 0.0;
+            for (var i = 0; i < n; i++)
+            {
+                total += weights[i]; // index order — identical sum to the old raw.Sum()
+            }
+
+            for (var i = 0; i < n; i++)
+            {
+                weights[i] /= total;
+            }
+        }
+        finally
+        {
+            if (rentedOrder is not null)
+            {
+                ArrayPool<int>.Shared.Return(rentedOrder);
+            }
+        }
+    }
+
+    /// <summary>Σ scores[i] × weights[i] in input order — the same accumulation order as the old <c>Zip().Sum()</c>.</summary>
+    private static double Fold(ReadOnlySpan<double> scores, ReadOnlySpan<double> weights)
+    {
+        var sum = 0.0;
+        for (var i = 0; i < scores.Length; i++)
+        {
+            sum += scores[i] * weights[i];
+        }
+
+        return sum;
+    }
+
+    private static void CopyTo(IReadOnlyList<double> scores, Span<double> destination)
+    {
+        for (var i = 0; i < destination.Length; i++)
+        {
+            destination[i] = scores[i];
+        }
     }
 
     /// <summary>The critical gate: a gated lens's displayed band is capped at Fair.</summary>
