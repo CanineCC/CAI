@@ -9,7 +9,7 @@ name: Deploy cai.canine.dev
 on:
   push:
     branches: [main]
-    paths: ["app/**", "scorer/**", "rubrics/**", ".github/workflows/deploy.yml"]
+    paths: ["src/**", "tests/**", "rubrics/**", ".github/workflows/deploy.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -29,17 +29,17 @@ jobs:
 
       # VERIFY (the old service keeps serving; any failure here = safe no-op).
       - name: Verify build (Release)
-        run: dotnet build app/Cai.Web -c Release
+        run: dotnet build src/Cai.Web -c Release
 
       - name: Test the scorer
-        run: dotnet test scorer/Cai.Tests -c Release
+        run: dotnet test tests/Cai.Tests -c Release
 
       # PUBLISH into a staging dir, sync the rubrics, swap, bounce.
       - name: Publish
         run: |
           set -euo pipefail
           rm -rf /home/jimmy/apps/cai-web/app.next
-          dotnet publish app/Cai.Web -c Release -o /home/jimmy/apps/cai-web/app.next
+          dotnet publish src/Cai.Web -c Release -o /home/jimmy/apps/cai-web/app.next
           rsync -a --delete rubrics/ /home/jimmy/apps/cai-web/rubrics/
           rm -rf /home/jimmy/apps/cai-web/app.prev
           [ -d /home/jimmy/apps/cai-web/app ] && mv /home/jimmy/apps/cai-web/app /home/jimmy/apps/cai-web/app.prev || true

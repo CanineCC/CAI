@@ -8,10 +8,10 @@ the in-browser calculator produce, because all three call the one [`Cai.Scoring`
 
 ```bash
 # Score an evidence bundle to its CAI headline + per-lens contributions
-dotnet run --project scorer/Cai.Cli -- path/to/evidence.json
+dotnet run --project src/Cai.Cli -- path/to/evidence.json
 ```
 
-The input is a CAI **evidence bundle** (see [`scorer/examples/evidence.sample.json`](../examples/evidence.sample.json)) —
+The input is a CAI **evidence bundle** (see [`examples/evidence.sample.json`](../../examples/evidence.sample.json)) —
 the portable, documented record a score is computed from. The output is the reproducible CAI score:
 same evidence under the same rubric version always folds to the same number.
 

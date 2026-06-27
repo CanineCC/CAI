@@ -1,6 +1,6 @@
 # Cai.Tests
 
-xUnit tests for the CAI reference scorer ([`Cai.Scoring`](../Cai.Scoring)). They pin the behaviour that
+xUnit tests for the CAI reference scorer ([`Cai.Scoring`](../../src/Cai.Scoring)). They pin the behaviour that
 makes the standard trustworthy: that the fold is **deterministic and reproducible**, and that its rules
 (confidence weighting, coverage, the worst-first OWA, the architecture surface floor, quality-bar bands,
 band coherence, critical gating) behave exactly as specified.
@@ -12,7 +12,7 @@ implementation details of the fold, not public contract (see
 ## Run
 
 ```bash
-dotnet test scorer/Cai.Tests       # or: dotnet test Cai.slnx
+dotnet test tests/Cai.Tests       # or: dotnet test Cai.slnx
 ```
 
 The deploy pipeline runs these on every change; a failure is a safe no-op (the live site keeps serving).

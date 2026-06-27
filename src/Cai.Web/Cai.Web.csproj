@@ -6,7 +6,7 @@
     <RootNamespace>Cai.Web</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\scorer\Cai.Scoring\Cai.Scoring.csproj" />
+    <ProjectReference Include="..\Cai.Scoring\Cai.Scoring.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="12.1.1" />

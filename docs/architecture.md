@@ -26,14 +26,18 @@ surveyor's product) is the defining boundary — see [ADR-0003](adr/0003-free-pa
 flowchart TD
     subgraph repo["CanineCC/CAI"]
         rubrics["rubrics/<br/>versioned, frozen catalogs"]
-        scoring["Cai.Scoring<br/>(library) — deterministic OWA fold"]
-        cli["Cai.Cli<br/>reference CLI"]
-        web["Cai.Web<br/>Blazor SSR UI + minimal JSON API"]
+        scoring["src/Cai.Scoring<br/>(library) — deterministic OWA fold"]
+        cli["src/Cai.Cli<br/>reference CLI"]
+        web["src/Cai.Web<br/>Blazor SSR UI + minimal JSON API"]
+        tests["tests/Cai.Tests<br/>xUnit over the fold"]
+        bench["benchmarks/Cai.Benchmarks<br/>hot-path micro-benchmarks"]
     end
     nuget["NuGet package<br/>(GitHub Packages)"]
     rubrics -->|loaded by RubricCatalogStore| web
     scoring --> cli
     scoring --> web
+    scoring --> tests
+    scoring --> bench
     scoring -->|published as| nuget
     web -->|/api/rubrics, /api/score, /api/verify, /llms.txt| consumer["consumers"]
 ```
@@ -47,6 +51,22 @@ flowchart TD
   API is rate-limited; `/score` and `/verify` validate inbound evidence before folding.
 - **`rubrics/`** — the versioned, frozen rubric catalogs cai.canine.dev owns
   ([ADR-0004](adr/0004-versioned-frozen-rubrics.md)).
+
+## Repository layout
+
+Production code lives under `src/`, tests under `tests/`, and performance benchmarks under
+`benchmarks/` — a conventional separation by role rather than by deployment artifact
+([ADR-0009](adr/0009-conventional-src-tests-layout.md)):
+
+```
+src/Cai.Scoring   src/Cai.Cli   src/Cai.Web      production code
+tests/Cai.Tests                                  xUnit suite over the fold
+benchmarks/Cai.Benchmarks                        BenchmarkDotNet hot-path benchmarks
+rubrics/   examples/   docs/   deploy/           data, samples, docs, ops
+```
+
+All projects are referenced by one solution file, `Cai.slnx`, so Roslyn-based tooling loads the whole
+graph ([ADR-0007](adr/0007-repository-solution-file.md)).
 
 ## Runtime & deployment
 

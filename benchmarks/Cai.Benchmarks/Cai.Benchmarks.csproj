@@ -9,7 +9,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\scorer\Cai.Scoring\Cai.Scoring.csproj" />
+    <ProjectReference Include="..\..\src\Cai.Scoring\Cai.Scoring.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />

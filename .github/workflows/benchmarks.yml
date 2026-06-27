@@ -1,12 +1,12 @@
 name: Benchmarks
 
 # Performance guard (PF1): run the BenchmarkDotNet suite so a regression in the deterministic scoring fold is visible
-# rather than silent. Triggered on changes to the scorer/benchmarks and on demand; a Short job keeps CI time bounded.
+# rather than silent. Triggered on changes to the scorer/benchmark sources and on demand; a Short job keeps CI time bounded.
 # Runs on a GitHub-hosted runner (the repo is public). Every action is pinned to a commit SHA.
 on:
   push:
     branches: [main]
-    paths: ["scorer/Cai.Scoring/**", "benchmarks/**", ".github/workflows/benchmarks.yml"]
+    paths: ["src/Cai.Scoring/**", "benchmarks/**", ".github/workflows/benchmarks.yml"]
   workflow_dispatch:
 
 permissions:

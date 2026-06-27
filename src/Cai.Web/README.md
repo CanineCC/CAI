@@ -17,7 +17,7 @@ the standard and exposes the rubric + scoring **JSON API**.
 
 ## How it's wired
 
-- Scoring is delegated to [`Cai.Scoring`](../../scorer/Cai.Scoring) — the one deterministic authority.
+- Scoring is delegated to [`Cai.Scoring`](../Cai.Scoring) — the one deterministic authority.
 - Rubric catalogs are loaded from `rubrics/` via `RubricCatalogStore` (configurable with `Rubrics:Root`).
 - Public read API is gated by a chained rate limiter (per-IP, 1/s · 3/min · 15/day), not auth; the
   surveyor's aggregate stats are fetched server-side through a resilient `HttpClient`.
@@ -29,7 +29,7 @@ the standard and exposes the rubric + scoring **JSON API**.
 ## Run locally
 
 ```bash
-dotnet run --project app/Cai.Web
+dotnet run --project src/Cai.Web
 ```
 
 Deployed to cai.canine.dev by [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml);

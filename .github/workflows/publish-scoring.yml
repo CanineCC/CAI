@@ -37,7 +37,7 @@ jobs:
           fi
 
       - name: Pack
-        run: dotnet pack scorer/Cai.Scoring/Cai.Scoring.csproj -c Release -o nupkg -p:Version=${{ steps.ver.outputs.version }}
+        run: dotnet pack src/Cai.Scoring/Cai.Scoring.csproj -c Release -o nupkg -p:Version=${{ steps.ver.outputs.version }}
 
       - name: Push to GitHub Packages
         run: >

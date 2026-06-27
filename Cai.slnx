@@ -1,13 +1,13 @@
 <Solution>
-  <Folder Name="/app/">
-    <Project Path="app/Cai.Web/Cai.Web.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/Cai.Web/Cai.Web.csproj" />
+    <Project Path="src/Cai.Scoring/Cai.Scoring.csproj" />
+    <Project Path="src/Cai.Cli/Cai.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Cai.Tests/Cai.Tests.csproj" />
   </Folder>
   <Folder Name="/benchmarks/">
     <Project Path="benchmarks/Cai.Benchmarks/Cai.Benchmarks.csproj" />
-  </Folder>
-  <Folder Name="/scorer/">
-    <Project Path="scorer/Cai.Cli/Cai.Cli.csproj" />
-    <Project Path="scorer/Cai.Scoring/Cai.Scoring.csproj" />
-    <Project Path="scorer/Cai.Tests/Cai.Tests.csproj" />
   </Folder>
 </Solution>

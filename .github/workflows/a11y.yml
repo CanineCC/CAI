@@ -6,7 +6,7 @@ name: Accessibility
 on:
   push:
     branches: [main]
-    paths: ["app/Cai.Web/**", ".pa11yci", ".github/workflows/a11y.yml"]
+    paths: ["src/Cai.Web/**", ".pa11yci", ".github/workflows/a11y.yml"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -31,7 +31,7 @@ jobs:
       - name: Start the site
         run: |
           set -euo pipefail
-          dotnet run --project app/Cai.Web -c Release --urls http://127.0.0.1:8090 &
+          dotnet run --project src/Cai.Web -c Release --urls http://127.0.0.1:8090 &
           for i in $(seq 1 60); do
             curl -sf http://127.0.0.1:8090/health >/dev/null && { echo "up"; break; }
             sleep 2

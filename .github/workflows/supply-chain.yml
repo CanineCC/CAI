@@ -10,7 +10,7 @@ name: Supply-chain (SBOM · sign · provenance)
 on:
   push:
     branches: [main]
-    paths: ["app/**", "scorer/**", "rubrics/**", ".github/workflows/supply-chain.yml"]
+    paths: ["src/**", "tests/**", "rubrics/**", ".github/workflows/supply-chain.yml"]
   workflow_dispatch:
 
 permissions:
@@ -37,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf "$DIST"
-          dotnet publish app/Cai.Web -c Release -o "$DIST"
+          dotnet publish src/Cai.Web -c Release -o "$DIST"
 
       - name: Package artifact
         run: tar -czf "$TARBALL" -C "$DIST" .

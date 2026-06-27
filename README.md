@@ -18,7 +18,21 @@ independent, signed *survey* (the deductions and what to do) is a service from t
 
 Bands: **Exemplary** 90–100 · **Strong** 70–89 · **Adequate** 50–69 · **Weak** 25–49 · **Critical** 0–24.
 
-## The reference scorer (`/scorer`)
+## Repository layout
+
+```
+src/          production code  — Cai.Web (the site + JSON API), Cai.Scoring (the library), Cai.Cli (the `cai` tool)
+tests/        Cai.Tests        — xUnit suite over the scorer (determinism, banding, the fold, verify)
+benchmarks/   Cai.Benchmarks   — BenchmarkDotNet micro-benchmarks for the scoring hot paths
+rubrics/      frozen, versioned rubric catalogs (owned and served by Cai.Web)
+examples/     a sample evidence bundle for the CLI and calculator
+docs/         architecture overview + Architecture Decision Records (ADRs)
+deploy/       the verify-before-swap deploy notes
+```
+
+Everything builds and tests from one solution file: `dotnet build Cai.slnx` · `dotnet test Cai.slnx`.
+
+## The reference scorer (`/src/Cai.Scoring`)
 
 The open, reproducible half of the standard, in C# (Apache-2.0). Measuring a codebase into an **evidence bundle** is
 the analyzer's job; **scoring** the bundle is open — the headline is a worst-first ordered-weighted average of the lens
@@ -26,18 +40,17 @@ scores (`Σ lensScore × owaWeight`), banded. Because the weights are published 
 falsify a published number with no access to the engine.
 
 ```
-cd scorer
-dotnet test                                                     # the scorer's own tests
-dotnet run --project Cai.Cli -- score  examples/evidence.sample.json
-dotnet run --project Cai.Cli -- verify examples/evidence.sample.json             # ✓ reproduced
-dotnet run --project Cai.Cli -- verify examples/evidence.sample.json --expect 90 # ✗ mismatch (exit 1)
+dotnet test Cai.slnx                                                          # the scorer's own tests
+dotnet run --project src/Cai.Cli -- score  examples/evidence.sample.json
+dotnet run --project src/Cai.Cli -- verify examples/evidence.sample.json             # ✓ reproduced
+dotnet run --project src/Cai.Cli -- verify examples/evidence.sample.json --expect 90 # ✗ mismatch (exit 1)
 ```
 
 `Cai.Scoring` is the library (bands, lenses, evidence bundle, the fold); `Cai.Cli` is the `cai` tool; `Cai.Tests`
 covers determinism, banding, the fold, and verify. The evidence-bundle format + the algorithm are documented at
 [cai.canine.dev/spec](https://cai.canine.dev/spec.html#evidence).
 
-## The app (`/app/Cai.Web`)
+## The app (`/src/Cai.Web`)
 
 cai.canine.dev is a hosted ASP.NET Core + Blazor app — it OWNS the rubric catalogs and serves them, the scorer, and the
 content over one origin:
@@ -55,7 +68,7 @@ content over one origin:
 | `/api-reference` | The rubric + scoring API (what watchdog calls). |
 | `/api/rubrics`, `/api/rubrics/{v}/catalog`, `/api/score`, `/api/verify` | The JSON API (rate-limited; loopback exempt). |
 
-Run locally: `cd app/Cai.Web && Rubrics__Root=$(pwd)/../../rubrics dotnet run` → http://localhost:5000. It's deployed
+Run locally: `cd src/Cai.Web && Rubrics__Root=$(pwd)/../../rubrics dotnet run` → http://localhost:5000. It's deployed
 as a systemd service on canine-wrx1 with nginx/SSL on canine-dgx1 — see [`deploy/DEPLOY.md`](deploy/DEPLOY.md).
 
 ## License

@@ -11,6 +11,6 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Cai.Scoring\Cai.Scoring.csproj" />
+    <ProjectReference Include="..\..\src\Cai.Scoring\Cai.Scoring.csproj" />
   </ItemGroup>
 </Project>

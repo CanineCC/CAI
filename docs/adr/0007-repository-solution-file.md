@@ -14,8 +14,9 @@ to analyzing nothing — every compiler-dependent signal then runs on an empty w
 
 ## Decision
 
-Commit a repository solution file, `Cai.slnx` (the modern XML solution format), referencing all four
-projects, grouped by their top-level folder. It is the single entry point for whole-graph tooling;
+Commit a repository solution file, `Cai.slnx` (the modern XML solution format), referencing every
+project, grouped by their top-level folder (`src/`, `tests/`, `benchmarks/` — see
+[ADR-0009](0009-conventional-src-tests-layout.md)). It is the single entry point for whole-graph tooling;
 per-project `dotnet build`/`dotnet test` in CI continue to work unchanged.
 
 ## Consequences

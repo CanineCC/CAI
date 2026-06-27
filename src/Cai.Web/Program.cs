@@ -79,7 +79,7 @@ builder.Services.AddAuthorizationBuilder()
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {
     o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    o.KnownNetworks.Clear();
+    o.KnownIPNetworks.Clear();
     o.KnownProxies.Clear(); // the proxy is a different host; accept the forwarded chain (we only use it for limiting, never auth)
 });
 

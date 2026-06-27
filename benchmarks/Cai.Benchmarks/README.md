@@ -1,7 +1,7 @@
 # Cai.Benchmarks
 
 [BenchmarkDotNet](https://benchmarkdotnet.org/) micro-benchmarks for the CAI scoring hot paths in
-[`Cai.Scoring`](../../scorer/Cai.Scoring): the deterministic fold (`CaiScorer.Score`) and evidence-bundle
+[`Cai.Scoring`](../../src/Cai.Scoring): the deterministic fold (`CaiScorer.Score`) and evidence-bundle
 parsing. `[MemoryDiagnoser]` tracks allocations so a regression (extra LINQ materialisation, boxing)
 shows up rather than slipping by.
 

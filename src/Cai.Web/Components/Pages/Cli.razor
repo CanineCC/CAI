@@ -34,11 +34,11 @@
     <h2>Run it</h2>
     <p>It needs only the .NET SDK and a clone of the repo — no keys, no network:</p>
     <pre>git clone https://github.com/CanineCC/CAI
-cd CAI/scorer
+cd CAI
 
-dotnet test                                                          # the scorer's own tests
-dotnet run --project Cai.Cli -- score  examples/evidence.sample.json
-dotnet run --project Cai.Cli -- verify examples/evidence.sample.json</pre>
+dotnet test Cai.slnx                                                     # the scorer's own tests
+dotnet run --project src/Cai.Cli -- score  examples/evidence.sample.json
+dotnet run --project src/Cai.Cli -- verify examples/evidence.sample.json</pre>
     <p class="muted">Builds to a <code>cai</code> binary; the usage below shows it as <code>cai</code>.</p>
 </div></section>
 
