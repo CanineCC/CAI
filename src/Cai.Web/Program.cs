@@ -15,6 +15,12 @@ using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Deployment liveness/readiness (P4): integrate with systemd's sd_notify protocol. Under a Type=notify unit the host
+// signals READY=1 once it has started (so the deploy's swap only completes when the app is actually serving) and sends
+// periodic WATCHDOG=1 keepalives when WatchdogSec is set (systemd restarts a hung process). A no-op off systemd, so it
+// stays safe in dev, tests and a plain Type=simple unit. See deploy/cai-web.service.
+builder.Host.UseSystemd();
+
 builder.Services.AddRazorComponents();
 
 // Server-side fetch of the surveyor's public aggregate scan stats (LoC scanned + completed scans) for /registry —

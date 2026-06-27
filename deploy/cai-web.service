@@ -4,8 +4,13 @@ Documentation=https://github.com/CanineCC/CAI
 After=network-online.target
 Wants=network-online.target
 
+# Type=notify + WatchdogSec give the service a readiness signal and a liveness probe: the app (UseSystemd) sends
+# sd_notify READY=1 once it is actually serving, so a restart/deploy is only "up" when requests can be handled, and
+# emits WATCHDOG=1 keepalives — systemd restarts the process if they stop (a hung-but-alive app is caught, not just a
+# crashed one). Restart=on-failure + RestartSec make that automatic and reversible.
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
 User=jimmy
 Group=jimmy
 WorkingDirectory=/home/jimmy/apps/cai-web/app
@@ -17,6 +22,8 @@ ExecStart=/usr/bin/dotnet /home/jimmy/apps/cai-web/app/Cai.Web.dll
 Restart=on-failure
 RestartSec=5
 StartLimitIntervalSec=0
+# Liveness: the app must check in within this window or systemd restarts it.
+WatchdogSec=30s
 
 [Install]
 WantedBy=multi-user.target
