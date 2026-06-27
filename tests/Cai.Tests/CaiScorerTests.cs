@@ -64,6 +64,27 @@ public sealed class CaiScorerTests
     }
 
     [Fact]
+    public void Omitted_coverage_deserializes_as_full_coverage()
+    {
+        // Regression: the wire contract says an absent "coverage" means full (1.0). System.Text.Json runs neither a
+        // struct's field initializers nor optional ctor-parameter defaults for an omitted member, so a naive default
+        // left coverage at 0.0 and zeroed out every dimension. A bundle that omits coverage MUST fold at full coverage.
+        var bundle = EvidenceBundle.Parse(
+            """{ "rubricVersion": "r", "dimensions": [ { "id": "D1", "category": "code-quality", "score": 8.0, "confidence": 1.0 } ] }""");
+        Assert.Equal(1.0, bundle.Dimensions[0].Coverage, 6);
+        Assert.Equal(80.0, Lens(CaiScorer.Score(bundle), "codeHealth").Score, 2);
+    }
+
+    [Fact]
+    public void Explicit_zero_coverage_is_honoured()
+    {
+        // The flip side of the default: an EXPLICIT 0.0 must survive (nothing measured), not be mistaken for "absent".
+        var bundle = EvidenceBundle.Parse(
+            """{ "rubricVersion": "r", "dimensions": [ { "id": "D1", "category": "code-quality", "score": 8.0, "confidence": 1.0, "coverage": 0.0 } ] }""");
+        Assert.Equal(0.0, bundle.Dimensions[0].Coverage, 6);
+    }
+
+    [Fact]
     public void Advisory_and_zero_confidence_dimensions_are_excluded_from_the_number()
     {
         var withNoise = CaiScorer.Score(Bundle(

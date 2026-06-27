@@ -83,9 +83,19 @@ public readonly record struct DimensionScore(
     [property: JsonPropertyName("score")] double ScoreZeroToTen,
     [property: JsonPropertyName("confidence")] double Confidence)
 {
+    private readonly double? _coverage;
+
     /// <summary>Coverage fraction (0–1) the measurement reached — the effective score is <c>score × coverage</c>.
-    /// Absent ⇒ full coverage (1.0).</summary>
-    [JsonPropertyName("coverage")] public double Coverage { get; init; } = 1.0;
+    /// Absent ⇒ full coverage (1.0). Backed by a nullable field so that an OMITTED "coverage" defaults to 1.0 while an
+    /// explicit <c>0.0</c> is honoured: System.Text.Json leaves the backing null when the property is absent (it does
+    /// not run a struct's field initializers, nor optional ctor-parameter defaults), so a plain <c>= 1.0</c> default
+    /// would silently fold to 0 and zero out the dimension.</summary>
+    [JsonPropertyName("coverage")]
+    public double Coverage
+    {
+        get => _coverage ?? 1.0;
+        init => _coverage = value;
+    }
 
     /// <summary>True for an LLM-scored dimension — advisory, excluded from the deterministic fold. Absent ⇒ false.</summary>
     [JsonPropertyName("advisory")] public bool Advisory { get; init; }

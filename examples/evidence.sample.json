@@ -1,21 +1,28 @@
 {
   "rubricVersion": "rubric-2026.08.15",
   "commit": "3f9a1c2",
+  "qualityBar": "production",
+  "analyzableProjects": 3,
+  "productionLoc": 1500,
   "dimensions": [
-    { "id": "D1",  "lens": "codeHealth",          "score": 7.5, "confidence": 0.95 },
-    { "id": "D3",  "lens": "codeHealth",          "score": 8.2, "confidence": 0.95 },
-    { "id": "D8",  "lens": "codeHealth",          "score": 6.4, "confidence": 0.90 },
-    { "id": "D17", "lens": "codeHealth",          "score": 8.8, "confidence": 0.90 },
-    { "id": "D5",  "lens": "architecture",        "score": 7.1, "confidence": 0.95 },
-    { "id": "D7",  "lens": "architecture",        "score": 8.4, "confidence": 0.90 },
-    { "id": "D15", "lens": "maturity",            "score": 6.0, "confidence": 0.85 },
-    { "id": "D16", "lens": "maturity",            "score": 7.2, "confidence": 0.80 },
-    { "id": "D30", "lens": "productionReadiness", "score": 7.6, "confidence": 0.90 },
-    { "id": "D33", "lens": "productionReadiness", "score": 8.1, "confidence": 0.90 },
-    { "id": "D12", "lens": "securityCompliance",  "score": 5.5, "confidence": 0.95 },
-    { "id": "D13", "lens": "securityCompliance",  "score": 8.9, "confidence": 0.95 },
-    { "id": "AC1", "lens": "accessibility",       "score": 8.5, "confidence": 0.85 },
-    { "id": "P1",  "lens": "performance",         "score": 8.0, "confidence": 0.80 },
-    { "id": "D21", "lens": "codeHealth",          "score": 7.0, "confidence": 0.70, "advisory": true }
-  ]
+    { "id": "D1",  "category": "code-quality",        "score": 7.5, "confidence": 0.95 },
+    { "id": "D3",  "category": "code-quality",        "score": 8.2, "confidence": 0.95 },
+    { "id": "D8",  "category": "code-quality",        "score": 6.4, "confidence": 0.90 },
+    { "id": "D17", "category": "explicit-debt",       "score": 8.8, "confidence": 0.90 },
+    { "id": "D5",  "category": "architecture",        "score": 7.1, "confidence": 0.95 },
+    { "id": "D7",  "category": "architecture",        "score": 8.4, "confidence": 0.90 },
+    { "id": "D15", "category": "git-mining",          "score": 6.0, "confidence": 0.85 },
+    { "id": "M1",  "category": "docs",                "score": 7.2, "confidence": 0.80 },
+    { "id": "D9",  "category": "testing",             "score": 7.0, "confidence": 0.85 },
+    { "id": "D12", "category": "dependencies",        "score": 8.1, "confidence": 0.90 },
+    { "id": "D30", "category": "security",            "score": 7.6, "confidence": 0.90 },
+    { "id": "D28", "category": "security-compliance", "score": 5.5, "confidence": 0.95 },
+    { "id": "D29", "category": "security-compliance", "score": 8.9, "confidence": 0.95 },
+    { "id": "D21", "category": "code-quality",        "score": 7.0, "confidence": 0.70, "advisory": true }
+  ],
+  "metaDimensions": [
+    { "id": "AC1", "lens": "accessibility", "score": 8.5 },
+    { "id": "PF1", "lens": "performance",   "score": 8.0 }
+  ],
+  "headlineScore": 70.3
 }

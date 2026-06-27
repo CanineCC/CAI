@@ -49,22 +49,23 @@ dotnet run --project src/Cai.Cli -- verify examples/evidence.sample.json</pre>
     <p class="muted">Fold an evidence bundle into the CAI + the per-lens roll-up.</p>
     <pre>$ cai score examples/evidence.sample.json
 
-CAI 69.6 (Adequate)  ·  rubric rubric-2026.08.15
+CAI 70.3 (Strong)  ·  rubric rubric-2026.08.15
 
   lens                    score band          dims   weight   contrib
-  maturity                 65.1 Adequate         18    0.457     29.77
-  securityCompliance       71.0 Strong           22    0.214     15.19
-  codeHealth               74.3 Strong           31    0.143     10.62
+  maturity                 65.1 Adequate          2    0.457     29.77
+  securityCompliance       72.0 Strong            1    0.251     18.10
+  productionReadiness      74.6 Strong            3    0.138     10.31
+  architecture             77.3 Strong            1    0.076      5.88
   …</pre>
 
     <h3>cai verify <code>&lt;evidence.json&gt; [--expect N]</code></h3>
     <p class="muted">Reproduce a published headline. The bundle carries <code>headlineScore</code>; or pass
         <code>--expect N</code> to check against a number you were told.</p>
     <pre>$ cai verify examples/evidence.sample.json
-✓ reproduced: CAI 70 (Strong) under rubric rubric-2026.08.15 (claimed 70, Δ0.04)
+✓ reproduced: CAI 70 (Strong) under rubric rubric-2026.08.15 (claimed 70, Δ0.01)
 
 $ cai verify examples/evidence.sample.json --expect 90
-✗ MISMATCH: evidence folds to 69.56 but the bundle claims 90.00 (Δ20.44 > 0.50)</pre>
+✗ MISMATCH: evidence folds to 70.31 but the bundle claims 90.00 (Δ19.69 > 0.50)</pre>
 
     <h3>Exit codes</h3>
     <ul>
