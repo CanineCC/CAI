@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Cai.Web/Cai.Web.csproj" />
     <Project Path="src/Cai.Scoring/Cai.Scoring.csproj" />
+    <Project Path="src/Cai.Delivery/Cai.Delivery.csproj" />
     <Project Path="src/Cai.Cli/Cai.Cli.csproj" />
   </Folder>
   <Folder Name="/tests/">

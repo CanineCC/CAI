@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>Cai.Delivery</AssemblyName>
+    <RootNamespace>Cai.Delivery</RootNamespace>
+  </PropertyGroup>
+
+  <!-- NuGet package: the reference signer/verifier for the CAI-delivery package (the signed, shareable evidence
+       artifact). It sits ON TOP of Cai.Scoring — Cai.Scoring stays a pure, crypto-free deterministic fold (ADR-0002);
+       the signing/verification concern lives here so a consumer can verify a delivery offline with the SAME code the
+       producer used to mint it. Ed25519 via NSec/libsodium — the existing NIS2/Delivery signing approach. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Cai.Delivery</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Canine Development</Authors>
+    <Company>Canine Development</Company>
+    <Description>The CAI-delivery package: sign, verify and build the signed (Ed25519), tamper-evident, portable CAI evidence artifact. Wraps a recomputed CAI verdict + its evidence bundle + provenance in a package cai.canine.dev signs and anyone can verify offline. Builds on Cai.Scoring for the deterministic recompute.</Description>
+    <PackageProjectUrl>https://cai.canine.dev</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/CanineCC/CAI</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>cai;delivery;ed25519;signature;evidence;attestation</PackageTags>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSec.Cryptography" Version="26.4.0" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.300" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cai.Scoring\Cai.Scoring.csproj" />
+  </ItemGroup>
+</Project>

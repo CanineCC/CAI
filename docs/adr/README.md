@@ -20,5 +20,7 @@ old one rather than editing history.
 | [0007](0007-repository-solution-file.md) | A repository solution file for whole-graph analysis | Accepted |
 | [0008](0008-api-access-control.md) | Default-deny authorization with an open public API | Accepted |
 | [0009](0009-conventional-src-tests-layout.md) | Conventional `src/` and `tests/` repository layout | Accepted |
+| [0010](0010-signed-cai-delivery-package-and-registry.md) | The signed CAI-delivery package and the registry | Accepted |
 
 See [../architecture.md](../architecture.md) for the high-level shape these decisions produce.
+Package/registry design details live under [../spec/](../spec).

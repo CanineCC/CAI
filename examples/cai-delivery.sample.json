@@ -1,0 +1,305 @@
+{
+  "payload": {
+    "schemaVersion": "1.0",
+    "deliveryId": "cd_acme_checkout-api_3f9a1c2",
+    "issuedAt": "2026-07-01T10:32:04Z",
+    "issuer": {
+      "name": "cai.canine.dev",
+      "keyId": "cai-ed25519-2026-07"
+    },
+    "producer": {
+      "name": "watchdog.canine.dev",
+      "scanner": "watchdog-surveyor",
+      "scannerVersion": "4.2.0"
+    },
+    "subject": {
+      "repository": "acme/checkout-api",
+      "commit": "3f9a1c2",
+      "host": "github.com"
+    },
+    "rubricVersion": "rubric-2026.08.15",
+    "qualityBar": "production",
+    "measurement": {
+      "productionLoc": 1500,
+      "analyzableProjects": 3
+    },
+    "verdict": {
+      "cai": 70.31,
+      "band": "Strong",
+      "aggregate": 74.46,
+      "categoryMean": 74.46,
+      "coherenceNote": "",
+      "lenses": [
+        {
+          "lens": "codeHealth",
+          "score": 79.91,
+          "band": "Strong",
+          "weight": 0.0418,
+          "contribution": 3.34,
+          "criticalGated": false,
+          "criticalContributors": [],
+          "itemCount": 2
+        },
+        {
+          "lens": "architecture",
+          "score": 77.32,
+          "band": "Strong",
+          "weight": 0.076,
+          "contribution": 5.88,
+          "criticalGated": false,
+          "criticalContributors": [],
+          "itemCount": 1
+        },
+        {
+          "lens": "maturity",
+          "score": 65.14,
+          "band": "Adequate",
+          "weight": 0.457,
+          "contribution": 29.77,
+          "criticalGated": false,
+          "criticalContributors": [],
+          "itemCount": 2
+        },
+        {
+          "lens": "productionReadiness",
+          "score": 74.62,
+          "band": "Strong",
+          "weight": 0.1382,
+          "contribution": 10.31,
+          "criticalGated": false,
+          "criticalContributors": [],
+          "itemCount": 3
+        },
+        {
+          "lens": "securityCompliance",
+          "score": 72,
+          "band": "Strong",
+          "weight": 0.2513,
+          "contribution": 18.1,
+          "criticalGated": false,
+          "criticalContributors": [],
+          "itemCount": 1
+        },
+        {
+          "lens": "accessibility",
+          "score": 85,
+          "band": "Strong",
+          "weight": 0.0126,
+          "contribution": 1.08,
+          "criticalGated": false,
+          "criticalContributors": [],
+          "itemCount": 1
+        },
+        {
+          "lens": "performance",
+          "score": 80,
+          "band": "Strong",
+          "weight": 0.023,
+          "contribution": 1.84,
+          "criticalGated": false,
+          "criticalContributors": [],
+          "itemCount": 1
+        }
+      ],
+      "categories": [
+        {
+          "category": "Architecture",
+          "lens": "architecture",
+          "score": 77.32,
+          "dimensionCount": 2
+        },
+        {
+          "category": "CodeQuality",
+          "lens": "codeHealth",
+          "score": 73.84,
+          "dimensionCount": 4
+        },
+        {
+          "category": "Dependencies",
+          "lens": "productionReadiness",
+          "score": 81,
+          "dimensionCount": 1
+        },
+        {
+          "category": "Docs",
+          "lens": "maturity",
+          "score": 72,
+          "dimensionCount": 1
+        },
+        {
+          "category": "ExplicitDebt",
+          "lens": "codeHealth",
+          "score": 88,
+          "dimensionCount": 1
+        },
+        {
+          "category": "GitMining",
+          "lens": "maturity",
+          "score": 60,
+          "dimensionCount": 1
+        },
+        {
+          "category": "Security",
+          "lens": "productionReadiness",
+          "score": 76,
+          "dimensionCount": 1
+        },
+        {
+          "category": "SecurityCompliance",
+          "lens": "securityCompliance",
+          "score": 72,
+          "dimensionCount": 2
+        },
+        {
+          "category": "Testing",
+          "lens": "productionReadiness",
+          "score": 70,
+          "dimensionCount": 1
+        }
+      ]
+    },
+    "evidence": {
+      "rubricVersion": "rubric-2026.08.15",
+      "commit": "3f9a1c2",
+      "qualityBar": "production",
+      "analyzableProjects": 3,
+      "productionLoc": 1500,
+      "headlineScore": 70.3,
+      "dimensions": [
+        {
+          "id": "D1",
+          "category": "code-quality",
+          "score": 7.5,
+          "confidence": 0.95,
+          "coverage": 1,
+          "advisory": false
+        },
+        {
+          "id": "D3",
+          "category": "code-quality",
+          "score": 8.2,
+          "confidence": 0.95,
+          "coverage": 1,
+          "advisory": false
+        },
+        {
+          "id": "D8",
+          "category": "code-quality",
+          "score": 6.4,
+          "confidence": 0.9,
+          "coverage": 1,
+          "advisory": false
+        },
+        {
+          "id": "D17",
+          "category": "explicit-debt",
+          "score": 8.8,
+          "confidence": 0.9,
+          "coverage": 1,
+          "advisory": false
+        },
+        {
+          "id": "D5",
+          "category": "architecture",
+          "score": 7.1,
+          "confidence": 0.95,
+          "coverage": 1,
+          "advisory": false
+        },
+        {
+          "id": "D7",
+          "category": "architecture",
+          "score": 8.4,
+          "confidence": 0.9,
+          "coverage": 1,
+          "advisory": false
+        },
+        {
+          "id": "D15",
+          "category": "git-mining",
+          "score": 6,
+          "confidence": 0.85,
+          "coverage": 1,
+          "advisory": false
+        },
+        {
+          "id": "M1",
+          "category": "docs",
+          "score": 7.2,
+          "confidence": 0.8,
+          "coverage": 1,
+          "advisory": false
+        },
+        {
+          "id": "D9",
+          "category": "testing",
+          "score": 7,
+          "confidence": 0.85,
+          "coverage": 1,
+          "advisory": false
+        },
+        {
+          "id": "D12",
+          "category": "dependencies",
+          "score": 8.1,
+          "confidence": 0.9,
+          "coverage": 1,
+          "advisory": false
+        },
+        {
+          "id": "D30",
+          "category": "security",
+          "score": 7.6,
+          "confidence": 0.9,
+          "coverage": 1,
+          "advisory": false
+        },
+        {
+          "id": "D28",
+          "category": "security-compliance",
+          "score": 5.5,
+          "confidence": 0.95,
+          "coverage": 1,
+          "advisory": false
+        },
+        {
+          "id": "D29",
+          "category": "security-compliance",
+          "score": 8.9,
+          "confidence": 0.95,
+          "coverage": 1,
+          "advisory": false
+        },
+        {
+          "id": "D21",
+          "category": "code-quality",
+          "score": 7,
+          "confidence": 0.7,
+          "coverage": 1,
+          "advisory": true
+        }
+      ],
+      "metaDimensions": [
+        {
+          "id": "AC1",
+          "lens": "accessibility",
+          "score": 8.5,
+          "advisory": false
+        },
+        {
+          "id": "PF1",
+          "lens": "performance",
+          "score": 8,
+          "advisory": false
+        }
+      ],
+      "lenses": []
+    }
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "keyId": "cai-ed25519-2026-07",
+    "canon": "RFC8785-json",
+    "value": "dM61D4ou9ulzTUZwgtueqwYmDPyLYiTjjkFYdjGRP6zEZRVdyPcenB-eQUQcmUqs_KkL8J6d5SJlCbp6SGLlBg"
+  }
+}

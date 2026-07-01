@@ -12,5 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Cai.Scoring\Cai.Scoring.csproj" />
+    <ProjectReference Include="..\..\src\Cai.Delivery\Cai.Delivery.csproj" />
   </ItemGroup>
 </Project>

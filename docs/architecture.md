@@ -27,6 +27,7 @@ flowchart TD
     subgraph repo["CanineCC/CAI"]
         rubrics["rubrics/<br/>versioned, frozen catalogs"]
         scoring["src/Cai.Scoring<br/>(library) — deterministic OWA fold"]
+        delivery["src/Cai.Delivery<br/>(library) — Ed25519 signed delivery package"]
         cli["src/Cai.Cli<br/>reference CLI"]
         web["src/Cai.Web<br/>Blazor SSR UI + minimal JSON API"]
         tests["tests/Cai.Tests<br/>xUnit over the fold"]
@@ -38,14 +39,22 @@ flowchart TD
     scoring --> web
     scoring --> tests
     scoring --> bench
+    scoring --> delivery
+    delivery --> cli
     scoring -->|published as| nuget
+    delivery -->|published as| nuget
     web -->|/api/rubrics, /api/score, /api/verify, /llms.txt| consumer["consumers"]
 ```
 
 - **`Cai.Scoring`** — the heart: a pure, side-effect-free fold from an *evidence bundle* to a CAI
   headline and per-lens contributions. Deterministic by construction
   ([ADR-0002](adr/0002-deterministic-reproducible-scoring.md)). Published as a NuGet package.
-- **`Cai.Cli`** — the reference command-line scorer; proves the fold runs anywhere.
+- **`Cai.Delivery`** — the reference signer/verifier for the **signed CAI-delivery package** (the shareable evidence
+  artifact) and the registry contract behind it (producer push / consumer pull / seller→buyer access grants). Ed25519,
+  signed by cai and reproducible offline; sits on top of `Cai.Scoring`
+  ([ADR-0010](adr/0010-signed-cai-delivery-package-and-registry.md), [spec](spec/cai-delivery-package.md)).
+- **`Cai.Cli`** — the reference command-line scorer (`score`/`verify`) and delivery tool
+  (`keygen`/`sign`/`verify-delivery`); proves both folds run anywhere.
 - **`Cai.Web`** — a Blazor static-SSR site that documents the standard and a minimal HTTP API
   (`/api/rubrics`, `/api/score`, `/api/verify`) plus `/llms.txt` and a JSON-LD glossary. The public
   API is rate-limited; `/score` and `/verify` validate inbound evidence before folding.
@@ -59,10 +68,10 @@ Production code lives under `src/`, tests under `tests/`, and performance benchm
 ([ADR-0009](adr/0009-conventional-src-tests-layout.md)):
 
 ```
-src/Cai.Scoring   src/Cai.Cli   src/Cai.Web      production code
+src/Cai.Scoring  src/Cai.Delivery  src/Cai.Cli  src/Cai.Web   production code
 tests/Cai.Tests                                  xUnit suite over the fold
 benchmarks/Cai.Benchmarks                        BenchmarkDotNet hot-path benchmarks
-rubrics/   examples/   docs/   deploy/           data, samples, docs, ops
+rubrics/  examples/  schemas/  docs/  deploy/    data, samples, schema, docs, ops
 ```
 
 All projects are referenced by one solution file, `Cai.slnx`, so Roslyn-based tooling loads the whole
