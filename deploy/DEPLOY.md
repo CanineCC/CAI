@@ -14,8 +14,10 @@ watchdog (co-located on wrx1) ──http──▶ 127.0.0.1:8090 ─────
   `/home/jimmy/apps/cai-web/app`, binds `0.0.0.0:8090`, reads the rubric catalogs from
   `/home/jimmy/apps/cai-web/rubrics`. `Restart=on-failure`.
 - **Firewall:** `ufw allow from 192.168.1.0/24 to any port 8090 proto tcp` (lets dgx1's nginx reach it; the LAN only).
-- The public API rate-limits per client IP (1/s · 3/min · 15/day); loopback callers are exempt, so watchdog calls
-  `http://127.0.0.1:8090` and is never limited.
+- The public API rate-limits anonymous traffic per client IP (1/s · 3/min · 15/day); loopback callers are exempt, so
+  watchdog calls `http://127.0.0.1:8090` and is never limited. Registry traffic has its own classes — authenticated
+  principals ride a per-principal budget and the anonymous `keys`/`health` probes a generous per-IP one (see
+  [`registry/DEPLOY.md`](registry/DEPLOY.md), "Rate limits").
 
 ## Host: canine-dgx1 (nginx + SSL)
 - **vhost:** [`nginx/cai.canine.dev.conf`](nginx/cai.canine.dev.conf) at `/etc/nginx/sites-available/cai` (symlinked

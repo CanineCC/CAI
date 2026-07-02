@@ -11,6 +11,15 @@ move a score for unchanged evidence mints a new rubric version (see
 ## [Unreleased]
 
 ### Fixed
+- **The rate limiter no longer throttles the registry's own principals** (production operability): the open API's
+  anonymous per-IP budget (1/s · 3/min · 15/day) also covered registry traffic, and since Watchdog + Assay call from
+  ONE LAN IP it 429ed `/api/registry/keys` and delivery GETs mid-loop. The limiter is now traffic-class aware
+  (`ApiRateLimiting`): a VALID registry bearer rides a generous per-PRINCIPAL budget (600/min — a runaway-client
+  fuse; the credential is the abuse control), the registry's anonymous public probes `keys` + `health` get their own
+  per-IP budget (300/min — an offline-verify loop over a whole corpus cannot trip it, a flood still does), and all
+  other anonymous `/api` traffic keeps the tight open-API budget — including requests with an INVALID token, which
+  also throttles token guessing. Covered by a dedicated rate-limiting suite (authenticated burst past the public
+  budget, exhausted-IP + credential, tampered token, offline-verify loop, flood ceiling).
 - **Unconfigured registry is safe-by-default, never `500`** ([spec §2/§3.4](docs/spec/cai-registry.md)): production
   ran the default-deny fallback policy with `AddAuthentication()` registering NO scheme, so every request without
   endpoint-level `AllowAnonymous` — all of `/api/registry/*` included — threw

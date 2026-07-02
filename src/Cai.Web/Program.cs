@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Net;
 using System.Threading.RateLimiting;
 using Cai.Scoring;
 using Cai.Web;
@@ -95,48 +94,38 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
     o.KnownProxies.Clear(); // the proxy is a different host; accept the forwarded chain (we only use it for limiting, never auth)
 });
 
-// API rate limiting (public read API): 1/second AND 3/minute AND 15/day, per client IP, chained so a request must pass
-// all three. EXEMPT: loopback callers (the co-located Watchdog surveyor calls cai locally), an optional partner key,
-// and AUTHENTICATED registry principals — the anonymous budget is the open standard API's abuse control; a registry
-// call's abuse control is its credential. (A request presenting an UNRESOLVED token stays inside the anonymous budget,
-// which also throttles token guessing.) Config is read per-request through DI, never snapshotted at startup — the
-// limiter runs BEFORE authentication, and a live read keeps it agreeing with what the auth handler will decide.
-bool Exempt(HttpContext ctx)
+// API rate limiting, by TRAFFIC CLASS (see ApiRateLimiting — each class carries its own abuse control):
+//   trusted         — loopback (the co-located Watchdog surveyor) or the partner key: no limit.
+//   principal       — a VALID registry bearer: the credential is the abuse control; a generous per-PRINCIPAL budget
+//                     (never per-IP: Watchdog and Assay call from ONE LAN IP, and per-IP throttling took the delivery
+//                     loop down mid-flight — observed live as 429s) stays as a runaway-client fuse.
+//   registry-public — anonymous /api/registry/keys + /health: the offline-verify pattern refetches keys and monitors
+//                     poll health, so these get their own generous per-IP budget instead of the 15/day open budget.
+//   public          — everything else under /api: the open standard API's anonymous budget, 1/second AND 3/minute AND
+//                     15/day per client IP, chained so a request must pass all three. A request presenting an
+//                     UNRESOLVED token stays here, which also throttles token guessing.
+// Config is read per-request through DI, never snapshotted at startup — the limiter runs BEFORE authentication, and a
+// live read keeps it agreeing with what the auth handler will decide.
+RateLimitPartition<string> Window(HttpContext ctx, ApiTrafficClass cls, string tag, int permit, TimeSpan window)
 {
-    if (ctx.Connection.RemoteIpAddress is { } ip && IPAddress.IsLoopback(ip))
-    {
-        return true;
-    }
-
-    var partnerKey = ctx.RequestServices.GetRequiredService<IConfiguration>()["RateLimit:PartnerKey"];
-    if (!string.IsNullOrEmpty(partnerKey) && ctx.Request.Headers["X-CAI-Partner"] == partnerKey)
-    {
-        return true;
-    }
-
-    var registry = ctx.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptions<RegistryOptions>>().Value;
-    return RegistryTokenAuthenticationHandler.Resolve(ctx.Request, registry) is not null;
-}
-
-RateLimitPartition<string> Window(HttpContext ctx, string tag, int permit, TimeSpan window)
-{
-    if (!ctx.Request.Path.StartsWithSegments("/api") || Exempt(ctx))
-    {
-        return RateLimitPartition.GetNoLimiter("exempt");
-    }
-
-    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-    return RateLimitPartition.GetFixedWindowLimiter($"{tag}:{ip}",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = permit, Window = window, QueueLimit = 0 });
+    var (requestClass, partition) = ApiRateLimiting.Classify(ctx);
+    return requestClass != cls
+        ? RateLimitPartition.GetNoLimiter("exempt")
+        : RateLimitPartition.GetFixedWindowLimiter($"{tag}:{partition}",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = permit, Window = window, QueueLimit = 0 });
 }
 
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.GlobalLimiter = PartitionedRateLimiter.CreateChained(
-        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, "s", 1, TimeSpan.FromSeconds(1))),
-        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, "m", 3, TimeSpan.FromMinutes(1))),
-        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, "d", 15, TimeSpan.FromDays(1))));
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.Public, "s", 1, TimeSpan.FromSeconds(1))),
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.Public, "m", 3, TimeSpan.FromMinutes(1))),
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.Public, "d", 15, TimeSpan.FromDays(1))),
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.RegistryPublic, "r",
+            ApiRateLimiting.RegistryPublicPermitsPerMinute, TimeSpan.FromMinutes(1))),
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.Principal, "p",
+            ApiRateLimiting.PrincipalPermitsPerMinute, TimeSpan.FromMinutes(1))));
     options.OnRejected = async (ctx, ct) =>
     {
         ctx.HttpContext.Response.Headers.RetryAfter = "1";

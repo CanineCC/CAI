@@ -13,8 +13,8 @@
 
 <section><div class="wrap">
     <h2>Rate limits</h2>
-    <p>To keep the standard free and available, <strong>every <code>/api</code> endpoint</strong> is rate-limited per
-        client IP:</p>
+    <p>To keep the standard free and available, <strong>anonymous requests to <code>/api</code></strong> are
+        rate-limited per client IP:</p>
     <ul>
         <li><strong>1 request / second</strong></li>
         <li><strong>3 requests / minute</strong></li>
@@ -24,6 +24,10 @@
         with a <code>Retry-After</code> header. <strong>The rubric catalog is immutable per version, so cache the rubric
         you use</strong> — you should never need to fetch a given version more than once. The client-side
         <a href="/calculator">WASM calculator</a> runs entirely in your browser and is <em>not</em> rate-limited.</p>
+    <p>Two surfaces carry their own, more generous budgets instead: <strong>authenticated registry calls</strong>
+        (a valid bearer token is the abuse control — a per-principal allowance far above any real delivery loop) and
+        the registry's <strong>public probes</strong> <code>/api/registry/keys</code> and
+        <code>/api/registry/health</code> (per-IP, sized so offline verification and monitoring never trip it).</p>
     <div class="callout"><p style="margin:0">The Watchdog surveyor (watchdog.canine.dev) calls these same public
         endpoints, exempt from the limit as a co-located partner.</p></div>
 </div></section>

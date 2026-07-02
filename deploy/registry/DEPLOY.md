@@ -44,8 +44,24 @@ deliveries + grants (nightly `sqlite3 registry.db ".backup ..."` or plain file c
 Install [`../nginx/api.cai.canine.dev.conf`](../nginx/api.cai.canine.dev.conf) on the edge
 (192.168.1.159), issue the cert (`sudo certbot certonly --webroot -w /var/www/html -d
 api.cai.canine.dev`), `nginx -t && systemctl reload nginx`. DNS is already covered by the
-`*.canine.dev` wildcard. Note: the open API's per-IP rate limits apply on api.cai too — registry
-callers authenticate, so consider exempting authenticated registry routes if limits ever bite.
+`*.canine.dev` wildcard.
+
+## Rate limits (RESOLVED — the limiter is traffic-class aware)
+
+The open API's per-IP budget (1/s · 3/min · 15/day) used to apply to registry traffic too, and it
+throttled the delivery loop live: Watchdog + Assay both call from ONE LAN IP (wrx1 behind the dgx1
+proxy), and 429s hit `/api/registry/keys` and delivery GETs mid-loop. The limiter now classifies
+(`ApiRateLimiting` in Cai.Web):
+
+| class | who | budget |
+|---|---|---|
+| trusted | loopback, partner key | none |
+| principal | VALID registry bearer | **600/min per principal** (fuse, not quota — the credential is the abuse control; partitioned by org/name, never IP) |
+| registry-public | anonymous `/api/registry/keys` + `/api/registry/health` | **300/min per IP** (an offline-verify loop over a whole corpus cannot trip it; a flood still does) |
+| public | everything else under `/api` | 1/s · 3/min · 15/day per IP (unchanged — an INVALID token stays here, throttling token guessing) |
+
+If a legitimate batch ever approaches the principal fuse, raise
+`ApiRateLimiting.PrincipalPermitsPerMinute` — do not put the loop back inside a per-IP budget.
 
 ## Verify after the registry merges + deploys
 
