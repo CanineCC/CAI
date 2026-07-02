@@ -4,8 +4,10 @@ using System.Threading.RateLimiting;
 using Cai.Scoring;
 using Cai.Web;
 using Cai.Web.Components;
+using Cai.Web.Registry;
 using FluentValidation;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using OpenTelemetry;
@@ -70,10 +72,20 @@ builder.Services.AddAntiforgery(o =>
 // explicitly opt out — so a future endpoint is protected unless deliberately made public. Every endpoint on this open,
 // read-only standard site is then explicitly .AllowAnonymous(): the public API *is* the product, gated by rate limiting
 // (not identity). The value is that the default flips from open to closed, so a new protected surface can't be added by
-// omission.
-builder.Services.AddAuthentication();
+// omission. The REGISTRY (/api/registry, ADR-0010) is the first surface that deliberately does NOT opt out: it
+// authenticates via the RegistryBearer scheme (configured principals; the claim contract in RegistryClaims is the
+// Keycloak seam — swap the scheme, keep the claims) and gates publishing on the producer role.
+builder.Services.AddAuthentication(RegistryTokenAuthenticationHandler.Scheme)
+    .AddScheme<AuthenticationSchemeOptions, RegistryTokenAuthenticationHandler>(RegistryTokenAuthenticationHandler.Scheme, null);
 builder.Services.AddAuthorizationBuilder()
-    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
+    .AddPolicy(RegistryClaims.ProducerPolicy, p => p.RequireRole(RegistryClaims.ProducerRole));
+
+// ── The registry (ADR-0010): store + trusted signing keys + health, all bound from the Registry config section. ──
+builder.Services.Configure<RegistryOptions>(builder.Configuration.GetSection(RegistryOptions.Section));
+builder.Services.AddSingleton<IRegistryStore, SqliteRegistryStore>();
+builder.Services.AddSingleton<TrustedKeyProvider>();
+builder.Services.AddHealthChecks().AddCheck<RegistryHealthCheck>("registry");
 
 // Behind the dgx1 nginx reverse proxy: trust X-Forwarded-* so the rate limiter partitions by the REAL client IP.
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
@@ -84,12 +96,27 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
 });
 
 // API rate limiting (public read API): 1/second AND 3/minute AND 15/day, per client IP, chained so a request must pass
-// all three. EXEMPT: loopback callers (the co-located Watchdog surveyor calls cai locally) and an optional partner key.
-// Only /api is limited — the UI and the client-side WASM calculator never hit it.
-var partnerKey = builder.Configuration["RateLimit:PartnerKey"];
-bool Exempt(HttpContext ctx) =>
-    (ctx.Connection.RemoteIpAddress is { } ip && IPAddress.IsLoopback(ip))
-    || (!string.IsNullOrEmpty(partnerKey) && ctx.Request.Headers["X-CAI-Partner"] == partnerKey);
+// all three. EXEMPT: loopback callers (the co-located Watchdog surveyor calls cai locally), an optional partner key,
+// and AUTHENTICATED registry principals — the anonymous budget is the open standard API's abuse control; a registry
+// call's abuse control is its credential. (A request presenting an UNRESOLVED token stays inside the anonymous budget,
+// which also throttles token guessing.) Config is read per-request through DI, never snapshotted at startup — the
+// limiter runs BEFORE authentication, and a live read keeps it agreeing with what the auth handler will decide.
+bool Exempt(HttpContext ctx)
+{
+    if (ctx.Connection.RemoteIpAddress is { } ip && IPAddress.IsLoopback(ip))
+    {
+        return true;
+    }
+
+    var partnerKey = ctx.RequestServices.GetRequiredService<IConfiguration>()["RateLimit:PartnerKey"];
+    if (!string.IsNullOrEmpty(partnerKey) && ctx.Request.Headers["X-CAI-Partner"] == partnerKey)
+    {
+        return true;
+    }
+
+    var registry = ctx.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptions<RegistryOptions>>().Value;
+    return RegistryTokenAuthenticationHandler.Resolve(ctx.Request, registry) is not null;
+}
 
 RateLimitPartition<string> Window(HttpContext ctx, string tag, int permit, TimeSpan window)
 {
@@ -323,6 +350,10 @@ The standard is free to use. An independent, signed CAI survey — with the dedu
     return Results.Text(text, "text/plain; charset=utf-8");
 });
 
+// ── The registry (ADR-0010) — the identity-gated push/pull/grant surface; /api/registry/keys is its one public
+// endpoint. Everything else is protected by the default-deny fallback policy + the RegistryBearer scheme. ─────────
+app.MapRegistryEndpoints();
+
 // The CAI vocabulary as a schema.org DefinedTermSet (JSON-LD) — the citable, machine-readable definition (referenceable pillar).
 app.MapGet("/glossary.jsonld", [AllowAnonymous] () => Results.Text(Cai.Web.CaiGlossary.Build(), "application/ld+json; charset=utf-8"));
 
@@ -333,3 +364,6 @@ app.MapGet("/favicon.ico", [AllowAnonymous] () => Results.Redirect("/favicon.svg
 app.MapRazorComponents<App>().AllowAnonymous();
 
 app.Run();
+
+/// <summary>Marker for <c>WebApplicationFactory</c> — lets the integration tests boot this exact app in-process.</summary>
+public partial class Program;

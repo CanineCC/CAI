@@ -11,6 +11,15 @@ move a score for unchanged evidence mints a new rubric version (see
 ## [Unreleased]
 
 ### Added
+- **The registry API** (`/api/registry`, [ADR-0010](docs/adr/0010-signed-cai-delivery-package-and-registry.md)
+  addendum + [contract](docs/spec/cai-registry.md)): producer push of signed CAI-delivery packages with
+  verification on ingest (versioned JSON-schema + trusted-active-key + Ed25519 over the canonical payload +
+  verdict-reproduces; tampered/unsigned/schema-invalid rejected), immutable storage (idempotent identical
+  re-push, `409` on same-id/different-content), consumer pull (verbatim package, metadata, list), seller→buyer
+  access grants (delivery/repo scope, expiry, revoke; ungranted reads are indistinguishable `404`s), the public
+  `GET /api/registry/keys` key set, and a registry-store `/health` contribution. First identity-gated surface:
+  bearer-token principals with a fixed claim contract as the Keycloak seam; authenticated registry calls are
+  exempt from the open-API rate budget. Storage = SQLite behind the `IRegistryStore` (Postgres) seam.
 - Architecture Decision Records under `docs/adr/` and a high-level `docs/architecture.md` with C4 /
   component diagrams.
 - `Cai.slnx` repository solution so Roslyn-based tooling loads the whole project graph

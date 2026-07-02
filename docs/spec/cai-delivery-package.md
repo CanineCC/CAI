@@ -145,8 +145,11 @@ frozen-forever discipline as rubric versions ([ADR-0004](../adr/0004-versioned-f
 
 ## 9. Security considerations
 
-- **Private key custody.** Only cai holds signing keys; they live server-side in the registry push path and never ship.
-  The reference `keygen` marks the private key `SECRET — do not commit`; the repository publishes only public keys.
+- **Private key custody.** Signing keys are issued by cai and never ship publicly; in closed-loop v1 the key pair is
+  operated inside the ONE trusted producer's push path, while the registry custodies only the public key set and
+  **verifies every package on ingest** (see [ADR-0010's implementation addendum](../adr/0010-signed-cai-delivery-package-and-registry.md)
+  and the [registry contract](cai-registry.md)). The reference `keygen` marks the private key `SECRET — do not
+  commit`; the repository publishes only public keys.
 - **Revocation vs. artifacts.** A delivery is a signed point-in-time artifact: revoking a *grant* stops future registry
   reads and discovery, but a copy a buyer already holds stays cryptographically valid by design (they got a free copy).
   Grants govern *distribution*, not an artifact's authenticity — see [registry design §5](cai-registry.md#5-access-model-adr-0018-visibility-vs-authority).

@@ -1,6 +1,6 @@
 # 0010 — The signed CAI-delivery package and the registry
 
-- Status: Accepted
+- Status: Accepted (see the 2026-07-02 implementation addendum at the end)
 - Date: 2026-07-01
 
 ## Context
@@ -78,3 +78,30 @@ and tests covering sign→verify, reproduce, tamper, wrong/unknown/retired key, 
   RFC 8785 conformance, which — with the producer conformance regime — is deliberately deferred.
 - The registry adds an authenticated surface and an access-grant model to a project that was previously all-anonymous;
   the open standard endpoints are unchanged.
+
+## Addendum — the registry as implemented (2026-07-02)
+
+The registry is now built (`src/Cai.Web/Registry/`, contract in [the registry spec](../spec/cai-registry.md), which is
+the authoritative wire document). Two decisions refine this ADR:
+
+1. **Producer-minted, registry-verified (v1).** The original text placed the mint (recompute-then-sign) inside the
+   registry push handler. As implemented, the trusted producer mints and signs the package (via the shared
+   `Cai.Delivery` builder/signer, so the verdict is still recomputed from evidence at build time — never hand-set), and
+   the registry's push path is a **verification gate**: versioned JSON-schema validation, trusted-ACTIVE-key check,
+   Ed25519 over the canonical payload, and an independent reproduce check (the verdict must fold from the embedded
+   evidence, ±0.5) — tampered, unsigned, schema-invalid or non-reproducing packages are rejected and never stored.
+   This matches the master plan's M1 wire ("Watchdog mints a signed Delivery → pushes; cai stores + serves") and is
+   forced by the format itself: `deliveryId` lives inside the signed payload, so a registry-assigned id cannot exist
+   without re-signing. The invariant this ADR cares about survives intact: nothing that does not reproduce from its own
+   evidence is ever signed-and-DISTRIBUTED, and a sharer still cannot alter or mint anything.
+2. **Key custody, amended.** "Signing keys never leave cai's push path" becomes: the signing key pair is *issued by
+   cai* and operated inside the ONE trusted producer's push path; the registry custodies only public keys
+   (`Registry:KeysPath`, served at `GET /api/registry/keys`; retired keys keep verifying stored artifacts but cannot
+   publish new ones). `payload.issuer` stays `cai.canine.dev`. Third-party producers (deferred) will NOT get cai-issued
+   keys — that is where registry-side minting or the conformance regime becomes necessary, and it can be added as a
+   new endpoint without breaking the v1 contract.
+
+Storage: SQLite behind an `IRegistryStore` seam (the spec is storage-agnostic; the delivery PK enforces immutability —
+identical re-push is idempotent `200`, same-id-different-content is `409`). Auth: opaque bearer principals with a fixed
+claim contract (`name`, `cai:org`, role `producer`) as the Keycloak seam. Deferred from the sketch: access requests,
+directory/visibility, email-grant claiming.
