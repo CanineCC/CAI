@@ -10,6 +10,16 @@ move a score for unchanged evidence mints a new rubric version (see
 
 ## [Unreleased]
 
+### Fixed
+- **Unconfigured registry is safe-by-default, never `500`** ([spec §2/§3.4](docs/spec/cai-registry.md)): production
+  ran the default-deny fallback policy with `AddAuthentication()` registering NO scheme, so every request without
+  endpoint-level `AllowAnonymous` — all of `/api/registry/*` included — threw
+  `No authenticationScheme was specified` and returned `500`. The `RegistryBearer` scheme is now registered
+  unconditionally (empty principal set included), so denied requests are challenged with `401`; the new public
+  `GET /api/registry/health` answers `200 Healthy` / `200 Degraded` (unconfigured — publishes rejected) /
+  `503 Unhealthy` (store unreachable), and `GET /api/registry/keys` stays public (empty set when unconfigured).
+  Covered by a dedicated unconfigured-boot test suite (no principals, no key file).
+
 ### Added
 - **The registry API** (`/api/registry`, [ADR-0010](docs/adr/0010-signed-cai-delivery-package-and-registry.md)
   addendum + [contract](docs/spec/cai-registry.md)): producer push of signed CAI-delivery packages with

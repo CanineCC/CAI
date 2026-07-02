@@ -50,10 +50,15 @@ callers authenticate, so consider exempting authenticated registry routes if lim
 ## Verify after the registry merges + deploys
 
 ```bash
-curl -s https://api.cai.canine.dev/api/registry/keys            # 200, public key set
-curl -s -o /dev/null -w '%{http_code}' https://api.cai.canine.dev/api/registry/deliveries  # 401 (default-deny)
+curl -s https://api.cai.canine.dev/api/registry/health          # 200 "Healthy"; "Degraded" until trusted-keys.json is provisioned (NEVER 500)
+curl -s https://api.cai.canine.dev/api/registry/keys            # 200, public key set (empty set until provisioned)
+curl -s -o /dev/null -w '%{http_code}' https://api.cai.canine.dev/api/registry/deliveries  # 401 (default-deny challenge)
 ls -la /home/jimmy/apps/cai-web/registry-data/                  # registry.db present, survives next deploy
 ```
+
+The unconfigured state (no `registry.env` principals, no `trusted-keys.json`) is SAFE, not broken: `/health` answers
+`Degraded`, `/keys` serves an empty set, everything else is `401`, and every publish is rejected — see the spec's
+safe-by-default contract (§2).
 
 ## Rollback
 

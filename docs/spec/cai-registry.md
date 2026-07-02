@@ -23,10 +23,15 @@ CAI-delivery packages, consumers (Assay) pull the ones they own or were granted,
 
 The existing cai API is an **open, anonymous, rate-limited** standard surface (`/api/rubrics`, `/api/score`,
 `/api/verify`) — the standard *is* the product ([ADR-0008](../adr/0008-api-access-control.md)). The registry is the
-**first identity-gated surface**: everything under `/api/registry` except `/keys` requires an authenticated principal —
-the endpoints simply do not opt out of ADR-0008's default-deny fallback policy. Authenticated registry calls are
-**exempt from the open-API rate budget** (their abuse control is the credential); anonymous calls, including `/keys`,
-stay inside it.
+**first identity-gated surface**: everything under `/api/registry` except `/health` and `/keys` requires an
+authenticated principal — the endpoints simply do not opt out of ADR-0008's default-deny fallback policy.
+Authenticated registry calls are **exempt from the open-API rate budget** (their abuse control is the credential);
+anonymous calls, including `/health` and `/keys`, stay inside it.
+
+**Safe-by-default (unconfigured):** the bearer scheme is registered unconditionally at the composition root, even when
+`Registry:Principals` is empty and no key file exists — a fresh deploy therefore answers exactly like a locked one:
+`/health` responds (`Degraded`, §3.4), `/keys` serves an empty set, and every other registry request is challenged
+with `401`. Never a `500`; an unconfigured registry accepts nothing but tells you it is alive.
 
 ### 2.1 Authentication (v1) and the Keycloak seam
 
@@ -55,8 +60,8 @@ All JSON. Every error body is `{ "error": "…" }` (schema rejections add `schem
 
 ### 3.0 `GET /api/registry/keys` — public
 
-The registry's trusted signing key set (active AND retired), for offline verification; pinnable. The one anonymous
-registry endpoint.
+The registry's trusted signing key set (active AND retired), for offline verification; pinnable. Anonymous (like
+`/health`, §3.4). Unconfigured ⇒ an empty set (and every publish is rejected).
 
 ```
 200 → { "keys": [ { "keyId", "alg": "Ed25519", "publicKey", "status": "active"|"retired" } ] }
@@ -172,9 +177,23 @@ Grant semantics:
   row (`status: "revoked"` + `revokedAt`) — grants are an audit trail, not editable state.
 - Grants to your own org are rejected (`400`) — you already own those deliveries.
 
-### 3.4 `GET /health` — public
+### 3.4 `GET /api/registry/health` and `GET /health` — public
 
-`200 Healthy` only when the rubric catalog AND the registry store are reachable (the deploy's verify-before-swap gate).
+`GET /api/registry/health` is the registry's own liveness/readiness probe — anonymous by design (a liveness answer can
+never require the credential whose absence it must be able to report), and it always ANSWERS with its health status,
+never a challenge and never a `500`:
+
+```
+200 "Healthy"   → store reachable, at least one ACTIVE trusted signing key
+200 "Degraded"  → store reachable but UNCONFIGURED (no active trusted key) — alive; every publish is rejected
+503 "Unhealthy" → registry store unreachable
+```
+
+`Degraded` maps to `200` on purpose: a fresh box must pass the deploy's health gate BEFORE credentials/keys are
+provisioned (safe-by-default, not dead-by-default).
+
+The app-wide `GET /health` (the deploy's verify-before-swap gate) folds in the same registry check next to the rubric
+catalog's: `200` only when the rubric catalog is served and the registry store is reachable.
 
 ## 4. Storage
 

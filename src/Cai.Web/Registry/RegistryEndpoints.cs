@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Cai.Delivery;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Cai.Web.Registry;
@@ -30,13 +31,19 @@ public static class RegistryEndpoints
         Results.NotFound(new { error = "delivery not found or not accessible" });
 
     /// <summary>Map the registry endpoints. Everything here requires an authenticated registry principal via the
-    /// default-deny fallback policy (ADR-0008) — except <c>/keys</c>, which is deliberately public (public keys are
-    /// not secret; consumers need them for offline verification).</summary>
+    /// default-deny fallback policy (ADR-0008) — except the two deliberately public probes: <c>/health</c> (a
+    /// liveness answer can never require the credential whose absence it must be able to report) and <c>/keys</c>
+    /// (public keys are not secret; consumers need them for offline verification).</summary>
     public static void MapRegistryEndpoints(this IEndpointRouteBuilder app)
     {
         var registry = app.MapGroup("/api/registry");
 
-        // ── Public keys (the one anonymous registry endpoint) ────────────────────────────────────────────────────
+        // ── Public health (spec §3.4): 200 Healthy / 200 Degraded (unconfigured — publishes rejected) / 503
+        // Unhealthy (store unreachable). Scoped to the registry's own check — the rubric catalog has /health.
+        registry.MapHealthChecks("/health", new HealthCheckOptions { Predicate = r => r.Name == "registry" })
+            .AllowAnonymous();
+
+        // ── Public keys (spec §3.0) ──────────────────────────────────────────────────────────────────────────────
         registry.MapGet("/keys", [AllowAnonymous] (TrustedKeyProvider keys) =>
             Results.Text(keys.Keys.ToJson(), "application/json"));
 

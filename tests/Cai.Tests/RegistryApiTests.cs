@@ -209,9 +209,18 @@ public sealed class RegistryApiTests(RegistryApiFixture fx) : IClassFixture<Regi
     }
 
     [Fact]
+    public async Task Registry_health_is_public_and_healthy_when_configured()
+    {
+        using var client = fx.Client(null); // no credential — /health is public (spec §3.4)
+        var response = await client.GetAsync("/api/registry/health", Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Healthy", await response.Content.ReadAsStringAsync(Ct));
+    }
+
+    [Fact]
     public async Task Keys_endpoint_is_public_and_serves_the_trusted_set()
     {
-        using var client = fx.Client(null); // no credential — /keys is the one anonymous registry endpoint
+        using var client = fx.Client(null); // no credential — /keys is public (spec §3.0)
         var response = await client.GetAsync("/api/registry/keys", Ct);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
