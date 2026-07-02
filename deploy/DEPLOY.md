@@ -29,3 +29,10 @@ watchdog (co-located on wrx1) ──http──▶ 127.0.0.1:8090 ─────
 verifies the build + scorer tests, publishes to `/home/jimmy/apps/cai-web/app` (keeping `app.prev`), bounces the
 service, health-checks `127.0.0.1:8090/api/rubrics`, and rolls back on failure. **Requires a self-hosted Actions runner
 registered for `CanineCC/CAI` on wrx1** (register with a repo runner token, same as the watchdog/unfold runners).
+
+## api.cai.canine.dev (the registry)
+
+The registry ships **inside Cai.Web** — `api.cai.canine.dev` is a second hostname on this same
+service, with its own edge vhost ([`nginx/api.cai.canine.dev.conf`](nginx/api.cai.canine.dev.conf))
+and a stable server-side store that survives deploys. Setup, secrets, backup and rollback:
+[`registry/DEPLOY.md`](registry/DEPLOY.md).

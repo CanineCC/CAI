@@ -35,9 +35,12 @@ jobs:
         run: dotnet test tests/Cai.Tests -c Release
 
       # PUBLISH into a staging dir, sync the rubrics, swap, bounce.
+      # registry-data/ is the registry's STABLE store (SQLite db + trusted keys — see
+      # deploy/registry/DEPLOY.md); it lives NEXT to the swapped app dir so a deploy never touches it.
       - name: Publish
         run: |
           set -euo pipefail
+          mkdir -p /home/jimmy/apps/cai-web/registry-data
           rm -rf /home/jimmy/apps/cai-web/app.next
           dotnet publish src/Cai.Web -c Release -o /home/jimmy/apps/cai-web/app.next
           rsync -a --delete rubrics/ /home/jimmy/apps/cai-web/rubrics/
@@ -57,3 +60,12 @@ jobs:
           echo "::error::cai-web did not come healthy — rolling back"
           [ -d /home/jimmy/apps/cai-web/app.prev ] && { rm -rf /home/jimmy/apps/cai-web/app; mv /home/jimmy/apps/cai-web/app.prev /home/jimmy/apps/cai-web/app; sudo systemctl restart cai-web.service; }
           exit 1
+
+      # Advisory registry probe (api.cai.canine.dev rides this same service). Warn-only until the
+      # registry endpoints are merged + configured — /health above stays the rollback gate.
+      - name: Registry probe (advisory)
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8090/api/registry/keys || true)
+          if [ "$code" = "200" ]; then echo "registry serving (/api/registry/keys 200)"; else
+            echo "::warning::/api/registry/keys returned $code — registry not live yet (expected until the registry context ships + keys are provisioned)"
+          fi
