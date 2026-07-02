@@ -60,3 +60,6 @@ nunit-*.xml
 nupkg/
 bin/
 obj/
+
+# Local registry store (Registry:DbPath default when running from a clone — never commit evidence data)
+src/Cai.Web/data/

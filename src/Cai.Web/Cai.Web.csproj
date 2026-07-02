@@ -7,9 +7,21 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Cai.Scoring\Cai.Scoring.csproj" />
+    <ProjectReference Include="..\Cai.Delivery\Cai.Delivery.csproj" />
+  </ItemGroup>
+  <!-- The registry validates inbound deliveries against the VERSIONED package schema. The schema ships INSIDE the
+       binary (embedded resource) so a deployed registry validates against exactly the schema revision it was built
+       with — no runtime file path to misconfigure. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\schemas\cai-delivery-1.0.schema.json" LogicalName="Cai.Web.Registry.cai-delivery-1.0.schema.json" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="12.1.1" />
+    <PackageReference Include="JsonSchema.Net" Version="9.2.2" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <!-- Direct override: Microsoft.Data.Sqlite 10.0.9 pulls bundle 2.1.11, whose native e_sqlite3 has a known high
+         vulnerability (NU1903 / GHSA-2m69-gcr7-jv3q); 3.x carries the patched SQLite. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
