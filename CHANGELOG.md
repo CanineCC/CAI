@@ -20,6 +20,12 @@ move a score for unchanged evidence mints a new rubric version (see
   other anonymous `/api` traffic keeps the tight open-API budget — including requests with an INVALID token, which
   also throttles token guessing. Covered by a dedicated rate-limiting suite (authenticated burst past the public
   budget, exhausted-IP + credential, tampered token, offline-verify loop, flood ceiling).
+- **`/api/auth/session` and `/api/auth/signin` fail closed and clean, never `500`**: the prod smoke probed these
+  paths (there is no interactive sign-in surface on this host) and the deployed build answered `500` — the same
+  family as the unconfigured-registry bug below: unmatched paths fall to the default-deny fallback policy, whose
+  challenge threw while the bearer scheme was registered conditionally. With the scheme unconditional they answer
+  `401` + `WWW-Authenticate: Bearer` + a JSON error (an authenticated probe gets an honest `404`); a dedicated test
+  suite now pins that contract for the `/api/auth/*` family on both the zero-config boot and the configured app.
 - **Unconfigured registry is safe-by-default, never `500`** ([spec §2/§3.4](docs/spec/cai-registry.md)): production
   ran the default-deny fallback policy with `AddAuthentication()` registering NO scheme, so every request without
   endpoint-level `AllowAnonymous` — all of `/api/registry/*` included — threw
