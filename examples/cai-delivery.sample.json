@@ -293,13 +293,19 @@
           "advisory": false
         }
       ],
-      "lenses": []
+      "lenses": [],
+      "rebuildCost": {
+        "low": 118000,
+        "high": 204000,
+        "currency": "EUR"
+      },
+      "busFactor": "2 of 11 devs"
     }
   },
   "signature": {
     "alg": "Ed25519",
     "keyId": "cai-ed25519-2026-07",
     "canon": "RFC8785-json",
-    "value": "dM61D4ou9ulzTUZwgtueqwYmDPyLYiTjjkFYdjGRP6zEZRVdyPcenB-eQUQcmUqs_KkL8J6d5SJlCbp6SGLlBg"
+    "value": "PN1kumgqxSphlYNxxy8vVw8eK2Tl8V6p8sKSuan5cKl9uw0zg8q07TLphws1sXJyLqcviIIc8KCaDa1TkqG2Dw"
   }
 }

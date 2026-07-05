@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Cai.Delivery;
 using Cai.Scoring;
 using Xunit;
@@ -180,6 +182,118 @@ public sealed class DeliveryTests
         var r = DeliveryVerifier.Verify(package, keys);
         Assert.True(r.SignatureValid, r.Reason);
         Assert.True(r.Reproduced, r.Reason);
+    }
+
+    // ── descriptive, non-scored metrics: rebuildCost + busFactor ─────────────────────────────────────────────────
+    // These are producer-worded metrics a downstream consumer (the Assay buyer report) echoes verbatim. They ride
+    // INSIDE the signed evidence but must NEVER enter the CAI fold or move the headline.
+
+    [Fact]
+    public void EvidenceBundle_round_trips_the_string_form_of_rebuildCost_and_busFactor()
+    {
+        var bundle = SampleEvidence() with
+        {
+            RebuildCost = JsonNode.Parse("\"€118k–€204k\""),
+            BusFactor = "2 of 11 devs",
+        };
+
+        var reparsed = EvidenceBundle.Parse(bundle.ToJson());
+
+        Assert.NotNull(reparsed.RebuildCost);
+        Assert.Equal(JsonValueKind.String, reparsed.RebuildCost!.GetValueKind());
+        Assert.Equal("€118k–€204k", reparsed.RebuildCost!.GetValue<string>());
+        Assert.Equal("2 of 11 devs", reparsed.BusFactor);
+    }
+
+    [Fact]
+    public void EvidenceBundle_round_trips_the_object_form_of_rebuildCost_preserving_number_tokens()
+    {
+        var bundle = SampleEvidence() with
+        {
+            RebuildCost = JsonNode.Parse("""{ "low": 118000, "high": 204000, "currency": "EUR" }"""),
+        };
+
+        var reparsed = EvidenceBundle.Parse(bundle.ToJson());
+
+        Assert.NotNull(reparsed.RebuildCost);
+        Assert.Equal(JsonValueKind.Object, reparsed.RebuildCost!.GetValueKind());
+        var obj = reparsed.RebuildCost!.AsObject();
+        Assert.Equal(118000, obj["low"]!.GetValue<int>());
+        Assert.Equal(204000, obj["high"]!.GetValue<int>());
+        Assert.Equal("EUR", obj["currency"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void DeliveryBuilder_carries_the_descriptive_metrics_into_payload_evidence()
+    {
+        var evidence = SampleEvidence() with
+        {
+            RebuildCost = JsonNode.Parse("""{ "low": 118000, "high": 204000, "currency": "EUR" }"""),
+            BusFactor = "2 of 11 devs",
+        };
+
+        var payload = DeliveryBuilder.Build(evidence, Request());
+
+        Assert.Equal("2 of 11 devs", payload.Evidence.BusFactor);
+        Assert.NotNull(payload.Evidence.RebuildCost);
+        Assert.Equal(118000, payload.Evidence.RebuildCost!.AsObject()["low"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void Descriptive_metrics_never_move_the_headline() // SACROSANCT
+    {
+        var without = SampleEvidence();
+        var with = without with
+        {
+            RebuildCost = JsonNode.Parse("""{ "low": 118000, "high": 204000, "currency": "EUR" }"""),
+            BusFactor = "2 of 11 devs",
+        };
+
+        var a = CaiScorer.Score(without);
+        var b = CaiScorer.Score(with);
+
+        // Bit-for-bit identical: the scorer reads none of these fields, so the headline (and band) cannot shift.
+        Assert.Equal(a.Headline, b.Headline);
+        Assert.Equal(a.Band, b.Band);
+    }
+
+    [Fact]
+    public void A_package_without_descriptive_metrics_still_verifies_and_omits_them_from_the_canonical_form()
+    {
+        // BACKWARD COMPAT: an evidence bundle predating these fields signs, verifies, and never emits the members into
+        // the canonical (signed) bytes — so an old package's signature is wholly unaffected by the schema addition.
+        var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
+        var payload = DeliveryBuilder.Build(SampleEvidence(), Request()); // no rebuildCost / busFactor
+        using var signer = new DeliverySigner(pair);
+        var package = signer.SignPackage(payload);
+
+        var r = DeliveryVerifier.Verify(package, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
+        Assert.True(r.Trustworthy, r.Reason);
+
+        var canonical = System.Text.Encoding.UTF8.GetString(CanonicalJson.Canonicalize(package.Payload));
+        Assert.DoesNotContain("rebuildCost", canonical);
+        Assert.DoesNotContain("busFactor", canonical);
+    }
+
+    [Fact]
+    public void Descriptive_metrics_survive_the_full_sign_reparse_verify_round_trip()
+    {
+        var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
+        var evidence = SampleEvidence() with
+        {
+            RebuildCost = JsonNode.Parse("""{ "low": 118000, "high": 204000, "currency": "EUR" }"""),
+            BusFactor = "2 of 11 devs",
+        };
+        using var signer = new DeliverySigner(pair);
+        var package = signer.SignPackage(DeliveryBuilder.Build(evidence, Request()));
+
+        // Round-trip through the pretty-printed wire form, then verify signature + reproduce.
+        var reparsed = DeliveryPackage.Parse(package.ToJson());
+        var r = DeliveryVerifier.Verify(reparsed, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
+
+        Assert.True(r.Trustworthy, r.Reason);
+        Assert.Equal("2 of 11 devs", reparsed.Payload.Evidence.BusFactor);
+        Assert.Equal(118000, reparsed.Payload.Evidence.RebuildCost!.AsObject()["low"]!.GetValue<int>());
     }
 
     private static string RepoRoot()

@@ -126,6 +126,24 @@
         "analyzableProjects": { "type": "integer", "minimum": 0 },
         "productionLoc": { "type": "integer", "minimum": 0 },
         "headlineScore": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "rebuildCost": {
+          "description": "DESCRIPTIVE, non-scored rebuild-cost estimate echoed by consumers; NEVER folded into the CAI. A plain string (e.g. \"€118k–€204k\") or a { low, high, currency } object. Absent => consumer shows \"Not assessed\".",
+          "oneOf": [
+            { "type": "string" },
+            {
+              "type": "object",
+              "properties": {
+                "low": { "type": "number" },
+                "high": { "type": "number" },
+                "currency": { "type": "string" }
+              }
+            }
+          ]
+        },
+        "busFactor": {
+          "type": "string",
+          "description": "DESCRIPTIVE, non-scored key-person-risk summary (producer-worded, e.g. \"2 of 11 devs\"); echoed verbatim, NEVER a scored dimension. Absent => consumer shows \"Not assessed\"."
+        },
         "dimensions": {
           "type": "array",
           "items": {

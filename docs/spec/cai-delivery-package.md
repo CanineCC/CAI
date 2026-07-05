@@ -77,6 +77,15 @@ The `Cai.Scoring` evidence bundle verbatim: `rubricVersion`, `commit`, `qualityB
 `productionLoc`, optional `headlineScore`, and the measured `dimensions` / `metaDimensions` (or a thin `lenses`
 fallback). Its presence is what makes the artifact self-verifying — see [ADR-0002](../adr/0002-deterministic-reproducible-scoring.md).
 
+The bundle may also carry two **descriptive, non-scored** metrics. They ride *inside* the signed evidence so a consumer
+can echo them, but the scorer reads **neither** — they can **never** fold into the CAI or move the headline, and a package
+that omits them is unaffected (a consumer that lacks them shows **"Not assessed"**):
+
+| Field | Type | Notes |
+|---|---|---|
+| `rebuildCost` | string \| object \| null | The producer's rebuild-cost estimate, echoed verbatim. Either a plain string (`"€118k–€204k"`) **or** a `{ low, high, currency }` object. Descriptive only — never scored. |
+| `busFactor` | string \| null | The producer's worded key-person-risk summary (`"2 of 11 devs"`), echoed verbatim. Descriptive only — never a scored dimension. |
+
 ### 3.2 `signature`
 
 | Field | Type | Notes |

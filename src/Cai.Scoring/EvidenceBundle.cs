@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace Cai.Scoring;
@@ -55,6 +56,21 @@ public sealed record EvidenceBundle
     /// across-lens fold derives the weights. Ignored when <see cref="Dimensions"/>/<see cref="MetaDimensions"/> carry
     /// evidence (those are folded instead).</summary>
     [JsonPropertyName("lenses")] public IReadOnlyList<LensInput> Lenses { get; init; } = [];
+
+    /// <summary>DESCRIPTIVE, NON-SCORED rebuild-cost estimate — a producer's estimate of what it would cost to rebuild this
+    /// codebase from scratch. Carried verbatim through the signed package so a downstream consumer (e.g. an Assay buyer
+    /// report) can ECHO it; it is NEVER folded into the CAI and can NEVER move the headline (<see cref="CaiScorer"/> reads
+    /// none of it). Round-trips BOTH shapes the consumer accepts: a plain string (e.g. <c>"€118k–€204k"</c>) and a
+    /// <c>{ "low": …, "high": …, "currency": … }</c> object. Held as a raw <see cref="JsonNode"/> so either shape passes
+    /// through the sign/verify round-trip untouched (number tokens preserved by <c>CanonicalJson</c>, so signing stays
+    /// byte-stable). Absent ⇒ consumer shows "Not assessed"; omitted from the canonical form, so old packages are
+    /// unaffected.</summary>
+    [JsonPropertyName("rebuildCost")] public JsonNode? RebuildCost { get; init; }
+
+    /// <summary>DESCRIPTIVE, NON-SCORED bus-factor summary — the producer's worded key-person-risk note (e.g.
+    /// <c>"2 of 11 devs"</c>). Echoed VERBATIM by a downstream consumer; it is NEVER a scored CAI dimension and can NEVER
+    /// move the headline. Absent ⇒ not assessed; omitted from the canonical form, so old packages are unaffected.</summary>
+    [JsonPropertyName("busFactor")] public string? BusFactor { get; init; }
 
     private static readonly JsonSerializerOptions Options = new()
     {
