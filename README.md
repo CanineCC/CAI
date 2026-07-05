@@ -15,6 +15,8 @@ independent, signed *survey* (the deductions and what to do) is a service from t
 - Composed of ~120 dimensions grouped into **ten lenses** (five core, always on; the rest model-aware).
 - **Reproducible**: same evidence + same rubric version ⇒ the same number. Falsifiable by design.
 - A **measurement, never a certification** — the tool evidences the automatable slice; a named human attests the rest.
+- **Contestable**: a number that won't reproduce is falsifiable proof, and every part of the method can be disputed
+  through a documented path — see [`docs/CHALLENGE.md`](docs/CHALLENGE.md).
 
 Bands: **Exemplary** 90–100 · **Strong** 70–89 · **Adequate** 50–69 · **Weak** 25–49 · **Critical** 0–24.
 
