@@ -16,6 +16,18 @@ concurrency:
   group: deploy-cai-main
   cancel-in-progress: false
 
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  # The runner host (canine-wrx1) is shared with the watchdog scan fleet; .NET Server GC under that
+  # contention intermittently aborts the runtime (Internal CLR error 0x80131506, exit 134).
+  # Workstation GC + tiered-JIT off shrink the footprint — same mitigation as the watchdog, kennel
+  # and imprint deploy workflows. Paired with -m:1 /p:UseSharedCompilation=false on the
+  # build/test/publish invocations below.
+  DOTNET_gcServer: "0"
+  DOTNET_TieredCompilation: "0"
+  DOTNET_TieredPGO: "0"
+
 jobs:
   deploy:
     runs-on: self-hosted
@@ -29,10 +41,10 @@ jobs:
 
       # VERIFY (the old service keeps serving; any failure here = safe no-op).
       - name: Verify build (Release)
-        run: dotnet build src/Cai.Web -c Release
+        run: dotnet build src/Cai.Web -c Release -m:1 /p:UseSharedCompilation=false
 
       - name: Test the scorer
-        run: dotnet test tests/Cai.Tests -c Release
+        run: dotnet test tests/Cai.Tests -c Release -m:1 /p:UseSharedCompilation=false
 
       # PUBLISH into a staging dir, sync the rubrics, swap, bounce.
       # registry-data/ is the registry's STABLE store (SQLite db + trusted keys — see
@@ -42,7 +54,7 @@ jobs:
           set -euo pipefail
           mkdir -p /home/jimmy/apps/cai-web/registry-data
           rm -rf /home/jimmy/apps/cai-web/app.next
-          dotnet publish src/Cai.Web -c Release -o /home/jimmy/apps/cai-web/app.next
+          dotnet publish src/Cai.Web -c Release -m:1 /p:UseSharedCompilation=false -o /home/jimmy/apps/cai-web/app.next
           rsync -a --delete rubrics/ /home/jimmy/apps/cai-web/rubrics/
           rm -rf /home/jimmy/apps/cai-web/app.prev
           [ -d /home/jimmy/apps/cai-web/app ] && mv /home/jimmy/apps/cai-web/app /home/jimmy/apps/cai-web/app.prev || true
