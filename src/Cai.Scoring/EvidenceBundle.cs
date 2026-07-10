@@ -72,6 +72,16 @@ public sealed record EvidenceBundle
     /// move the headline. Absent ⇒ not assessed; omitted from the canonical form, so old packages are unaffected.</summary>
     [JsonPropertyName("busFactor")] public string? BusFactor { get; init; }
 
+    /// <summary>DESCRIPTIVE, NON-SCORED deployment topology — the producer's authoritative "what this system runs and what
+    /// it depends on," read from the repo's own declarative deployment sources (Docker Compose / .NET Aspire / Kubernetes /
+    /// Terraform / Bicep / …). Carried VERBATIM through the signed package so a downstream consumer (e.g. an Assay buyer
+    /// report) can ECHO it as an Operational Architecture section; it is NEVER folded into the CAI and can NEVER move the
+    /// headline (<see cref="CaiScorer"/> reads none of it). Held as a raw <see cref="JsonNode"/> — the producer owns the
+    /// topology schema (nodes/edges/provenance); CAI is agnostic to it and simply round-trips it byte-stable through the
+    /// sign/verify canonicalization (like <see cref="RebuildCost"/>). Absent ⇒ consumer shows no topology section;
+    /// omitted from the canonical form, so old packages are unaffected.</summary>
+    [JsonPropertyName("topology")] public JsonNode? Topology { get; init; }
+
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNameCaseInsensitive = true,
