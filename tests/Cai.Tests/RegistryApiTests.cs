@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Cai.Delivery;
 using Cai.Scoring;
+using Cai.Web.Registry;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -23,9 +24,11 @@ public sealed class RegistryApiFixture : IDisposable
     public const string SellerToken = "tok-seller";
     public const string BuyerToken = "tok-buyer";
     public const string StrangerToken = "tok-stranger";
+    public const string KennelToken = "tok-kennel";
     public const string SellerOrg = "org_seller";
     public const string BuyerOrg = "org_buyer";
     public const string StrangerOrg = "org_stranger";
+    public const string KennelOrg = "org_kennel";
     public const string PartnerKey = "test-partner";
 
     private readonly string _root;
@@ -73,6 +76,11 @@ public sealed class RegistryApiFixture : IDisposable
                 ["Registry:Principals:3:Token"] = StrangerToken,
                 ["Registry:Principals:3:OrgId"] = StrangerOrg,
                 ["Registry:Principals:3:Name"] = "Stranger",
+                // A TRUSTED SERVICE principal (Kennel) — may read on a customer org's behalf via X-Cai-On-Behalf-Org.
+                ["Registry:Principals:4:Token"] = KennelToken,
+                ["Registry:Principals:4:OrgId"] = KennelOrg,
+                ["Registry:Principals:4:Name"] = "kennel.canine.dev",
+                ["Registry:Principals:4:CanActOnBehalf"] = "true",
                 // Anonymous-request tests ride the partner-key rate-limit exemption so the open-API budget
                 // (1/s · 3/min · 15/day) can never make THIS suite flaky.
                 ["RateLimit:PartnerKey"] = PartnerKey,
@@ -105,8 +113,9 @@ public sealed class RegistryApiFixture : IDisposable
     }
 
     /// <summary>An HttpClient with a principal's bearer token (or anonymous when null — then the partner header keeps
-    /// it out of the open-API rate budget).</summary>
-    public HttpClient Client(string? token)
+    /// it out of the open-API rate budget). When <paramref name="onBehalfOrg"/> is set, it rides as the
+    /// <c>X-Cai-On-Behalf-Org</c> header (only a CanActOnBehalf principal will honour it).</summary>
+    public HttpClient Client(string? token, string? onBehalfOrg = null)
     {
         var client = Factory.CreateClient();
         if (token is not null)
@@ -116,6 +125,11 @@ public sealed class RegistryApiFixture : IDisposable
         else
         {
             client.DefaultRequestHeaders.Add("X-CAI-Partner", PartnerKey);
+        }
+
+        if (onBehalfOrg is not null)
+        {
+            client.DefaultRequestHeaders.Add("X-Cai-On-Behalf-Org", onBehalfOrg);
         }
 
         return client;
@@ -688,5 +702,131 @@ public sealed class RegistryApiTests(RegistryApiFixture fx) : IClassFixture<Regi
         Assert.Equal(HttpStatusCode.BadRequest, (await seller.GetAsync("/api/registry/deliveries?limit=0", Ct)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await seller.GetAsync("/api/registry/deliveries?limit=201", Ct)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await seller.GetAsync("/api/registry/deliveries?offset=-1", Ct)).StatusCode);
+    }
+
+    // ── on-behalf-of: a trusted service principal (Kennel) reads AS the buyer ─────────────────────────────────────────
+
+    /// <summary>Seed a seller delivery + an active grant of it to the buyer, and return the delivery id — the exact
+    /// owned+granted surface a real buyer token sees.</summary>
+    private async Task<string> SeedGrantedDelivery()
+    {
+        var id = NewId("cd_obo");
+        await PublishAsync(Mint(id, "acme/on-behalf"));
+        await GrantAsync(new { grantee = new { orgId = RegistryApiFixture.BuyerOrg }, scope = "delivery", scopeRefs = new[] { id } });
+        return id;
+    }
+
+    [Fact]
+    public async Task On_behalf_service_principal_sees_exactly_what_the_named_org_sees()
+    {
+        var granted = await SeedGrantedDelivery();
+
+        // The real buyer's owned+granted set (what a buyer TOKEN sees) is the ground truth.
+        using var buyer = fx.Client(RegistryApiFixture.BuyerToken);
+        using var buyerList = await Json(await buyer.GetAsync("/api/registry/deliveries?limit=200", Ct));
+        var buyerIds = buyerList.RootElement.GetProperty("deliveries").EnumerateArray()
+            .Select(d => d.GetProperty("deliveryId").GetString()).OrderBy(x => x, StringComparer.Ordinal).ToList();
+
+        // Kennel (service principal) acting on behalf of the buyer must see EXACTLY the same set.
+        using var kennel = fx.Client(RegistryApiFixture.KennelToken, onBehalfOrg: RegistryApiFixture.BuyerOrg);
+        using var kennelList = await Json(await kennel.GetAsync("/api/registry/deliveries?limit=200", Ct));
+        var kennelIds = kennelList.RootElement.GetProperty("deliveries").EnumerateArray()
+            .Select(d => d.GetProperty("deliveryId").GetString()).OrderBy(x => x, StringComparer.Ordinal).ToList();
+
+        Assert.Equal(buyerIds, kennelIds);
+        Assert.Contains(granted, kennelIds);
+
+        // and a single GET of the granted delivery works as the buyer
+        Assert.Equal(HttpStatusCode.OK, (await kennel.GetAsync($"/api/registry/deliveries/{granted}", Ct)).StatusCode);
+    }
+
+    [Fact]
+    public async Task On_behalf_header_is_ignored_for_a_non_service_principal()
+    {
+        var granted = await SeedGrantedDelivery();
+
+        // A stranger asserting the buyer org via the header — the header MUST be ignored (only CanActOnBehalf honours it),
+        // so the stranger stays scoped to its own (empty) org and cannot reach the buyer's granted delivery.
+        using var stranger = fx.Client(RegistryApiFixture.StrangerToken, onBehalfOrg: RegistryApiFixture.BuyerOrg);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync($"/api/registry/deliveries/{granted}", Ct)).StatusCode);
+
+        using var list = await Json(await stranger.GetAsync("/api/registry/deliveries?limit=200", Ct));
+        var ids = list.RootElement.GetProperty("deliveries").EnumerateArray().Select(d => d.GetProperty("deliveryId").GetString());
+        Assert.DoesNotContain(granted, ids);
+    }
+
+    [Fact]
+    public async Task On_behalf_service_principal_read_without_a_header_fails_closed()
+    {
+        var granted = await SeedGrantedDelivery();
+
+        // A CanActOnBehalf service principal has NO data of its own to read — a read that names no customer
+        // org fails CLOSED (401), so a missing header can never silently read as the broad service org.
+        using var kennel = fx.Client(RegistryApiFixture.KennelToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await kennel.GetAsync($"/api/registry/deliveries/{granted}", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await kennel.GetAsync("/api/registry/deliveries?limit=200", Ct)).StatusCode);
+    }
+
+    [Fact]
+    public async Task On_behalf_malformed_header_fails_closed_401()
+    {
+        var granted = await SeedGrantedDelivery();
+
+        // A MALFORMED on-behalf assertion must FAIL CLOSED (401) — never silently fall back to the broad service org.
+        using var kennel = fx.Client(RegistryApiFixture.KennelToken, onBehalfOrg: "not-an-org");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await kennel.GetAsync($"/api/registry/deliveries/{granted}", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await kennel.GetAsync("/api/registry/deliveries?limit=200", Ct)).StatusCode);
+    }
+
+    [Fact]
+    public async Task On_behalf_is_ignored_on_a_grant_write_so_a_service_cannot_forge_cross_tenant_access()
+    {
+        // A delivery owned by the seller — the victim's confidential evidence.
+        var victim = NewId("cd_forge");
+        await PublishAsync(Mint(victim, "acme/forge-victim")); // ownerOrgId defaults to org_seller
+
+        // Kennel (CanActOnBehalf) tries to forge a grant AS the seller, giving ITSELF read of the victim's repo.
+        // On-behalf is honoured ONLY on GET reads, so this WRITE acts as org_kennel (its OWN org) — any grant it
+        // creates is owned by org_kennel and covers none of the seller's deliveries (adversarial: else this would
+        // be cross-tenant grant forgery).
+        using var kennel = fx.Client(RegistryApiFixture.KennelToken, onBehalfOrg: RegistryApiFixture.SellerOrg);
+        _ = await kennel.PostAsJsonAsync("/api/registry/grants",
+            new { grantee = new { orgId = RegistryApiFixture.KennelOrg }, scope = "repo", scopeRefs = new[] { "acme/forge-victim" } }, Ct);
+
+        // The forge did nothing: Kennel reading on its own behalf still cannot see the seller's delivery.
+        using var kennelRead = fx.Client(RegistryApiFixture.KennelToken, onBehalfOrg: RegistryApiFixture.KennelOrg);
+        Assert.Equal(HttpStatusCode.NotFound, (await kennelRead.GetAsync($"/api/registry/deliveries/{victim}", Ct)).StatusCode);
+
+        // And the real seller still owns/reads it (sanity: the delivery exists and is the seller's).
+        using var seller = fx.Client(RegistryApiFixture.SellerToken);
+        Assert.Equal(HttpStatusCode.OK, (await seller.GetAsync($"/api/registry/deliveries/{victim}", Ct)).StatusCode);
+    }
+
+    // ── scanner provenance + quality ─────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Metadata_surfaces_scanner_provenance_and_quality()
+    {
+        var id = NewId("cd_scanner");
+        await PublishAsync(Mint(id, "acme/scanner-provenance"));
+
+        using var owner = fx.Client(RegistryApiFixture.SellerToken);
+
+        // publish populated scanner + version from the signed payload; quality is null until the calc lands
+        using (var meta = await Json(await owner.GetAsync($"/api/registry/deliveries/{id}/metadata", Ct)))
+        {
+            Assert.Equal("watchdog-surveyor", meta.RootElement.GetProperty("scanner").GetString());
+            Assert.Equal("4.2.0", meta.RootElement.GetProperty("scannerVersion").GetString());
+            Assert.Equal(JsonValueKind.Null, meta.RootElement.GetProperty("scannerQuality").ValueKind);
+        }
+
+        // record CAI's quality score for that scanner build → metadata now surfaces it
+        var store = (IRegistryStore)fx.Factory.Services.GetService(typeof(IRegistryStore))!;
+        store.UpsertScannerQuality(new ScannerQualityRecord("watchdog-surveyor", "4.2.0", 0.87, "2026-07-15T00:00:00Z"));
+
+        using (var meta = await Json(await owner.GetAsync($"/api/registry/deliveries/{id}/metadata", Ct)))
+        {
+            Assert.Equal(0.87, meta.RootElement.GetProperty("scannerQuality").GetDouble(), 3);
+        }
     }
 }

@@ -22,7 +22,18 @@ public sealed record DeliveryRecord(
     string CanonicalSha256,
     string SignatureValue,
     string PackageJson,
-    string PublishedAt);
+    string PublishedAt,
+    string? Scanner = null,
+    string? ScannerVersion = null);
+
+/// <summary>CAI's provenance + quality assessment of a scanner build, keyed by (scanner, version). The scanner NAME +
+/// VERSION come from the signed <c>DeliveryProducer</c>, but the quality score is CAI's own opinion — it CANNOT ride in
+/// the producer-signed payload, so it lives here. <see cref="QualityScore"/> stays null until the calc lands (deferred).</summary>
+public sealed record ScannerQualityRecord(
+    string Scanner,
+    string Version,
+    double? QualityScore,
+    string? AssessedAt);
 
 /// <summary>A stored access grant — the seller (<see cref="OwnerOrgId"/>) granting a buyer read access to some of the
 /// seller's deliveries. Exactly one of <see cref="GranteeOrgId"/>/<see cref="GranteeEmail"/> is set; email grants stay
@@ -92,6 +103,12 @@ public interface IRegistryStore
 
     /// <summary>Mark a grant revoked (idempotent — revoking a revoked grant is a no-op).</summary>
     void RevokeGrant(string grantId, string revokedAt);
+
+    /// <summary>CAI's quality assessment for a scanner build (scanner + version), or null when none is recorded.</summary>
+    ScannerQualityRecord? GetScannerQuality(string scanner, string version);
+
+    /// <summary>Insert or replace CAI's quality assessment for a scanner build, keyed (scanner, version).</summary>
+    void UpsertScannerQuality(ScannerQualityRecord record);
 
     /// <summary>True when the store is reachable (the /health probe).</summary>
     bool IsHealthy();
@@ -169,8 +186,45 @@ public sealed class SqliteRegistryStore : IRegistryStore
             );
             CREATE INDEX IF NOT EXISTS ix_grants_owner   ON grants(owner_org_id);
             CREATE INDEX IF NOT EXISTS ix_grants_grantee ON grants(grantee_org_id);
+
+            CREATE TABLE IF NOT EXISTS scanner_quality (
+                scanner       TEXT NOT NULL,
+                version       TEXT NOT NULL,
+                quality_score REAL NULL,
+                assessed_at   TEXT NULL,
+                PRIMARY KEY (scanner, version)
+            );
             """;
         cmd.ExecuteNonQuery();
+
+        // Scanner provenance columns on deliveries — additive on an EXISTING table (rows predate them), so ALTER…ADD
+        // guarded against the "duplicate column" error that a second startup would raise (SQLite has no ADD COLUMN IF
+        // NOT EXISTS). Existing rows keep NULL scanner/version; that is honest — those deliveries were stored before
+        // provenance was surfaced.
+        AddColumnIfMissing(conn, "deliveries", "scanner", "TEXT NULL");
+        AddColumnIfMissing(conn, "deliveries", "scanner_version", "TEXT NULL");
+    }
+
+    /// <summary>Idempotent <c>ALTER TABLE … ADD COLUMN</c>: adds the column unless it already exists (checked via
+    /// <c>PRAGMA table_info</c>), so re-running <see cref="Initialize"/> on an already-migrated DB is a no-op.</summary>
+    private static void AddColumnIfMissing(SqliteConnection conn, string table, string column, string columnDef)
+    {
+        using (var check = conn.CreateCommand())
+        {
+            check.CommandText = $"PRAGMA table_info({table})";
+            using var reader = check.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(reader.GetOrdinal("name")), column, StringComparison.Ordinal))
+                {
+                    return; // already present
+                }
+            }
+        }
+
+        using var alter = conn.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {columnDef}";
+        alter.ExecuteNonQuery();
     }
 
     /// <inheritdoc />
@@ -181,8 +235,10 @@ public sealed class SqliteRegistryStore : IRegistryStore
         insert.CommandText =
             """
             INSERT INTO deliveries (delivery_id, owner_org_id, repository, commit_sha, host, producer, rubric_version,
-                                    cai, band, issued_at, key_id, canonical_sha256, signature_value, package_json, published_at)
-            VALUES (@id, @owner, @repo, @commit, @host, @producer, @rubric, @cai, @band, @issued, @key, @hash, @sig, @json, @published)
+                                    cai, band, issued_at, key_id, canonical_sha256, signature_value, package_json, published_at,
+                                    scanner, scanner_version)
+            VALUES (@id, @owner, @repo, @commit, @host, @producer, @rubric, @cai, @band, @issued, @key, @hash, @sig, @json, @published,
+                    @scanner, @scannerVersion)
             """;
         insert.Parameters.AddWithValue("@id", r.DeliveryId);
         insert.Parameters.AddWithValue("@owner", r.OwnerOrgId);
@@ -199,6 +255,8 @@ public sealed class SqliteRegistryStore : IRegistryStore
         insert.Parameters.AddWithValue("@sig", r.SignatureValue);
         insert.Parameters.AddWithValue("@json", r.PackageJson);
         insert.Parameters.AddWithValue("@published", r.PublishedAt);
+        insert.Parameters.AddWithValue("@scanner", (object?)r.Scanner ?? DBNull.Value);
+        insert.Parameters.AddWithValue("@scannerVersion", (object?)r.ScannerVersion ?? DBNull.Value);
 
         try
         {
@@ -334,6 +392,46 @@ public sealed class SqliteRegistryStore : IRegistryStore
     }
 
     /// <inheritdoc />
+    public ScannerQualityRecord? GetScannerQuality(string scanner, string version)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT scanner, version, quality_score, assessed_at FROM scanner_quality WHERE scanner = @scanner AND version = @version";
+        cmd.Parameters.AddWithValue("@scanner", scanner);
+        cmd.Parameters.AddWithValue("@version", version);
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read())
+        {
+            return null;
+        }
+
+        var scoreOrdinal = reader.GetOrdinal("quality_score");
+        return new ScannerQualityRecord(
+            Scanner: reader.GetString(reader.GetOrdinal("scanner")),
+            Version: reader.GetString(reader.GetOrdinal("version")),
+            QualityScore: reader.IsDBNull(scoreOrdinal) ? null : reader.GetDouble(scoreOrdinal),
+            AssessedAt: NullableString(reader, "assessed_at"));
+    }
+
+    /// <inheritdoc />
+    public void UpsertScannerQuality(ScannerQualityRecord record)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            INSERT INTO scanner_quality (scanner, version, quality_score, assessed_at)
+            VALUES (@scanner, @version, @score, @assessed)
+            ON CONFLICT (scanner, version) DO UPDATE SET quality_score = @score, assessed_at = @assessed
+            """;
+        cmd.Parameters.AddWithValue("@scanner", record.Scanner);
+        cmd.Parameters.AddWithValue("@version", record.Version);
+        cmd.Parameters.AddWithValue("@score", (object?)record.QualityScore ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@assessed", (object?)record.AssessedAt ?? DBNull.Value);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <inheritdoc />
     public bool IsHealthy()
     {
         try
@@ -391,7 +489,9 @@ public sealed class SqliteRegistryStore : IRegistryStore
         CanonicalSha256: r.GetString(r.GetOrdinal("canonical_sha256")),
         SignatureValue: r.GetString(r.GetOrdinal("signature_value")),
         PackageJson: r.GetString(r.GetOrdinal("package_json")),
-        PublishedAt: r.GetString(r.GetOrdinal("published_at")));
+        PublishedAt: r.GetString(r.GetOrdinal("published_at")),
+        Scanner: NullableString(r, "scanner"),
+        ScannerVersion: NullableString(r, "scanner_version"));
 
     private static IReadOnlyList<GrantRecord> ReadGrants(SqliteCommand cmd)
     {

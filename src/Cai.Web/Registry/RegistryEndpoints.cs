@@ -161,7 +161,9 @@ public static class RegistryEndpoints
             CanonicalSha256: Convert.ToHexStringLower(SHA256.HashData(CanonicalJson.Canonicalize(payload))),
             SignatureValue: package.Signature.Value,
             PackageJson: rawPackage,
-            PublishedAt: DateTimeOffset.UtcNow.ToString(TimestampFormat, CultureInfo.InvariantCulture));
+            PublishedAt: DateTimeOffset.UtcNow.ToString(TimestampFormat, CultureInfo.InvariantCulture),
+            Scanner: payload.Producer.Scanner,
+            ScannerVersion: payload.Producer.ScannerVersion);
 
         var location = $"/api/registry/deliveries/{Uri.EscapeDataString(record.DeliveryId)}";
         switch (store.InsertDelivery(record))
@@ -169,11 +171,11 @@ public static class RegistryEndpoints
             case PublishOutcome.Created:
                 log.LogInformation("Registry stored delivery {Id} for {Repo} (owner {Owner}, CAI {Cai})",
                     record.DeliveryId, record.Repository, record.OwnerOrgId, record.Cai);
-                return Results.Created(location, Metadata(record));
+                return Results.Created(location, Metadata(record, store));
 
             case PublishOutcome.AlreadyStored:
                 // Idempotent re-push of the exact same artifact — return the stored record, no duplicate.
-                return Results.Ok(Metadata(store.GetDelivery(record.DeliveryId)!));
+                return Results.Ok(Metadata(store.GetDelivery(record.DeliveryId)!, store));
 
             default:
                 log.LogWarning("Registry publish rejected: delivery id {Id} already holds a different artifact", record.DeliveryId);
@@ -201,7 +203,7 @@ public static class RegistryEndpoints
         var (delivery, canRead) = Authorize(id, http, store);
         return delivery is null || !canRead
             ? NotFoundOrNotAccessible()
-            : Results.Ok(Metadata(delivery));
+            : Results.Ok(Metadata(delivery, store));
     }
 
     // ════ GET /api/registry/deliveries?repository=&producer=&ownerOrgId=&limit=&offset= ══════════════════════════
@@ -255,7 +257,7 @@ public static class RegistryEndpoints
             .ThenBy(d => d.DeliveryId, StringComparer.Ordinal)
             .Skip(offset)
             .Take(limit)
-            .Select(Metadata)
+            .Select(d => Metadata(d, store))
             .ToList();
 
         return Results.Ok(new { deliveries });
@@ -401,18 +403,30 @@ public static class RegistryEndpoints
     }
 
     /// <summary>The delivery metadata header — the light, no-evidence shape used by publish responses, the metadata
-    /// endpoint and list items.</summary>
-    private static object Metadata(DeliveryRecord d) => new
+    /// endpoint and list items. Surfaces scanner provenance (name + version, from the signed payload) plus CAI's own
+    /// quality score for that scanner build (looked up from the registry, null until the calc lands) — so "which
+    /// scanner, what version, CAI's score for it" is visible without parsing the signed package.</summary>
+    private static object Metadata(DeliveryRecord d, IRegistryStore store)
     {
-        deliveryId = d.DeliveryId,
-        ownerOrgId = d.OwnerOrgId,
-        subject = new { repository = d.Repository, commit = d.Commit, host = d.Host },
-        producer = d.Producer,
-        rubricVersion = d.RubricVersion,
-        verdict = new { cai = Math.Round(d.Cai, 2), band = d.Band },
-        issuedAt = d.IssuedAt,
-        publishedAt = d.PublishedAt,
-    };
+        double? scannerQuality = d.Scanner is { } scanner && d.ScannerVersion is { } version
+            ? store.GetScannerQuality(scanner, version)?.QualityScore
+            : null;
+
+        return new
+        {
+            deliveryId = d.DeliveryId,
+            ownerOrgId = d.OwnerOrgId,
+            subject = new { repository = d.Repository, commit = d.Commit, host = d.Host },
+            producer = d.Producer,
+            scanner = d.Scanner,
+            scannerVersion = d.ScannerVersion,
+            scannerQuality,
+            rubricVersion = d.RubricVersion,
+            verdict = new { cai = Math.Round(d.Cai, 2), band = d.Band },
+            issuedAt = d.IssuedAt,
+            publishedAt = d.PublishedAt,
+        };
+    }
 
     private static object GrantView(GrantRecord g) => new
     {

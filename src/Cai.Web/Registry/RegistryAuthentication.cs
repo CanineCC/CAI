@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 
@@ -41,6 +42,14 @@ public sealed class RegistryTokenAuthenticationHandler(
     /// <summary>The scheme name (hides the base class's per-instance scheme accessor on purpose — this IS that name).</summary>
     public new const string Scheme = "RegistryBearer";
 
+    /// <summary>The header a trusted SERVICE principal (see <see cref="RegistryPrincipalOptions.CanActOnBehalf"/>) uses
+    /// to assert which customer org a read is for — Kennel reading the registry on a buyer's behalf.</summary>
+    public const string OnBehalfHeader = "X-Cai-On-Behalf-Org";
+
+    /// <summary>A well-formed org id: <c>org_</c> then lowercase alphanumerics/underscore/hyphen, ordinal, length-capped.
+    /// A malformed on-behalf assertion must FAIL CLOSED — never silently fall back to the broad service org.</summary>
+    private static readonly Regex OrgIdPattern = new(@"^org_[a-z0-9_-]{1,64}\z", RegexOptions.CultureInvariant);
+
     private readonly RegistryOptions _registry = registry.Value;
 
     /// <inheritdoc />
@@ -51,10 +60,35 @@ public sealed class RegistryTokenAuthenticationHandler(
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
+        // Effective org. A normal principal always acts as its own configured org. A TRUSTED SERVICE
+        // principal (CanActOnBehalf) reads the registry on a NAMED customer's behalf via the on-behalf
+        // header — and the header is honored ONLY on READS (GET). On a write it is ignored, so on-behalf
+        // can NEVER forge grant/owner authority: a write always acts as the principal's own configured
+        // org (adversarial finding — otherwise a service credential could create/revoke grants as any
+        // tenant). A service principal has no data of its OWN to read, so a read that names no valid
+        // customer org FAILS CLOSED — never silently read as the broad service org (that reopens the leak).
+        var effectiveOrg = principal.OrgId;
+        if (principal.CanActOnBehalf && HttpMethods.IsGet(Request.Method))
+        {
+            var onBehalf = Request.Headers[OnBehalfHeader].ToString();
+            if (string.IsNullOrEmpty(onBehalf) || !OrgIdPattern.IsMatch(onBehalf))
+            {
+                Logger.LogWarning(
+                    "Registry on-behalf read rejected: service principal '{Principal}' presented a missing or malformed org id",
+                    principal.Name);
+                return Task.FromResult(AuthenticateResult.Fail(
+                    "a well-formed X-Cai-On-Behalf-Org is required for a service-principal read"));
+            }
+
+            effectiveOrg = onBehalf;
+            Logger.LogInformation("Registry on-behalf: service principal '{Principal}' reading as org '{Org}'",
+                principal.Name, effectiveOrg);
+        }
+
         var identity = new ClaimsIdentity(
         [
             new Claim(ClaimTypes.Name, principal.Name),
-            new Claim(RegistryClaims.Org, principal.OrgId),
+            new Claim(RegistryClaims.Org, effectiveOrg),
             .. principal.Roles.Select(r => new Claim(ClaimTypes.Role, r)),
         ], Scheme);
 

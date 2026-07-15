@@ -45,4 +45,11 @@ public sealed class RegistryPrincipalOptions
     /// <summary>Roles: <c>producer</c> may publish deliveries; every authenticated principal may read what it owns
     /// or is granted, and manage grants for its own org.</summary>
     public List<string> Roles { get; set; } = [];
+
+    /// <summary>When true, this is a TRUSTED SERVICE principal (e.g. Kennel) that may assert which customer org a
+    /// read is for via the <c>X-Cai-On-Behalf-Org</c> header — the registry then scopes the request to that org's
+    /// authority (it reads AS THE BUYER: only what that org owns or was actively granted). A normal principal
+    /// (false) can never assert another org; the header is ignored for it. SECURITY: only grant this to credentials
+    /// you trust to name the caller org.</summary>
+    public bool CanActOnBehalf { get; set; }
 }
