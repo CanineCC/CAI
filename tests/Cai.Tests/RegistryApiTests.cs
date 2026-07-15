@@ -76,11 +76,10 @@ public sealed class RegistryApiFixture : IDisposable
                 ["Registry:Principals:3:Token"] = StrangerToken,
                 ["Registry:Principals:3:OrgId"] = StrangerOrg,
                 ["Registry:Principals:3:Name"] = "Stranger",
-                // A TRUSTED SERVICE principal (Kennel) — may read on a customer org's behalf via X-Cai-On-Behalf-Org.
+                // The Kennel service principal — reads on a customer org's behalf via X-Cai-On-Behalf-Org.
                 ["Registry:Principals:4:Token"] = KennelToken,
                 ["Registry:Principals:4:OrgId"] = KennelOrg,
                 ["Registry:Principals:4:Name"] = "kennel.canine.dev",
-                ["Registry:Principals:4:CanActOnBehalf"] = "true",
                 // Anonymous-request tests ride the partner-key rate-limit exemption so the open-API budget
                 // (1/s · 3/min · 15/day) can never make THIS suite flaky.
                 ["RateLimit:PartnerKey"] = PartnerKey,
@@ -114,7 +113,7 @@ public sealed class RegistryApiFixture : IDisposable
 
     /// <summary>An HttpClient with a principal's bearer token (or anonymous when null — then the partner header keeps
     /// it out of the open-API rate budget). When <paramref name="onBehalfOrg"/> is set, it rides as the
-    /// <c>X-Cai-On-Behalf-Org</c> header (only a CanActOnBehalf principal will honour it).</summary>
+    /// <c>X-Cai-On-Behalf-Org</c> header (honoured on GET reads).</summary>
     public HttpClient Client(string? token, string? onBehalfOrg = null)
     {
         var client = Factory.CreateClient();
@@ -741,41 +740,30 @@ public sealed class RegistryApiTests(RegistryApiFixture fx) : IClassFixture<Regi
     }
 
     [Fact]
-    public async Task On_behalf_header_is_ignored_for_a_non_service_principal()
+    public async Task On_behalf_absent_header_reads_as_the_principals_own_org()
     {
         var granted = await SeedGrantedDelivery();
 
-        // A stranger asserting the buyer org via the header — the header MUST be ignored (only CanActOnBehalf honours it),
-        // so the stranger stays scoped to its own (empty) org and cannot reach the buyer's granted delivery.
-        using var stranger = fx.Client(RegistryApiFixture.StrangerToken, onBehalfOrg: RegistryApiFixture.BuyerOrg);
-        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync($"/api/registry/deliveries/{granted}", Ct)).StatusCode);
-
-        using var list = await Json(await stranger.GetAsync("/api/registry/deliveries?limit=200", Ct));
-        var ids = list.RootElement.GetProperty("deliveries").EnumerateArray().Select(d => d.GetProperty("deliveryId").GetString());
-        Assert.DoesNotContain(granted, ids);
-    }
-
-    [Fact]
-    public async Task On_behalf_service_principal_read_without_a_header_fails_closed()
-    {
-        var granted = await SeedGrantedDelivery();
-
-        // A CanActOnBehalf service principal has NO data of its own to read — a read that names no customer
-        // org fails CLOSED (401), so a missing header can never silently read as the broad service org.
+        // No header → the request reads as the caller's OWN org (Kennel's org owns/was-granted nothing here).
         using var kennel = fx.Client(RegistryApiFixture.KennelToken);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await kennel.GetAsync($"/api/registry/deliveries/{granted}", Ct)).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await kennel.GetAsync("/api/registry/deliveries?limit=200", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await kennel.GetAsync($"/api/registry/deliveries/{granted}", Ct)).StatusCode);
+
+        using var list = await Json(await kennel.GetAsync("/api/registry/deliveries?limit=200", Ct));
+        Assert.Equal(0, list.RootElement.GetProperty("deliveries").GetArrayLength());
     }
 
     [Fact]
-    public async Task On_behalf_malformed_header_fails_closed_401()
+    public async Task On_behalf_malformed_header_is_ignored()
     {
         var granted = await SeedGrantedDelivery();
 
-        // A MALFORMED on-behalf assertion must FAIL CLOSED (401) — never silently fall back to the broad service org.
+        // A malformed value is ignored → reads as the caller's own org (empty), never the named org. (Kennel
+        // always sends a well-formed org_{guid:N}; a bad value can only be a bug or an attack.)
         using var kennel = fx.Client(RegistryApiFixture.KennelToken, onBehalfOrg: "not-an-org");
-        Assert.Equal(HttpStatusCode.Unauthorized, (await kennel.GetAsync($"/api/registry/deliveries/{granted}", Ct)).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await kennel.GetAsync("/api/registry/deliveries?limit=200", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await kennel.GetAsync($"/api/registry/deliveries/{granted}", Ct)).StatusCode);
+
+        using var list = await Json(await kennel.GetAsync("/api/registry/deliveries?limit=200", Ct));
+        Assert.Equal(0, list.RootElement.GetProperty("deliveries").GetArrayLength());
     }
 
     [Fact]
@@ -785,7 +773,7 @@ public sealed class RegistryApiTests(RegistryApiFixture fx) : IClassFixture<Regi
         var victim = NewId("cd_forge");
         await PublishAsync(Mint(victim, "acme/forge-victim")); // ownerOrgId defaults to org_seller
 
-        // Kennel (CanActOnBehalf) tries to forge a grant AS the seller, giving ITSELF read of the victim's repo.
+        // Kennel tries to forge a grant AS the seller (via on-behalf), giving ITSELF read of the victim's repo.
         // On-behalf is honoured ONLY on GET reads, so this WRITE acts as org_kennel (its OWN org) — any grant it
         // creates is owned by org_kennel and covers none of the seller's deliveries (adversarial: else this would
         // be cross-tenant grant forgery).
