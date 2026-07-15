@@ -60,20 +60,17 @@ public sealed class RegistryTokenAuthenticationHandler(
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
-        // Effective org. A request acts as the caller's own configured org — EXCEPT a GET read may name the
-        // customer org it is for via the on-behalf header (Kennel reading the registry on a buyer's behalf),
-        // so the existing per-caller gating scopes to that org. Honored on READS only: a write always acts as
-        // the caller's own org, so on-behalf can never forge grant/owner authority. Closed-loop: every
-        // principal is a trusted service, so any may assert it — add a per-principal gate when third-party
-        // producers land (spec defers their conformance).
+        // Effective org. A request acts as the caller's own configured org, UNLESS it names a customer org via
+        // the on-behalf header (Kennel acting for a buyer/seller) — then it runs as that org for ALL of its
+        // authority: reads scope to it AND a grant it writes is owned by it, so the give-access share loop is
+        // consistent (a grant only covers deliveries of the same owner org). Malformed/absent → own org.
+        // Closed-loop: every principal is a trusted Canine service, so any may assert it; gate this
+        // per-principal the day an untrusted third-party producer exists (spec defers their conformance).
         var effectiveOrg = principal.OrgId;
-        if (HttpMethods.IsGet(Request.Method))
+        var onBehalf = Request.Headers[OnBehalfHeader].ToString();
+        if (!string.IsNullOrEmpty(onBehalf) && OrgIdPattern.IsMatch(onBehalf))
         {
-            var onBehalf = Request.Headers[OnBehalfHeader].ToString();
-            if (!string.IsNullOrEmpty(onBehalf) && OrgIdPattern.IsMatch(onBehalf))
-            {
-                effectiveOrg = onBehalf;
-            }
+            effectiveOrg = onBehalf;
         }
 
         var identity = new ClaimsIdentity(

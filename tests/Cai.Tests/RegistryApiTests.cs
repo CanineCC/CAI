@@ -767,27 +767,27 @@ public sealed class RegistryApiTests(RegistryApiFixture fx) : IClassFixture<Regi
     }
 
     [Fact]
-    public async Task On_behalf_is_ignored_on_a_grant_write_so_a_service_cannot_forge_cross_tenant_access()
+    public async Task On_behalf_drives_the_whole_share_loop_grant_as_seller_then_read_as_buyer()
     {
-        // A delivery owned by the seller — the victim's confidential evidence.
-        var victim = NewId("cd_forge");
-        await PublishAsync(Mint(victim, "acme/forge-victim")); // ownerOrgId defaults to org_seller
+        // Seller publishes a delivery (owned by org_seller).
+        var id = NewId("cd_share");
+        await PublishAsync(Mint(id, "acme/shared-repo"));
 
-        // Kennel tries to forge a grant AS the seller (via on-behalf), giving ITSELF read of the victim's repo.
-        // On-behalf is honoured ONLY on GET reads, so this WRITE acts as org_kennel (its OWN org) — any grant it
-        // creates is owned by org_kennel and covers none of the seller's deliveries (adversarial: else this would
-        // be cross-tenant grant forgery).
-        using var kennel = fx.Client(RegistryApiFixture.KennelToken, onBehalfOrg: RegistryApiFixture.SellerOrg);
-        _ = await kennel.PostAsJsonAsync("/api/registry/grants",
-            new { grantee = new { orgId = RegistryApiFixture.KennelOrg }, scope = "repo", scopeRefs = new[] { "acme/forge-victim" } }, Ct);
+        // Kennel acts on the SELLER's behalf to grant the buyer read of that repo. Because on-behalf applies
+        // to the write, the grant is OWNED BY the seller org — so it covers the seller's delivery (a grant only
+        // covers deliveries of the same owner org). This is the give-access write path.
+        using var kennelAsSeller = fx.Client(RegistryApiFixture.KennelToken, onBehalfOrg: RegistryApiFixture.SellerOrg);
+        var grant = await kennelAsSeller.PostAsJsonAsync("/api/registry/grants",
+            new { grantee = new { orgId = RegistryApiFixture.BuyerOrg }, scope = "repo", scopeRefs = new[] { "acme/shared-repo" } }, Ct);
+        Assert.Equal(HttpStatusCode.Created, grant.StatusCode);
 
-        // The forge did nothing: Kennel reading on its own behalf still cannot see the seller's delivery.
-        using var kennelRead = fx.Client(RegistryApiFixture.KennelToken, onBehalfOrg: RegistryApiFixture.KennelOrg);
-        Assert.Equal(HttpStatusCode.NotFound, (await kennelRead.GetAsync($"/api/registry/deliveries/{victim}", Ct)).StatusCode);
+        // Kennel acts on the BUYER's behalf and can now read the seller's delivery — the full share loop works.
+        using var kennelAsBuyer = fx.Client(RegistryApiFixture.KennelToken, onBehalfOrg: RegistryApiFixture.BuyerOrg);
+        Assert.Equal(HttpStatusCode.OK, (await kennelAsBuyer.GetAsync($"/api/registry/deliveries/{id}", Ct)).StatusCode);
 
-        // And the real seller still owns/reads it (sanity: the delivery exists and is the seller's).
-        using var seller = fx.Client(RegistryApiFixture.SellerToken);
-        Assert.Equal(HttpStatusCode.OK, (await seller.GetAsync($"/api/registry/deliveries/{victim}", Ct)).StatusCode);
+        // A DIFFERENT buyer (no grant) still cannot — scoping holds.
+        using var kennelAsStranger = fx.Client(RegistryApiFixture.KennelToken, onBehalfOrg: RegistryApiFixture.StrangerOrg);
+        Assert.Equal(HttpStatusCode.NotFound, (await kennelAsStranger.GetAsync($"/api/registry/deliveries/{id}", Ct)).StatusCode);
     }
 
     // ── scanner provenance + quality ─────────────────────────────────────────────────────────────────────────────
