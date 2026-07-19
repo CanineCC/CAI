@@ -1,3 +1,4 @@
+using System.Globalization;
 using Cai.Delivery;
 using Cai.Scoring;
 using Microsoft.Extensions.Logging;
@@ -166,7 +167,11 @@ async Task<int> RunSign(string[] a, ILogger l)
     {
         DeliveryId = ParseString(a, "--id") ?? $"cd_{repo.Replace('/', '_')}_{bundle.Commit ?? "head"}",
         // The CLI stamps a wall-clock time when --issued-at is absent; pass --issued-at for a reproducible artifact.
-        IssuedAt = ParseString(a, "--issued-at") ?? DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+        // InvariantCulture is load-bearing, not stylistic: ':' in a custom format string is the CULTURE's time
+        // separator, so on a machine with (say) a Danish locale this silently emitted "2026-07-19T09.28.09Z" — an
+        // invalid RFC 3339 timestamp, baked into a signed artifact where it cannot be corrected after the fact.
+        IssuedAt = ParseString(a, "--issued-at")
+                   ?? DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
         Subject = new DeliverySubject { Repository = repo, Commit = ParseString(a, "--commit"), Host = ParseString(a, "--host") },
         Producer = new DeliveryProducer
         {

@@ -1,4 +1,8 @@
 @page "/verify"
+@using System.Text.Json
+@using Cai.Delivery
+@using Cai.Web.Registry
+@inject TrustedKeyProvider Keys
 
 <PageTitle>CAI — verify</PageTitle>
 
@@ -29,13 +33,64 @@
     </div>
 </div></section>
 
-<section><div class="wrap">
+<section id="signature"><div class="wrap">
     <h2>Signed, so attribution is checkable too</h2>
-    <p class="muted">Beyond reproducing the number, a published survey is cryptographically <strong>signed</strong> by
-        its issuer — so you can confirm <em>who</em> attested it. The signature covers the content hash; the public key
-        is published; anyone can verify the signature independently. Openness proves the method; the signature proves the
-        author.</p>
+    <p class="muted">Beyond reproducing the number, a delivered survey is cryptographically <strong>signed</strong> by
+        its issuer — so you can confirm <em>who</em> attested it and that nobody has edited it since. The signature
+        covers the payload's canonical form; the public keys are published at
+        <a href="/api/registry/keys"><code>/api/registry/keys</code></a>. Paste a signed package below and check it
+        here — no account, no tooling, nothing installed.</p>
+
+    <EditForm FormName="verifydelivery" Model="Pkg" OnValidSubmit="DoVerify">
+        <p><label class="muted small" for="pkg">Signed CAI delivery package (JSON)</label></p>
+        <textarea id="pkg" name="Pkg.Json" rows="12" style="width:100%;font-family:var(--mono);font-size:.85rem;"
+                  placeholder='{ "payload": { "schemaVersion": "1.0", ... }, "signature": { "alg": "Ed25519", ... } }'>@Pkg?.Json</textarea>
+        <div class="btns">
+            <button class="btn primary" type="submit">Verify the signature</button>
+        </div>
+    </EditForm>
+
+    @if (_error is not null)
+    {
+        <div class="callout" style="border-color:var(--crit)"><strong>Couldn't read that package:</strong> @_error</div>
+    }
+    else if (_result is not null)
+    {
+        <div class="callout" style="@(_result.Trustworthy ? "" : "border-color:var(--crit)")">
+            @if (_result.Trustworthy)
+            {
+                <p><strong>✓ Authentic and reproducing.</strong> This package was signed by a published CAI key and has
+                    not been altered since — and the CAI it states follows from the evidence it carries.</p>
+            }
+            else if (!_result.SignatureValid)
+            {
+                <p><strong>✗ Not authentic.</strong> @(_result.Reason ?? "the signature did not verify") — treat this
+                    document as unattributed. Either it was not issued by cai.canine.dev, or it has been edited since
+                    it was signed.</p>
+            }
+            else
+            {
+                <p><strong>✗ Signed, but the number does not reproduce.</strong> The signature is genuine, so the
+                    document really was issued this way — but folding its own evidence gives
+                    @($"{_result.ComputedCai:0.00}"), not the @($"{_result.ClaimedCai:0.00}") it claims. A valid
+                    signature attests the author, never the arithmetic.</p>
+            }
+        </div>
+
+        @if (_subject is not null)
+        {
+            <p class="muted small">Signature checks the document, not that it describes the code you were shown — so
+                confirm the subject is what you expected:</p>
+            <ul class="small">
+                <li><strong>Repository:</strong> <code>@_subject.Repository</code>@if (!string.IsNullOrWhiteSpace(_subject.Commit)) { <text> at commit <code>@_subject.Commit</code></text> }</li>
+                <li><strong>Rubric:</strong> <span class="pill">@_rubricVersion</span></li>
+                <li><strong>Issued:</strong> @_issuedAt · <strong>key</strong> <code>@_keyId</code></li>
+                <li><strong>Produced by:</strong> @_producer</li>
+            </ul>
+        }
+    }
 </div></section>
+
 
 <section><div class="wrap">
     <h2>It doesn't reproduce — now what?</h2>
@@ -47,3 +102,49 @@
         <a class="btn primary" href="https://github.com/CanineCC/CAI/blob/main/docs/CHALLENGE.md">How to challenge a CAI →</a>
     </div>
 </div></section>
+@code {
+    [SupplyParameterFromForm] public PackageForm? Pkg { get; set; }
+
+    private DeliveryVerification? _result;
+    private DeliverySubject? _subject;
+    private string? _rubricVersion;
+    private string? _issuedAt;
+    private string? _keyId;
+    private string? _producer;
+    private string? _error;
+
+    public sealed class PackageForm
+    {
+        public string? Json { get; set; }
+    }
+
+    protected override void OnInitialized() => Pkg ??= new();
+
+    private void DoVerify()
+    {
+        _result = null;
+        _subject = null;
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(Pkg!.Json))
+        {
+            _error = "paste a signed delivery package first";
+            return;
+        }
+
+        try
+        {
+            var package = DeliveryPackage.Parse(Pkg.Json!);
+            _result = DeliveryVerifier.Verify(package, Keys.Keys);
+            _subject = package.Payload.Subject;
+            _rubricVersion = package.Payload.RubricVersion;
+            _issuedAt = package.Payload.IssuedAt;
+            _keyId = package.Signature.KeyId;
+            _producer = package.Payload.Producer.Name;
+        }
+        catch (Exception e) when (e is JsonException or ArgumentException or FormatException)
+        {
+            _error = e.Message;
+        }
+    }
+}

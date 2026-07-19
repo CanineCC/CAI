@@ -1,5 +1,7 @@
+using System.Text.Json;
 using System.Globalization;
 using System.Threading.RateLimiting;
+using Cai.Delivery;
 using Cai.Scoring;
 using Cai.Web;
 using Cai.Web.Components;
@@ -284,6 +286,54 @@ api.MapPost("/verify", [AllowAnonymous] async (HttpRequest req, HttpContext http
     catch (Exception e)
     {
         log.LogWarning(e, "Malformed /verify payload");
+        return Results.BadRequest(new { error = e.Message });
+    }
+});
+
+// Verify a SIGNED delivery package: is this artifact authentically ours, unedited, and does its number reproduce?
+//
+// /verify (above) answers only "does this evidence fold to this headline" — honest math, but it says nothing about
+// whether the document is genuine. Signature checking existed solely in the CLI and on registry ingest, so a party
+// handed a signed survey had no way to check it without installing tooling. That is the wrong way round: the
+// recipient is exactly who the signature is for, and they are the least likely to have the toolchain. This endpoint
+// runs both checks — authenticity (Ed25519 over the canonical payload, against the published key set) and
+// reproducibility (re-fold the embedded evidence) — for anyone, anonymously.
+api.MapPost("/verify-delivery", [AllowAnonymous] async (
+    HttpRequest req, HttpContext http, TrustedKeyProvider keys, ILogger<Program> log) =>
+{
+    ApiAccess.EnsureAllowed(http);
+    try
+    {
+        using var reader = new StreamReader(req.Body);
+        var package = DeliveryPackage.Parse(await reader.ReadToEndAsync().ConfigureAwait(false));
+
+        var result = DeliveryVerifier.Verify(package, keys.Keys);
+        var payload = package.Payload;
+
+        return Results.Ok(new
+        {
+            // The headline answer: authentic AND (when evidence was embedded) the number reproduces.
+            trustworthy = result.Trustworthy,
+            signatureValid = result.SignatureValid,
+            reproduced = result.Reproduced,
+            reason = result.Reason,
+            computedCai = result.ComputedCai is { } c ? Math.Round(c, 2) : (double?)null,
+            claimedCai = result.ClaimedCai is { } cl ? Math.Round(cl, 2) : (double?)null,
+            // Echo what the document claims about itself, so the caller can check it is the survey they think it is
+            // (right repository, right commit) rather than a genuine signature over someone else's code.
+            subject = new { payload.Subject.Repository, payload.Subject.Commit, payload.Subject.Host },
+            payload.RubricVersion,
+            payload.IssuedAt,
+            payload.DeliveryId,
+            keyId = package.Signature.KeyId,
+            issuer = payload.Issuer.Name,
+            producer = new { payload.Producer.Name, payload.Producer.Scanner, payload.Producer.ScannerVersion },
+            verdict = new { cai = Math.Round(payload.Verdict.Cai, 2), payload.Verdict.Band },
+        });
+    }
+    catch (Exception e) when (e is JsonException or ArgumentException or FormatException)
+    {
+        log.LogWarning(e, "Malformed /verify-delivery payload");
         return Results.BadRequest(new { error = e.Message });
     }
 });

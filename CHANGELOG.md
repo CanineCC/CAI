@@ -10,7 +10,49 @@ move a score for unchanged evidence mints a new rubric version (see
 
 ## [Unreleased]
 
+### Added
+- **Anyone can now verify a signed survey, anonymously** — `POST /api/verify-delivery` plus a working tool on
+  `/verify`. Signature checking previously existed only in the CLI and on registry ingest, which put it exactly where
+  the person who needs it is not: the party HANDED a signed survey is who the signature is for, and the least likely
+  to install tooling to use it. The endpoint reports the two claims separately and refuses to let one vouch for the
+  other — authenticity (Ed25519 over the canonical payload, against the published key set) and reproducibility
+  (re-folding the embedded evidence). A package that is genuinely ours but states a number its own evidence does not
+  produce is reported as signed-but-not-reproducing, never as trustworthy. The response echoes the subject
+  (repository, commit, rubric, issuer, key) because a valid signature attests the document, not that it describes
+  the code the recipient was shown.
+- **`rubric-2026.08.16` and `rubric-2026.08.17` are published.** The archive had stopped at `.15` while the engine
+  had been stamping surveys `.16` and `.17`, so a freshly signed survey named a rubric the public could not fetch and
+  its recipient could not verify it. Both were generated from the engine commits that actually set
+  `RubricVersion.Current` to each version, not written by hand: `.16` adds D40–D42 (runtime hardening), `.17` adds
+  `scoringPolarity` metadata — matching the documented bump notes exactly.
+
+### Changed
+- **The archive now serves only catalogs it can attest.** `RubricCatalogStore` enforces that a catalog's declared
+  `rubricVersion` matches the directory it is published under; mismatched or unparseable catalogs are withheld from
+  `Versions()`/`Get()` and reported by the new `UnattestedVersions()` so the gap is visible rather than silent.
+- **`Cai.Scoring` and `Cai.Delivery` are published to nuget.org at 0.1.3**, with GitHub Packages kept as a mirror.
+  The shipped scorer was never actually public: consumers used `0.1.3-ws-e` vendored as a file, while the only
+  published artifact was `0.1.0` on GitHub Packages — which requires a GitHub account even for public feeds, so
+  "read our algorithm and check our number" was not true for an anonymous third party. `Cai.Delivery` had no publish
+  pipeline at all. Requires the `NUGET_API_KEY` repository secret; without it the workflow warns and publishes only
+  the mirror rather than failing.
+
 ### Fixed
+- **Both packages now declare Apache-2.0**, matching the repository `LICENSE`, and ship the licence text inside the
+  package. They previously declared MIT in `PackageLicenseExpression` — a standard whose reference implementation
+  carries contradictory licence metadata is not credibly open.
+- **`cai sign` emitted an invalid RFC 3339 `issuedAt`** on any machine whose locale does not use `:` as the time
+  separator. `':'` in a custom format string is the *current culture's* time separator, so on a Danish-locale box it
+  produced `2026-07-19T09.28.09Z` — dots for colons — baked into the signed payload, where it cannot be corrected
+  without invalidating the signature. Now formatted with `InvariantCulture`, with a regression test that pins the
+  behaviour under a hostile locale.
+
+### Withheld
+- **`rubric-2026.08.13` is withdrawn from publication** to `rubrics/_unattested/`. The catalog published under that
+  name declares itself `rubric-2026.08.14` and is not a copy of `.14`'s file, so its provenance is unknown; it had
+  been served that way since `191649a`. Relabelling it would assert provenance we do not have. The commit that set
+  `Current` to `.13` predates the engine's move into the kennel repository and was not available when this was
+  found — `rubrics/_unattested/README.md` records the recovery procedure.
 - **The rate limiter no longer throttles the registry's own principals** (production operability): the open API's
   anonymous per-IP budget (1/s · 3/min · 15/day) also covered registry traffic, and since Watchdog + Assay call from
   ONE LAN IP it 429ed `/api/registry/keys` and delivery GETs mid-loop. The limiter is now traffic-class aware
