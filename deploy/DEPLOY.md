@@ -38,3 +38,30 @@ The registry ships **inside Cai.Web** — `api.cai.canine.dev` is a second hostn
 service, with its own edge vhost ([`nginx/api.cai.canine.dev.conf`](nginx/api.cai.canine.dev.conf))
 and a stable server-side store that survives deploys. Setup, secrets, backup and rollback:
 [`registry/DEPLOY.md`](registry/DEPLOY.md).
+
+## app.cai.canine.dev (the interactive tools)
+
+> ⚠️ **The apex is the marketing site, not the app.** `cai.canine.dev` is served by the imprint CMS;
+> only `/api/*` reaches Cai.Web from there. `cai.canine.dev/calculator` returns "Page not found" even
+> though the app renders that page. The apex vhost in
+> [`nginx/cai.canine.dev.conf`](nginx/cai.canine.dev.conf) is **stale** and does not describe this.
+
+That left the two pages that make the standard *checkable* — the calculator, and the verifier that
+reproduces a headline and validates an Ed25519 delivery signature — deployed but unlinkable at the
+hostname every page points at. `app.cai.canine.dev` is a third hostname on the same service
+([`nginx/app.cai.canine.dev.conf`](nginx/app.cai.canine.dev.conf)), mirroring the split watchdog
+already uses (`watchdog.canine.dev` marketing / `app.watchdog.canine.dev` app).
+
+One-time setup on **canine-dgx1**:
+
+```bash
+sudo cp app.cai.canine.dev.conf /etc/nginx/sites-available/app.cai.canine.dev
+sudo ln -s /etc/nginx/sites-available/app.cai.canine.dev /etc/nginx/sites-enabled/
+sudo certbot certonly --webroot -w /var/www/html -d app.cai.canine.dev   # wildcard DNS already resolves
+sudo nginx -t && sudo systemctl reload nginx
+curl -sI https://app.cai.canine.dev/verify | head -1                      # expect 200
+```
+
+Then point the imprint marketing pages at the tools instead of describing them:
+`app.cai.canine.dev/verify` and `app.cai.canine.dev/calculator`. Until that link exists, a reader who
+is told "reproduce the number yourself" has no button to press.
