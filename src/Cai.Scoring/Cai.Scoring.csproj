@@ -14,14 +14,18 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>Cai.Scoring</PackageId>
-    <Version>0.1.0</Version>
+    <!-- Keep in lockstep with Cai.Delivery: the two ship as one reference implementation of the same rubric
+         generation, and a consumer that mixes versions can recompute a different number. -->
+    <Version>0.1.3</Version>
     <Authors>Canine Development</Authors>
     <Company>Canine Development</Company>
     <Description>The CAI (Codebase Assurance Index) open reference scorer: folds an evidence bundle (per-dimension scores + meta-dimensions + surface metrics) through the rubric — confidence-weighted categories, worst-first OWA lenses, the architecture surface floor, quality-bar bands, critical gating and the coherence cap — into the 0–100 headline and ten lens scores. Deterministic and reproducible: same evidence + same rubric ⇒ the same number.</Description>
     <PackageProjectUrl>https://cai.canine.dev</PackageProjectUrl>
     <RepositoryUrl>https://github.com/CanineCC/CAI</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <!-- MUST match the repository LICENSE (Apache-2.0). A standard whose reference implementation carries
+         contradictory licence metadata is not credibly open — see ADR-0011. -->
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageTags>cai;codebase-assurance-index;scoring;code-quality;rubric;owa</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -34,6 +38,9 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <!-- Ship the licence text inside the package, not just as an SPDX expression, so an offline consumer
+         auditing the reference implementation has the terms in hand. -->
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>

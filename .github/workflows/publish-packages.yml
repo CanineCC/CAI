@@ -1,0 +1,95 @@
+name: publish-packages
+
+# Publishes the CAI reference implementation — Cai.Scoring (the deterministic fold) and Cai.Delivery (the
+# Ed25519 signer/verifier) — so ANY consumer can recompute and verify a CAI with the same code that produced it.
+#
+# Why nuget.org and not only GitHub Packages: GitHub Packages requires an authenticated GitHub account even for
+# public feeds, so "the reference scorer is open, go check our number" was not actually true for an anonymous
+# third party. nuget.org is anonymous. GitHub Packages is kept as a mirror.
+#
+# Trigger by pushing a tag like `packages-v0.1.3` (version taken from the tag), or run manually.
+# `scoring-v*` is still honoured for backwards compatibility with the old publish-scoring workflow.
+#
+# Required repository secret: NUGET_API_KEY (nuget.org push key). If absent the nuget.org step is skipped with a
+# warning rather than failing the run, so the GitHub Packages mirror still publishes.
+
+on:
+  push:
+    tags: ['packages-v*', 'scoring-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (e.g. 0.1.3)'
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9  # v4.3.1
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            v="${{ github.event.inputs.version }}"
+          else
+            v="${GITHUB_REF_NAME#*-v}"
+          fi
+          if [ -z "$v" ]; then echo "::error::could not resolve a version"; exit 1; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Publishing version $v"
+
+      - name: Verify the packaged version matches the csproj
+        # Guards the failure mode this workflow exists to fix: shipping a package whose version does not
+        # correspond to any source the public can read.
+        run: |
+          for p in src/Cai.Scoring/Cai.Scoring.csproj src/Cai.Delivery/Cai.Delivery.csproj; do
+            declared=$(grep -oPm1 '(?<=<Version>)[^<]+' "$p")
+            if [ "$declared" != "${{ steps.ver.outputs.version }}" ]; then
+              echo "::error::$p declares <Version>$declared</Version> but the tag asks for ${{ steps.ver.outputs.version }}."
+              exit 1
+            fi
+          done
+
+      - name: Test
+        run: dotnet test tests/Cai.Tests/Cai.Tests.csproj -c Release --nologo
+
+      - name: Pack
+        run: |
+          dotnet pack src/Cai.Scoring/Cai.Scoring.csproj  -c Release -o nupkg -p:Version=${{ steps.ver.outputs.version }}
+          dotnet pack src/Cai.Delivery/Cai.Delivery.csproj -c Release -o nupkg -p:Version=${{ steps.ver.outputs.version }}
+
+      - name: Push to nuget.org (anonymous-readable)
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "::warning::NUGET_API_KEY is not set — skipping nuget.org. The reference implementation will NOT be anonymously installable until this secret is configured."
+            exit 0
+          fi
+          dotnet nuget push "nupkg/*.nupkg" \
+            --source "https://api.nuget.org/v3/index.json" \
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate
+
+      - name: Push to GitHub Packages (mirror)
+        run: >
+          dotnet nuget push "nupkg/*.nupkg"
+          --source "https://nuget.pkg.github.com/CanineCC/index.json"
+          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --skip-duplicate
+
+      - name: Upload packages as build artifacts
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v7.0.1
+        with:
+          name: cai-packages-${{ steps.ver.outputs.version }}
+          path: nupkg/*
