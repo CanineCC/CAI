@@ -82,6 +82,24 @@ builder.Services.AddAuthorizationBuilder()
     .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
     .AddPolicy(RegistryClaims.ProducerPolicy, p => p.RequireRole(RegistryClaims.ProducerRole));
 
+// ── CORS for the marketing islands ────────────────────────────────────────────────────────────────────────────
+// cai.canine.dev is served by the imprint CMS, and its widgets are cross-origin web components that call this API
+// from the reader's browser (score an evidence bundle, verify a delivery). Without an explicit allow they simply
+// cannot: the standard would ship interactive proof tools that only work on a hostname nobody links to.
+//
+// Deliberately narrow: named origins only (never AllowAnyOrigin), no credentials — every endpoint reached this way
+// is anonymous and read-only in effect, so there is nothing to send. Origins are configured under
+// Cai:PublicCors:AllowedOrigins; unset ⇒ no cross-origin allow at all (same-origin only), so a misconfigured
+// deployment fails closed rather than opening the API to the web.
+var corsOrigins = ReadCorsOrigins(builder.Configuration);
+builder.Services.AddCors(options => options.AddPolicy(CaiCors.PolicyName, policy =>
+{
+    if (corsOrigins.Length > 0)
+    {
+        policy.WithOrigins(corsOrigins).AllowAnyHeader().WithMethods("GET", "POST");
+    }
+}));
+
 // ── The registry (ADR-0010): store + trusted signing keys + health, all bound from the Registry config section. ──
 builder.Services.Configure<RegistryOptions>(builder.Configuration.GetSection(RegistryOptions.Section));
 builder.Services.AddSingleton<IRegistryStore, SqliteRegistryStore>();
@@ -177,6 +195,7 @@ app.Use(async (context, next) =>
     }
 });
 
+app.UseCors(CaiCors.PolicyName);
 app.UseRateLimiter();
 app.UseStaticFiles();
 app.UseAntiforgery();
@@ -404,5 +423,39 @@ app.MapRazorComponents<App>().AllowAnonymous();
 
 app.Run();
 
+/// <summary>Allowed marketing origins for the island CORS policy. Accepts a comma/semicolon-delimited scalar (the
+/// env-var form) or a bound array; blank entries are dropped. Unset ⇒ empty ⇒ same-origin only (fail closed).</summary>
+static string[] ReadCorsOrigins(IConfiguration cfg)
+{
+    const string key = "Cai:PublicCors:AllowedOrigins";
+    var scalar = cfg[key];
+    if (!string.IsNullOrWhiteSpace(scalar))
+    {
+        return scalar.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    var configured = cfg.GetSection(key).GetChildren()
+        .Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!.Trim()).ToArray();
+
+    // Default to the first-party marketing hosts rather than to nothing. "Fail closed" would be right if this were
+    // an allowlist of THIRD parties, but these four are our own sites, and every endpoint they reach is anonymous
+    // and read-only in effect — there is no credential to leak and no state to change. Defaulting to empty would
+    // instead mean the standard's interactive proof tools silently stop working on the very sites that link to
+    // them, which is the failure that actually costs something. Override the key to narrow or extend it.
+    return configured.Length > 0
+        ? configured
+        : ["https://cai.canine.dev", "https://imprint.canine.dev",
+           "https://watchdog.canine.dev", "https://assay.canine.dev"];
+}
+
+
+/// <summary>The named CORS policy the marketing islands ride. Applied globally: every endpoint on this open,
+/// read-only standard site is anonymous already, so the policy's own origin list IS the restriction.</summary>
+
 /// <summary>Marker for <c>WebApplicationFactory</c> — lets the integration tests boot this exact app in-process.</summary>
 public partial class Program;
+
+public static partial class CaiCors
+{
+    public const string PolicyName = "cai-public-islands";
+}
