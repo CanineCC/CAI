@@ -22,7 +22,7 @@
     <!-- Direct override: Microsoft.Data.Sqlite 10.0.9 pulls bundle 2.1.11, whose native e_sqlite3 has a known high
          vulnerability (NU1903 / GHSA-2m69-gcr7-jv3q); 3.x carries the patched SQLite. -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.8.0" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.16.0" />
