@@ -17,7 +17,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="12.1.1" />
-    <PackageReference Include="JsonSchema.Net" Version="9.2.2" />
+    <PackageReference Include="JsonSchema.Net" Version="9.3.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
     <!-- Direct override: Microsoft.Data.Sqlite 10.0.9 pulls bundle 2.1.11, whose native e_sqlite3 has a known high
          vulnerability (NU1903 / GHSA-2m69-gcr7-jv3q); 3.x carries the patched SQLite. -->
