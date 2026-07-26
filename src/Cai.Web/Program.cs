@@ -236,7 +236,7 @@ api.MapGet("/rubrics/{version}/catalog", [AllowAnonymous] (string version, HttpC
 });
 
 // Score an evidence bundle — the open, reproducible fold. POST the bundle JSON; get the CAI + per-lens contributions.
-api.MapPost("/score", [AllowAnonymous] async (HttpRequest req, HttpContext http, IValidator<EvidenceBundle> validator, ILogger<Program> log) =>
+api.MapPost("/score", [AllowAnonymous] async (HttpRequest req, HttpContext http, IValidator<EvidenceBundle> validator, RubricCatalogStore store, ILogger<Program> log) =>
 {
     ApiAccess.EnsureAllowed(http);
     try
@@ -250,7 +250,10 @@ api.MapPost("/score", [AllowAnonymous] async (HttpRequest req, HttpContext http,
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
-        var s = CaiScorer.Score(bundle);
+        // Fold against the catalog the bundle NAMES, so the published rubric — not the producer's current code —
+        // decides which category each dimension rolls into. An unpublished version scores on the bundle's own
+        // categories, exactly as before (the archive cannot contradict a definition it does not hold).
+        var s = CaiScorer.Score(bundle, store.Get(bundle.RubricVersion));
         return Results.Ok(new
         {
             cai = Math.Round(s.Headline, 2),
@@ -285,7 +288,7 @@ api.MapPost("/score", [AllowAnonymous] async (HttpRequest req, HttpContext http,
 });
 
 // Verify a published headline reproduces from its evidence.
-api.MapPost("/verify", [AllowAnonymous] async (HttpRequest req, HttpContext http, IValidator<EvidenceBundle> validator, ILogger<Program> log) =>
+api.MapPost("/verify", [AllowAnonymous] async (HttpRequest req, HttpContext http, IValidator<EvidenceBundle> validator, RubricCatalogStore store, ILogger<Program> log) =>
 {
     ApiAccess.EnsureAllowed(http);
     try
@@ -299,7 +302,8 @@ api.MapPost("/verify", [AllowAnonymous] async (HttpRequest req, HttpContext http
             return Results.ValidationProblem(validation.ToDictionary());
         }
 
-        var v = CaiScorer.Verify(bundle);
+        // Same as /score: reproduce against the rubric the evidence names, not against whatever map it ships with.
+        var v = CaiScorer.Verify(bundle, store.Get(bundle.RubricVersion));
         return Results.Ok(new { reproduced = v.Reproduced, computed = Math.Round(v.Computed, 2), claimed = v.Claimed, delta = Math.Round(v.Delta, 2), tolerance = v.Tolerance });
     }
     catch (Exception e)

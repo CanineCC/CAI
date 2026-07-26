@@ -59,7 +59,7 @@ public sealed record DeliveryPayload
     [JsonPropertyName("verdict")] public DeliveryVerdict Verdict { get; init; } = new();
 
     /// <summary>The embedded evidence bundle — the open record the verdict folds from (ADR-0002). Its presence is what
-    /// makes the package self-verifying: a consumer can re-run <see cref="CaiScorer.Score"/> and confirm the headline
+    /// makes the package self-verifying: a consumer can re-run <see cref="CaiScorer.Score(EvidenceBundle)"/> and confirm the headline
     /// matches <see cref="DeliveryVerdict.Cai"/>, independent of the signature.</summary>
     [JsonPropertyName("evidence")] public EvidenceBundle Evidence { get; init; } = new();
 }

@@ -77,12 +77,30 @@ public static class CaiScorer
 
     /// <summary>Score an evidence bundle. Folds dimensions + meta-dimensions when present (the primary path); falls back
     /// to pre-computed lens scores for a thin bundle.</summary>
-    public static CaiScore Score(EvidenceBundle bundle)
+    public static CaiScore Score(EvidenceBundle bundle) => Score(bundle, catalog: null);
+
+    /// <summary>
+    /// Score an evidence bundle against a PUBLISHED rubric catalog — the version-pinned form of the fold.
+    /// <para>The catalog is the authority on which category each dimension folds into, because that assignment moves
+    /// the number: dimensions in a category average together before the lens sees them. A bundle also names the
+    /// category it believes each dimension belongs to; when the frozen catalog for the version the bundle claims says
+    /// otherwise, the bundle is REJECTED rather than scored under either map — the producer's map has drifted from the
+    /// rubric it says it measured under, and a number folded under an unpublished map would be unverifiable by anyone
+    /// holding the catalog.</para>
+    /// <para>Pass <paramref name="catalog"/> as null (or a catalog that predates the category field) and the bundle's
+    /// own categories are used, exactly as before — so every previously-published rubric version keeps verifying.</para>
+    /// </summary>
+    /// <param name="bundle">The evidence to fold.</param>
+    /// <param name="catalog">The published catalog for <see cref="EvidenceBundle.RubricVersion"/>, or null to fold on
+    /// the bundle's declared categories alone.</param>
+    /// <exception cref="ArgumentException">The bundle contradicts the catalog's frozen dimension→category map, or the
+    /// catalog names a category this scorer does not implement.</exception>
+    public static CaiScore Score(EvidenceBundle bundle, RubricCatalog? catalog)
     {
         ArgumentNullException.ThrowIfNull(bundle);
         if (bundle.Dimensions.Count > 0 || bundle.MetaDimensions.Count > 0)
         {
-            return ScoreFromEvidence(bundle);
+            return ScoreFromEvidence(bundle, catalog);
         }
 
         if (bundle.Lenses.Count > 0)
@@ -93,10 +111,35 @@ public static class CaiScorer
         throw new ArgumentException("Evidence bundle carries no dimensions, meta-dimensions or lens scores.", nameof(bundle));
     }
 
+    /// <summary>The category a dimension folds into: the published catalog's assignment when this rubric version
+    /// freezes one, else the bundle's own. A disagreement is fatal — see <see cref="Score(EvidenceBundle, RubricCatalog?)"/>.</summary>
+    private static DimensionCategory CategoryOf(
+        DimensionScore dimension, IReadOnlyDictionary<string, DimensionCategory> frozen, string rubricVersion)
+    {
+        var declared = Categories.Parse(dimension.Category);
+        if (!frozen.TryGetValue(dimension.Id, out var published))
+        {
+            return declared;
+        }
+
+        return published == declared
+            ? published
+            : throw new ArgumentException(
+                $"Dimension '{dimension.Id}' is declared in category '{dimension.Category}', but rubric " +
+                $"'{rubricVersion}' publishes it in '{Categories.WireName(published)}'. A dimension's category decides " +
+                "which other dimensions it averages with, so this changes the score: the producer must either measure " +
+                "under the rubric it names, or the re-homing must mint a new rubric version (ADR-0004).",
+                "bundle");
+    }
+
+    private static readonly IReadOnlyDictionary<string, DimensionCategory> EmptyCategoryMap =
+        new Dictionary<string, DimensionCategory>(StringComparer.Ordinal);
+
     /// <summary>The full fold: dimensions → categories → lenses (with the architecture surface floor) → headline.</summary>
-    private static CaiScore ScoreFromEvidence(EvidenceBundle bundle)
+    private static CaiScore ScoreFromEvidence(EvidenceBundle bundle, RubricCatalog? catalog)
     {
         Validate(bundle);
+        var frozen = catalog?.CategoryMap() ?? EmptyCategoryMap;
 
         // ── Stage 1: per-category confidence-weighted roll-up (0–100). Advisory dimensions are kept out of the number.
         // gatedDimsByLens records the critical (<4.0 effective) contributors so a lens with one can cap its band.
@@ -104,7 +147,7 @@ public static class CaiScorer
         var categoryScoresByLens = new Dictionary<string, List<double>>(StringComparer.Ordinal);
         var gatedByLens = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 
-        foreach (var group in bundle.Dimensions.GroupBy(d => Categories.Parse(d.Category)))
+        foreach (var group in bundle.Dimensions.GroupBy(d => CategoryOf(d, frozen, bundle.RubricVersion)))
         {
             var lens = Categories.LensOf(group.Key);
             var measured = group.Where(d => !d.Advisory).ToList();
@@ -220,7 +263,13 @@ public static class CaiScorer
 
     /// <summary>Reproduce a published headline from its evidence — recompute and compare to the claimed
     /// <see cref="EvidenceBundle.HeadlineScore"/> within <paramref name="tolerance"/> (default ±0.5).</summary>
-    public static VerifyResult Verify(EvidenceBundle bundle, double tolerance = 0.5)
+    public static VerifyResult Verify(EvidenceBundle bundle, double tolerance = 0.5) =>
+        Verify(bundle, catalog: null, tolerance);
+
+    /// <summary>Reproduce a published headline against a PUBLISHED rubric catalog — the version-pinned form of
+    /// <see cref="Verify(EvidenceBundle, double)"/>. The catalog's frozen dimension→category map governs the fold; see
+    /// <see cref="Score(EvidenceBundle, RubricCatalog?)"/>.</summary>
+    public static VerifyResult Verify(EvidenceBundle bundle, RubricCatalog? catalog, double tolerance = 0.5)
     {
         ArgumentNullException.ThrowIfNull(bundle);
         if (bundle.HeadlineScore is not { } claimed)
@@ -228,7 +277,7 @@ public static class CaiScorer
             throw new ArgumentException("Evidence bundle carries no headlineScore to verify against.", nameof(bundle));
         }
 
-        var computed = Score(bundle).Headline;
+        var computed = Score(bundle, catalog).Headline;
         var delta = Math.Abs(computed - claimed);
         return new VerifyResult(delta <= tolerance, computed, claimed, delta, tolerance);
     }

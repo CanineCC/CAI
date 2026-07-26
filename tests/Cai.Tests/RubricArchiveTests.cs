@@ -54,6 +54,7 @@ public sealed class RubricArchiveTests
 
         Assert.Contains("rubric-2026.08.16", versions);
         Assert.Contains("rubric-2026.08.17", versions);
+        Assert.Contains("rubric-2026.08.18", versions);
     }
 
     [Fact]

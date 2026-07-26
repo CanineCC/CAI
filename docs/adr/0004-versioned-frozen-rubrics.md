@@ -25,3 +25,13 @@ scorer resolves against that exact version.
   weights, or cutlines must. Judging "could this move a score?" is a release-time responsibility.
 - The `RubricCatalogStore` resolves `latest` to the newest version and serves any published version
   by name through the `/api/rubrics` endpoints.
+- **A catalog must pin every input that can move a score, including the dimension→category map.** A
+  dimension's category is not decoration: dimensions in one category average together before their
+  lens's worst-first fold sees them, so re-homing a dimension changes the number for unchanged
+  evidence. That assignment used to live only in the producer's code (collapsed into each catalog
+  entry's `lens`, which several categories share), which meant a re-homing could move published
+  scores without minting a version — the exact case this ADR says cannot happen. From
+  `rubric-2026.08.18` every scored dimension carries its `category`, and `CaiScorer.Score(bundle,
+  catalog)` folds under the CATALOG's assignment: evidence that contradicts the frozen map is
+  refused rather than scored under a map nobody can fetch. Catalogs published before `.18` carry no
+  category and keep verifying on the bundle's own, exactly as they were computed.

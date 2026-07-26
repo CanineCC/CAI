@@ -38,7 +38,7 @@ public sealed record EvidenceBundle
     /// big library clears the bar on LoC alone).</summary>
     [JsonPropertyName("productionLoc")] public int ProductionLoc { get; init; }
 
-    /// <summary>The PUBLISHED headline (0–100) this evidence claims — what <see cref="CaiScorer.Verify"/> reproduces.
+    /// <summary>The PUBLISHED headline (0–100) this evidence claims — what <see cref="CaiScorer.Verify(EvidenceBundle, double)"/> reproduces.
     /// Optional.</summary>
     [JsonPropertyName("headlineScore")] public double? HeadlineScore { get; init; }
 

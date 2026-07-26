@@ -11,6 +11,28 @@ move a score for unchanged evidence mints a new rubric version (see
 ## [Unreleased]
 
 ### Added
+- **The rubric catalog now publishes the dimension→category map, closing the one score-moving input it did not
+  pin.** A dimension's influence on the score IS its category — dimensions in one category average together
+  (confidence-weighted) before their lens's worst-first fold sees them — but the catalog only ever published the
+  `lens`, and several categories share a lens (`code-quality` and `explicit-debt` both feed Code Health), so the
+  assignment was not recoverable from the published document. It lived solely as a property on each analyzer class in
+  the producer. Re-homing a dimension therefore moved published scores for unchanged evidence while the rubric version
+  stood still — precisely what [ADR-0004](docs/adr/0004-versioned-frozen-rubrics.md) states is impossible. From
+  `rubric-2026.08.18` every scored dimension carries its `category`, and `CaiScorer.Score(bundle, catalog)` /
+  `Verify(bundle, catalog)` fold under the CATALOG's assignment rather than the producer's: a bundle that contradicts
+  the frozen map is refused, naming both sides, instead of being scored under a map no verifier can fetch, and a
+  catalog naming a category the scorer does not implement fails closed. `/api/score` and `/api/verify` now resolve the
+  catalog for the version the bundle names. **No score changed**: the published categories are exactly the ones the
+  evidence already declared, so the same bundle folds identically with and without the catalog (proved by a test), and
+  the engine's golden rubric snapshot moved only its version string.
+- **`rubric-2026.08.18` is published** — `.17` plus the `category` field on all 42 scored dimensions. A pure
+  catalog-schema addition (backward-compatible; old consumers ignore the field), versioned because the catalog
+  *contract* changed and catalogs are versioned by rubric — the same reason `.17` was minted for `scoringPolarity`.
+- **`CatalogDimension` models `scoringPolarity`.** `.17` added it to the archive but the scorer's model did not carry
+  it, so `/api/rubrics/{version}/catalog` — which serves the re-serialized model — silently dropped it on the way out.
+  An archive that cannot serve what it holds is not an archive; a test now pins the id/category/lens/polarity
+  round-trip. (`deepScan` remains a non-nullable `bool`, so it is still emitted as `false` for catalogs that omit it —
+  cosmetic, and changing it would break the public model's shape.)
 - **Anyone can now verify a signed survey, anonymously** — `POST /api/verify-delivery` plus a working tool on
   `/verify`. Signature checking previously existed only in the CLI and on registry ingest, which put it exactly where
   the person who needs it is not: the party HANDED a signed survey is who the signature is for, and the least likely

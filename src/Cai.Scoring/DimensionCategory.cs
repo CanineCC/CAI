@@ -40,6 +40,28 @@ internal enum DimensionCategory
 /// <summary>Maps a scoring category to its lens and parses the wire name a bundle carries.</summary>
 internal static class Categories
 {
+    /// <summary>Every category the fold knows, in declaration order.</summary>
+    public static IReadOnlyList<DimensionCategory> All { get; } = Enum.GetValues<DimensionCategory>();
+
+    /// <summary>The canonical kebab-case wire name of a category ("code-quality", "security-compliance") — the form a
+    /// published rubric catalog and an evidence bundle carry. The inverse of <see cref="Parse"/>.</summary>
+    public static string WireName(DimensionCategory category)
+    {
+        var name = category.ToString();
+        var sb = new System.Text.StringBuilder(name.Length + 2);
+        for (var i = 0; i < name.Length; i++)
+        {
+            if (i > 0 && char.IsUpper(name[i]))
+            {
+                sb.Append('-');
+            }
+
+            sb.Append(char.ToLowerInvariant(name[i]));
+        }
+
+        return sb.ToString();
+    }
+
     /// <summary>The lens a category feeds (the rubric's category→lens map). Architecture is its own lens so an
     /// over-engineered-but-low-coupling codebase shows a weak Architecture slice while Code Health stays high; docs +
     /// git-mining are Maturity; tests + dependencies + presence-only security are Production Readiness; the deep-scan
