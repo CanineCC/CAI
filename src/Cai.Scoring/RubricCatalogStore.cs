@@ -129,4 +129,24 @@ public sealed class RubricCatalogStore
 
         return catalog;
     }
+
+    /// <summary>
+    /// The catalog document for a version exactly as published, or null under the same conditions as
+    /// <see cref="Get"/> (absent, or unattested because it declares a different version than the directory it sits in).
+    ///
+    /// <para>Returned as raw text rather than a parsed <see cref="RubricCatalog"/> because the caller that needs this
+    /// is computing a CONTENT DIGEST, and a digest must be taken over what was actually published — a re-serialization
+    /// of the parsed model would silently drop any field the model does not carry, so two materially different
+    /// documents could digest identically. Canonicalization belongs downstream of this method, not inside it.</para>
+    /// </summary>
+    public string? RawCatalogJson(string rubricVersion)
+    {
+        if (string.IsNullOrWhiteSpace(rubricVersion))
+        {
+            return null;
+        }
+
+        var path = Path.Combine(_root, rubricVersion, CatalogFileName);
+        return File.Exists(path) && IsAttested(rubricVersion) ? File.ReadAllText(path) : null;
+    }
 }

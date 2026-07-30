@@ -212,12 +212,60 @@ app.MapHealthChecks("/health").AllowAnonymous();
 // deliberate, documented public surface.
 var api = app.MapGroup("/api");
 
-// The published rubric versions, newest first.
+// The published rubric versions, newest first, each with the CONTENT DIGEST of its catalog.
+//
+// The digest is what binds a rubric's name to its content. The catalog store's attestation check only proves a catalog
+// is filed under the name it declares; it cannot detect an edit that keeps that name. Publishing the digest lets any
+// reader pin what a version contained today and prove a later change — including against us. See RubricDigest.
 api.MapGet("/rubrics", [AllowAnonymous] (HttpContext http, RubricCatalogStore store) =>
 {
     ApiAccess.EnsureAllowed(http);
-    return Results.Ok(new { latest = store.Latest(), versions = store.Versions() });
+    var versions = store.Versions()
+        .Select(v => new
+        {
+            version = v,
+            contentHash = DigestOf(store, v),
+        })
+        .ToList();
+
+    return Results.Ok(new
+    {
+        latest = store.Latest(),
+        versions = versions.Select(v => v.version).ToList(),
+        digestAlgorithm = RubricDigest.Algorithm,
+        catalogs = versions,
+    });
 });
+
+// The content digest of one published version, for a reader pinning a single rubric.
+api.MapGet("/rubrics/{version}/digest", [AllowAnonymous] (string version, HttpContext http, RubricCatalogStore store) =>
+{
+    ApiAccess.EnsureAllowed(http);
+    var resolved = version == "latest" ? store.Latest() : version;
+    var digest = resolved is null ? null : DigestOf(store, resolved);
+    return digest is null
+        ? Results.NotFound(new { error = $"unknown or unattested rubric version '{version}'", published = store.Versions() })
+        : Results.Ok(new { rubricVersion = resolved, algorithm = RubricDigest.Algorithm, contentHash = digest });
+});
+
+static string? DigestOf(RubricCatalogStore store, string version)
+{
+    var json = store.RawCatalogJson(version);
+    if (json is null)
+    {
+        return null;
+    }
+
+    try
+    {
+        return RubricDigest.Of(json);
+    }
+    catch (JsonException)
+    {
+        // Unparseable ⇒ unattestable ⇒ no digest, consistent with the store withholding it.
+        return null;
+    }
+}
 
 // A version's full catalog — the 124 dimensions × 10 lenses it defines. "latest" resolves to the newest.
 api.MapGet("/rubrics/{version}/catalog", [AllowAnonymous] (string version, HttpContext http, RubricCatalogStore store) =>

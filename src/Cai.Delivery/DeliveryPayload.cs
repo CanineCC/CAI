@@ -46,6 +46,20 @@ public sealed record DeliveryPayload
     /// same rubric ⇒ the same number — the reproducibility anchor (ADR-0002 / ADR-0004).</summary>
     [JsonPropertyName("rubricVersion")] public string RubricVersion { get; init; } = "";
 
+    /// <summary>
+    /// The content digest of the rubric catalog this verdict was folded under, as <c>sha256:&lt;base64url&gt;</c>
+    /// (see <see cref="RubricDigest"/>). Null on packages minted before the field existed, and omitted from the
+    /// canonical bytes when null — so older signatures keep verifying unchanged.
+    ///
+    /// <para>This is what turns <see cref="RubricVersion"/> from a NAME into a BINDING. The version string alone says
+    /// which ruleset was claimed; the digest says what that ruleset actually contained, and the signature covers it.
+    /// Because an issued package cannot be recalled, every delivered report becomes an independent witness to the
+    /// rubric's content at scoring time: if a published rubric is later edited under its own name, any holder of an
+    /// older report can prove it by re-digesting the current catalog and comparing. The publisher cannot rewrite
+    /// evidence already in someone else's hands.</para>
+    /// </summary>
+    [JsonPropertyName("rubricContentHash")] public string? RubricContentHash { get; init; }
+
     /// <summary>The quality bar the repo was judged against (shifts band cutlines only, never the score). Absent ⇒
     /// production baseline. Mirrors <see cref="EvidenceBundle.QualityBar"/>.</summary>
     [JsonPropertyName("qualityBar")] public string? QualityBar { get; init; }
