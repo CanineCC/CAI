@@ -5,7 +5,7 @@
     "issuedAt": "2026-07-01T10:32:04Z",
     "issuer": {
       "name": "cai.canine.dev",
-      "keyId": "cai-ed25519-2026-07"
+      "keyId": "cai-ed25519-sample"
     },
     "producer": {
       "name": "watchdog.canine.dev",
@@ -18,10 +18,13 @@
       "host": "github.com"
     },
     "rubricVersion": "rubric-2026.08.15",
+    "rubricContentHash": null,
     "qualityBar": "production",
     "measurement": {
+      "measuredLoc": null,
       "productionLoc": 1500,
-      "analyzableProjects": 3
+      "analyzableProjects": 3,
+      "scannedAt": null
     },
     "verdict": {
       "cai": 70.31,
@@ -299,13 +302,14 @@
         "high": 204000,
         "currency": "EUR"
       },
-      "busFactor": "2 of 11 devs"
+      "busFactor": "2 of 11 devs",
+      "topology": null
     }
   },
   "signature": {
     "alg": "Ed25519",
-    "keyId": "cai-ed25519-2026-07",
+    "keyId": "cai-ed25519-sample",
     "canon": "RFC8785-json",
-    "value": "PN1kumgqxSphlYNxxy8vVw8eK2Tl8V6p8sKSuan5cKl9uw0zg8q07TLphws1sXJyLqcviIIc8KCaDa1TkqG2Dw"
+    "value": "w7SWp9FBxEsXQaxK4f92d3SZKa55TsYAT0zA7HM6jeSUC2RxwLwUA-TmHtv5CgSVa2mLMn5Iphlz464yXTUbAA"
   }
 }

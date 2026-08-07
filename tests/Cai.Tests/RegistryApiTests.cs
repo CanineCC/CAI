@@ -423,7 +423,7 @@ public sealed class RegistryApiTests(RegistryApiFixture fx) : IClassFixture<Regi
         // byte-for-byte what the producer published — and it still verifies offline
         var text = await response.Content.ReadAsStringAsync(Ct);
         Assert.Equal(package.ToJson(), text);
-        Assert.True(DeliveryVerifier.Verify(DeliveryPackage.Parse(text), fx.TrustedKeys).Trustworthy);
+        Assert.True(DeliveryVerifier.Verify(DeliveryPackage.Parse(text), fx.TrustedKeys).AuthenticAndReproducing);
     }
 
     [Fact]

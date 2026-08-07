@@ -1,9 +1,9 @@
 {
   "keys": [
     {
-      "keyId": "cai-ed25519-2026-07",
+      "keyId": "cai-ed25519-sample",
       "alg": "Ed25519",
-      "publicKey": "O15c7UTbJlIf2_J57rh0EBfOA6q5UOkoucSL13mV9vE",
+      "publicKey": "6diqz2KxN_GsxEtNjdw0pZyPlYZZnU-WVPXpNGdJBZo",
       "status": "active"
     }
   ]

@@ -383,8 +383,11 @@ api.MapPost("/verify-delivery", [AllowAnonymous] async (
 
         return Results.Ok(new
         {
-            // The headline answer: authentic AND (when evidence was embedded) the number reproduces.
-            trustworthy = result.Trustworthy,
+            // The headline answer: authentic AND (when evidence was embedded) the number reproduces. Named for the
+            // two facts it conjoins — this was `trustworthy` until 2026-08-07, an unqualified label that claimed far
+            // more than a signature and a reproducing fold can establish (W3 §6.2). BREAKING for any consumer bound
+            // to the old field name; the two component fields below are unchanged and are the ones to prefer.
+            authenticAndReproducing = result.AuthenticAndReproducing,
             signatureValid = result.SignatureValid,
             reproduced = result.Reproduced,
             reason = result.Reason,

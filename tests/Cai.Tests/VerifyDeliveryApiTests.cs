@@ -78,7 +78,7 @@ public sealed class VerifyDeliveryApiTests(RegistryApiFixture fx) : IClassFixtur
     {
         var json = await PostAsync(Mint());
 
-        Assert.True(json.GetProperty("trustworthy").GetBoolean());
+        Assert.True(json.GetProperty("authenticAndReproducing").GetBoolean());
         Assert.True(json.GetProperty("signatureValid").GetBoolean());
         Assert.True(json.GetProperty("reproduced").GetBoolean());
     }
@@ -99,11 +99,11 @@ public sealed class VerifyDeliveryApiTests(RegistryApiFixture fx) : IClassFixtur
     }
 
     [Fact]
-    public async Task A_package_signed_by_an_untrusted_key_is_not_trustworthy()
+    public async Task A_package_signed_by_an_untrusted_key_is_not_authentic()
     {
         var json = await PostAsync(Mint(key: fx.UnknownKey));
 
-        Assert.False(json.GetProperty("trustworthy").GetBoolean());
+        Assert.False(json.GetProperty("authenticAndReproducing").GetBoolean());
         Assert.False(json.GetProperty("signatureValid").GetBoolean());
         Assert.Contains("no public key", json.GetProperty("reason").GetString(), StringComparison.OrdinalIgnoreCase);
     }
@@ -117,7 +117,7 @@ public sealed class VerifyDeliveryApiTests(RegistryApiFixture fx) : IClassFixtur
 
         var json = await PostAsync(doc);
 
-        Assert.False(json.GetProperty("trustworthy").GetBoolean());
+        Assert.False(json.GetProperty("authenticAndReproducing").GetBoolean());
         Assert.False(json.GetProperty("signatureValid").GetBoolean());
     }
 
@@ -144,7 +144,7 @@ public sealed class VerifyDeliveryApiTests(RegistryApiFixture fx) : IClassFixtur
 
         Assert.True(json.GetProperty("signatureValid").GetBoolean());
         Assert.False(json.GetProperty("reproduced").GetBoolean());
-        Assert.False(json.GetProperty("trustworthy").GetBoolean());
+        Assert.False(json.GetProperty("authenticAndReproducing").GetBoolean());
         Assert.Equal(99.0, json.GetProperty("claimedCai").GetDouble(), 1);
         Assert.NotEqual(99.0, json.GetProperty("computedCai").GetDouble(), 1);
     }

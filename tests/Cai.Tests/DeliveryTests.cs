@@ -54,7 +54,7 @@ public sealed class DeliveryTests
 
         Assert.True(r.SignatureValid);
         Assert.True(r.Reproduced);
-        Assert.True(r.Trustworthy);
+        Assert.True(r.AuthenticAndReproducing);
         Assert.Null(r.Reason);
     }
 
@@ -87,7 +87,7 @@ public sealed class DeliveryTests
 
         var r = DeliveryVerifier.Verify(tampered, keys);
         Assert.False(r.SignatureValid);
-        Assert.False(r.Trustworthy);
+        Assert.False(r.AuthenticAndReproducing);
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public sealed class DeliveryTests
     }
 
     [Fact]
-    public void Signature_valid_but_verdict_that_does_not_reproduce_is_not_trustworthy()
+    public void Signature_valid_but_verdict_that_does_not_reproduce_is_not_authentic_and_reproducing()
     {
         // Sign a payload whose verdict headline was hand-altered away from what the evidence folds to. The signature is
         // valid over that (dishonest) payload, but the independent reproduce check catches the mismatch.
@@ -159,7 +159,7 @@ public sealed class DeliveryTests
         var r = DeliveryVerifier.Verify(package, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
         Assert.True(r.SignatureValid);
         Assert.False(r.Reproduced);
-        Assert.False(r.Trustworthy);
+        Assert.False(r.AuthenticAndReproducing);
     }
 
     [Fact]
@@ -182,6 +182,35 @@ public sealed class DeliveryTests
         var r = DeliveryVerifier.Verify(package, keys);
         Assert.True(r.SignatureValid, r.Reason);
         Assert.True(r.Reproduced, r.Reason);
+    }
+
+    [Fact]
+    public void The_shipped_sample_signs_under_a_key_id_production_can_never_use()
+    {
+        // The test above passed happily while the sample was BROKEN in public, which is why this one exists.
+        //
+        // Until 2026-08-07 the sample signed under `cai-ed25519-2026-07` — the production key id — and
+        // examples/cai-delivery.keys.json bound that same id to a different public key. Verifying the sample against
+        // its own bundled keys therefore succeeded, and the test above was satisfied, while anyone who posted the
+        // published sample to the live /api/verify-delivery was told "signature does not verify (tampered payload or
+        // wrong key)". A standard whose pitch is that strangers can check our work was shipping an example its own
+        // public endpoint called untrustworthy.
+        //
+        // The collision was also a trap for the offline verification the spec encourages: a downloaded key snapshot
+        // that binds a PRODUCTION key id to a NON-PRODUCTION key is worse than no snapshot at all.
+        //
+        // So: the sample must sign under an id that is unmistakably a sample. Its private seed is published beside it
+        // on purpose — the key is worthless for minting anything the registry accepts, and publishing it lets a reader
+        // regenerate the example instead of trusting us. Production must never add this id to its trusted set.
+        var root = RepoRoot();
+        var package = DeliveryPackage.Parse(File.ReadAllText(Path.Combine(root, "examples", "cai-delivery.sample.json")));
+        var keys = DeliveryPublicKeySet.Parse(File.ReadAllText(Path.Combine(root, "examples", "cai-delivery.keys.json")));
+
+        Assert.Contains("sample", package.Signature.KeyId, StringComparison.OrdinalIgnoreCase);
+        Assert.All(keys.Keys, k => Assert.Contains("sample", k.KeyId, StringComparison.OrdinalIgnoreCase));
+
+        // The shape a production key id takes (cai-ed25519-YYYY-MM). The sample must not look like one.
+        Assert.DoesNotMatch(@"^cai-ed25519-\d{4}-\d{2}$", package.Signature.KeyId);
     }
 
     // ── descriptive, non-scored metrics: rebuildCost + busFactor ─────────────────────────────────────────────────
@@ -268,7 +297,7 @@ public sealed class DeliveryTests
         var package = signer.SignPackage(payload);
 
         var r = DeliveryVerifier.Verify(package, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
-        Assert.True(r.Trustworthy, r.Reason);
+        Assert.True(r.AuthenticAndReproducing, r.Reason);
 
         var canonical = System.Text.Encoding.UTF8.GetString(CanonicalJson.Canonicalize(package.Payload));
         Assert.DoesNotContain("rebuildCost", canonical);
@@ -291,7 +320,7 @@ public sealed class DeliveryTests
         var reparsed = DeliveryPackage.Parse(package.ToJson());
         var r = DeliveryVerifier.Verify(reparsed, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
 
-        Assert.True(r.Trustworthy, r.Reason);
+        Assert.True(r.AuthenticAndReproducing, r.Reason);
         Assert.Equal("2 of 11 devs", reparsed.Payload.Evidence.BusFactor);
         Assert.Equal(118000, reparsed.Payload.Evidence.RebuildCost!.AsObject()["low"]!.GetValue<int>());
     }

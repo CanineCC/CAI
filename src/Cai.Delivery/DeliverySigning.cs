@@ -67,8 +67,8 @@ public sealed class DeliverySigner : IDisposable
 }
 
 /// <summary>The outcome of verifying a delivery: whether the signature is authentic, and — when checked — whether the
-/// verdict reproduces from the embedded evidence. A package is trustworthy only when <see cref="SignatureValid"/> is
-/// true; <see cref="Reproduced"/> is the independent second check that the number is honest math, not just a signed
+/// verdict reproduces from the embedded evidence. <see cref="SignatureValid"/> establishes authenticity;
+/// <see cref="Reproduced"/> is the independent second check that the number is honest math, not just a signed
 /// claim.</summary>
 public sealed record DeliveryVerification(
     bool SignatureValid,
@@ -77,8 +77,17 @@ public sealed record DeliveryVerification(
     double? ComputedCai = null,
     double? ClaimedCai = null)
 {
-    /// <summary>True only when the signature is authentic AND (if evidence was folded) the headline reproduced.</summary>
-    public bool Trustworthy => SignatureValid && Reproduced != false;
+    /// <summary>
+    /// True only when the signature is authentic AND (if evidence was folded) the headline reproduced.
+    /// </summary>
+    /// <remarks>
+    /// Named for the two facts it conjoins, NOT "Trustworthy", which it was called until 2026-08-07. Whitepaper W3
+    /// spends a section on why a signature plus reproducing arithmetic is not the same as a codebase being good, or
+    /// safe, or fit to buy — it establishes that this document is ours, unedited, and internally consistent. An
+    /// unqualified trust label invites exactly the over-reading the paper warns against, and the /verify page's own
+    /// copy already said "Authentic and reproducing" while the field underneath said "trustworthy".
+    /// </remarks>
+    public bool AuthenticAndReproducing => SignatureValid && Reproduced != false;
 }
 
 /// <summary>

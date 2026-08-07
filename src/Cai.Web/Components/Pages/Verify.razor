@@ -56,8 +56,8 @@
     }
     else if (_result is not null)
     {
-        <div class="callout" style="@(_result.Trustworthy ? "" : "border-color:var(--crit)")">
-            @if (_result.Trustworthy)
+        <div class="callout" style="@(_result.AuthenticAndReproducing ? "" : "border-color:var(--crit)")">
+            @if (_result.AuthenticAndReproducing)
             {
                 <p><strong>✓ Authentic and reproducing.</strong> This package was signed by a published CAI key and has
                     not been altered since — and the CAI it states follows from the evidence it carries.</p>
