@@ -9,19 +9,19 @@ namespace Cai.Scoring;
 /// </summary>
 public enum Band
 {
-    /// <summary>Below 25 — the floor band; displayed as "Critical".</summary>
+    /// <summary>score &lt; 25 — the floor band; displayed as "Critical".</summary>
     Critical,
 
-    /// <summary>25–49; displayed as "Weak".</summary>
+    /// <summary>25 ≤ score &lt; 50; displayed as "Weak".</summary>
     Poor,
 
-    /// <summary>50–69; displayed as "Adequate".</summary>
+    /// <summary>50 ≤ score &lt; 70; displayed as "Adequate".</summary>
     Fair,
 
-    /// <summary>70–89; displayed as "Strong".</summary>
+    /// <summary>70 ≤ score &lt; 90; displayed as "Strong".</summary>
     Healthy,
 
-    /// <summary>90 and above — the top band; displayed as "Exemplary".</summary>
+    /// <summary>score ≥ 90 — the top band; displayed as "Exemplary".</summary>
     Exemplary,
 }
 

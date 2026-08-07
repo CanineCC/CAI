@@ -81,13 +81,14 @@
 <section><div class="wrap">
     <h2>The bands</h2>
     <p class="muted">A 0–100 lands in one of five fixed-valence bands (the canonical <code>RatingScale.TierFor</code>
-        table). Thresholds are part of the standard and don't move between rubric versions.</p>
+        table). Thresholds are part of the standard and don't move between rubric versions. The intervals are
+        half-open, so they cover a continuous score without gaps.</p>
     <div class="bands">
-        <span class="band b-exemplary">Exemplary 90–100</span>
-        <span class="band b-strong">Strong 70–89</span>
-        <span class="band b-adequate">Adequate 50–69</span>
-        <span class="band b-weak">Weak 25–49</span>
-        <span class="band b-critical">Critical 0–24</span>
+        <span class="band b-exemplary">Exemplary ≥ 90</span>
+        <span class="band b-strong">Strong 70 – &lt;90</span>
+        <span class="band b-adequate">Adequate 50 – &lt;70</span>
+        <span class="band b-weak">Weak 25 – &lt;50</span>
+        <span class="band b-critical">Critical &lt; 25</span>
     </div>
     <div class="btns"><a class="btn" href="/dimensions">The dimension catalog →</a><a class="btn" href="/verify">Verify a published number</a></div>
 </div></section>
