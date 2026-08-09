@@ -11,6 +11,18 @@ move a score for unchanged evidence mints a new rubric version (see
 ## [Unreleased]
 
 ### Added
+- **Thirteen historical rubric catalogs published, closing the archive's back-gap.** Production runs
+  referenced `rubric-2026.06.0`–`.5`, `.7`, `.10`, `.11`, `.17`, `rubric-2026.08.10`, `.11` and `.13`,
+  but the archive had never held them — so a report naming one could not be verified by the party it
+  was handed to, which is the one promise the frozen-rubric contract exists to make. Each was
+  regenerated from the engine commit that set `RubricVersion.Current` to that version, and each emitted
+  catalog declares the version it is published under.
+- **`rubric-2026.08.13` is out of quarantine.** Its published catalog declared `rubric-2026.08.14` and
+  its provenance was unrecoverable from the machine where the quarantine was created; the pre-relocation
+  engine repository turned out to still exist as `CanineCC/RETIRED.watchdog.canine.dev`. The recovered
+  catalog differs from the quarantined one (121 dimensions against 122), so the quarantine was right to
+  refuse it rather than relabel it. `rubrics/_unattested/` is now empty and kept only for the invariant.
+
 - **The rubric catalog now publishes the dimension→category map, closing the one score-moving input it did not
   pin.** A dimension's influence on the score IS its category — dimensions in one category average together
   (confidence-weighted) before their lens's worst-first fold sees them — but the catalog only ever published the

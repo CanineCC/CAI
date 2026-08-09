@@ -13,30 +13,22 @@ The invariant is enforced in code (`RubricCatalogStore`, attestation) and in
 
 ## Current contents
 
-### `rubric-2026.08.13/`
+**None.** The directory is kept because the invariant it enforces still applies: a catalog whose
+declared `rubricVersion` does not match the directory it sits in is withheld here rather than served.
 
-**Problem.** The catalog published under `rubric-2026.08.13` declares `"rubricVersion": "rubric-2026.08.14"`. It is
-*not* a copy of the `.14` catalog (the two files differ), so it is neither a duplicate nor obviously the `.13`
-content — its provenance is genuinely unknown. It was committed in `191649a` ("cai.canine.dev becomes the standard
-authority") and had been served, mislabelled, ever since.
+### Resolved
 
-**Why it was not simply relabelled.** Editing the `rubricVersion` field to say `.13` would assert a provenance we
-cannot demonstrate. A rubric catalog is an attestation; hand-editing one to make a check pass is the exact behaviour
-the standard's credibility depends on never doing.
+#### `rubric-2026.08.13` — recovered 2026-08-09
 
-**How to restore it.** Regenerate from the engine commit that set `RubricVersion.Current = "rubric-2026.08.13"`. That
-commit predates the relocation of the engine into the `kennel.canine.dev` repository (`ab6ab1d7`), so it lives in the
-former `CodeHealth` / `watchdog.canine.dev` repository, which is not checked out on the machine where this quarantine
-was created. With that repository available:
+The catalog published under `rubric-2026.08.13` declared `"rubricVersion": "rubric-2026.08.14"`, and its
+provenance could not be established from the machine where the quarantine was created — the engine commit
+that set `RubricVersion.Current = "rubric-2026.08.13"` predates the engine's move into
+`kennel.canine.dev` (`ab6ab1d7`), and the former repository was not checked out there.
 
-```bash
-git checkout <commit-where-Current-was-rubric-2026.08.13>
-dotnet run --project src/CodeHealth.Cli -- dimensions --catalog rubric-catalog.json
-# confirm the emitted rubricVersion is rubric-2026.08.13, then:
-mv rubric-catalog.json <CAI>/rubrics/rubric-2026.08.13/rubric-catalog.json
-```
+It was still on GitHub, as `CanineCC/RETIRED.watchdog.canine.dev`. Regenerating from commit
+`dc4bef3e` emitted a catalog declaring `rubric-2026.08.13`, which is now published. The recovered
+document is **not** the quarantined one — 121 dimensions against 122 — so the quarantine was correct
+to refuse it, and relabelling it would have asserted a false provenance.
 
-Then move the directory back out of `_unattested/` and delete this entry. The archive test will confirm it.
-
-**If it cannot be recovered**, leave it withheld and record `rubric-2026.08.13` as an unrecoverable gap in
-`CHANGELOG.md`. A version the archive admits it cannot serve is honest; a mislabelled one being served is not.
+The same recovery published twelve further versions that production runs referenced but the archive
+never held: `2026.06.0`–`.5`, `.7`, `.10`, `.11`, `.17`, and `2026.08.10`, `.11`.
