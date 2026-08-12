@@ -42,9 +42,14 @@ public sealed class RegistryUnconfiguredFixture : IDisposable
     public WebApplicationFactory<Program> Factory { get; }
 
     /// <summary>An anonymous or bearer-token client. No principals are configured, so EVERY token is unknown.</summary>
-    public HttpClient Client(string? token = null)
+    public HttpClient Client(string? token = null, bool followRedirects = true)
     {
-        var client = Factory.CreateClient();
+        var client = followRedirects
+            ? Factory.CreateClient()
+            : Factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false,
+            });
         client.DefaultRequestHeaders.Add("X-CAI-Partner", PartnerKey);
         if (token is not null)
         {

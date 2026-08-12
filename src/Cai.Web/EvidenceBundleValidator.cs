@@ -17,7 +17,9 @@ internal sealed class EvidenceBundleValidator : AbstractValidator<EvidenceBundle
         RuleForEach(b => b.Dimensions).ChildRules(d =>
         {
             d.RuleFor(x => x.Id).NotEmpty();
-            d.RuleFor(x => x.Category).NotEmpty();
+            // NOT NotEmpty: the category is derivable from the named rubric's catalog, which froze the assignment.
+            // Requiring it here rejected every bundle written from the published examples — none of which show it —
+            // and the scorer resolves it (and still cross-checks a stated one against the catalog). See CaiScorer.CategoryOf.
             d.RuleFor(x => x.ScoreZeroToTen).InclusiveBetween(0, 10);
             d.RuleFor(x => x.Confidence).InclusiveBetween(0, 1);
             d.RuleFor(x => x.Coverage).InclusiveBetween(0, 1);

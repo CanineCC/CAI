@@ -112,16 +112,36 @@ public static class CaiScorer
     }
 
     /// <summary>The category a dimension folds into: the published catalog's assignment when this rubric version
-    /// freezes one, else the bundle's own. A disagreement is fatal — see <see cref="Score(EvidenceBundle, RubricCatalog?)"/>.</summary>
+    /// freezes one, else the bundle's own. A disagreement is fatal — see <see cref="Score(EvidenceBundle, RubricCatalog?)"/>.
+    /// <para>
+    /// The category is OPTIONAL on the wire when the named rubric publishes one for the dimension. It is derivable —
+    /// the catalog is the authority and already froze the answer — so requiring the producer to restate it made every
+    /// hand-written bundle fail, including the sample this project ships. Producers that state it are still checked
+    /// against the catalog; the check is the point, and it is unaffected.
+    /// </para></summary>
     private static DimensionCategory CategoryOf(
         DimensionScore dimension, IReadOnlyDictionary<string, DimensionCategory> frozen, string rubricVersion)
     {
-        var declared = Categories.Parse(dimension.Category);
+        var stated = !string.IsNullOrWhiteSpace(dimension.Category);
         if (!frozen.TryGetValue(dimension.Id, out var published))
         {
-            return declared;
+            // No published assignment: the bundle is the only source, so it must carry one. Say which dimension and
+            // what to do about it — this used to surface as "Value cannot be null. (Parameter 'wire')".
+            return stated
+                ? Categories.Parse(dimension.Category)
+                : throw new ArgumentException(
+                    $"Dimension '{dimension.Id}' states no category, and rubric '{rubricVersion}' publishes none for " +
+                    "it either — so there is nothing to fold it into. Either add \"category\" to the dimension, or " +
+                    "name a rubric version whose catalog assigns one.",
+                    "bundle");
         }
 
+        if (!stated)
+        {
+            return published;
+        }
+
+        var declared = Categories.Parse(dimension.Category);
         return published == declared
             ? published
             : throw new ArgumentException(

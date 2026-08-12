@@ -92,6 +92,11 @@ builder.Services.AddAuthorizationBuilder()
 // Cai:PublicCors:AllowedOrigins; unset ⇒ no cross-origin allow at all (same-origin only), so a misconfigured
 // deployment fails closed rather than opening the API to the web.
 var corsOrigins = ReadCorsOrigins(builder.Configuration);
+
+// The same list the rate limiter consults to tell a first-party page read from a script (ApiRateLimiting.SiteReader).
+// Bound once here so the two cannot drift: an origin trusted to call the API should not then be throttled as a scraper.
+builder.Services.Configure<PublicCorsOptions>(o => o.AllowedOrigins = corsOrigins);
+
 builder.Services.AddCors(options => options.AddPolicy(CaiCors.PolicyName, policy =>
 {
     if (corsOrigins.Length > 0)
@@ -144,6 +149,10 @@ builder.Services.AddRateLimiter(options =>
         PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.Public, "d", 15, TimeSpan.FromDays(1))),
         PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.RegistryPublic, "r",
             ApiRateLimiting.RegistryPublicPermitsPerMinute, TimeSpan.FromMinutes(1))),
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.SelfServiceVerify, "v",
+            ApiRateLimiting.SelfServiceVerifyPermitsPerMinute, TimeSpan.FromMinutes(1))),
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.SiteReader, "b",
+            ApiRateLimiting.SiteReaderPermitsPerMinute, TimeSpan.FromMinutes(1))),
         PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.Principal, "p",
             ApiRateLimiting.PrincipalPermitsPerMinute, TimeSpan.FromMinutes(1))));
     options.OnRejected = async (ctx, ct) =>
@@ -473,8 +482,82 @@ app.MapGet("/glossary.jsonld", [AllowAnonymous] () => Results.Text(Cai.Web.CaiGl
 // Browsers auto-request /favicon.ico; we only ship favicon.svg. Redirect so non-HTML responses (e.g. /llms.txt) don't 404.
 app.MapGet("/favicon.ico", [AllowAnonymous] () => Results.Redirect("/favicon.svg", permanent: true));
 
+// ── This host is the API; cai.canine.dev is the standard's site ───────────────────────────────────────────────────
+// It used to be both, and the copy that had the working tools was the one nobody could find: api.cai.canine.dev
+// served a COMPLETE second website — its own nav, its own /spec, /dimensions, /verify, /registry — whose content
+// disagreed with the pages of the same name on cai.canine.dev. The site showed 42 of the 127 dimensions; this host
+// showed all of them. The site told you to install a CLI; this host had a working verifier. Neither linked to the
+// other, and this one's robots.txt answered 401, so search engines could not even find the better copy.
+//
+// The pages now live on cai.canine.dev, where the catalogue, the calculator and the verifier are rendered by islands
+// that read THIS API — one copy of the content, one copy of the data, and the API feeding both. These redirects
+// retire the duplicates without breaking any link that was ever published to them.
+foreach (var (from, to) in new[]
+{
+    ("/", "https://cai.canine.dev/"),
+    ("/spec", "https://cai.canine.dev/spec/"),
+    ("/dimensions", "https://cai.canine.dev/dimensions/"),
+    // The lens list is part of the catalogue island, which renders lenses and their dimensions together.
+    ("/lenses", "https://cai.canine.dev/dimensions/"),
+    ("/registry", "https://cai.canine.dev/registry/"),
+    ("/cli", "https://cai.canine.dev/page-cli/"),
+    ("/badge", "https://cai.canine.dev/badge/"),
+    // Both self-service checks are on one page now: paste a delivery, or paste a bundle.
+    ("/verify", "https://cai.canine.dev/verify/"),
+    ("/calculator", "https://cai.canine.dev/verify/"),
+})
+{
+    app.MapGet(from, [AllowAnonymous] () => Results.Redirect(to, permanent: true));
+}
+
+// The canonical VALID evidence bundle, served rather than only printed. The examples in the API reference and on the
+// calculator page were not valid input — they omitted the category and put meta-dimensions among the deterministic
+// ones — so every bundle written from them was rejected. An example you can fetch and POST straight back cannot drift
+// from what the scorer accepts, and CalculatorSampleTests folds it on every build.
+app.MapGet("/api/score/example", [AllowAnonymous] (HttpContext http) =>
+{
+    ApiAccess.EnsureAllowed(http);
+    return Results.Text(CalculatorSample.Json, "application/json");
+});
+
+// Crawlers belong on cai.canine.dev, which serves the same standard as pages with its own robots.txt and sitemap.
+//
+// Without this route /robots.txt matched no endpoint, and a request that matches no endpoint is evaluated against the
+// default-deny FALLBACK policy — so the file every crawler fetches first answered
+// `401 {"error":"authentication required — present a registry bearer token"}`. A 401 on robots.txt is read as
+// "disallow everything", which is a strong signal to de-index a host, applied here to the host that serves the open
+// standard's API.
+app.MapGet("/robots.txt", [AllowAnonymous] () => Results.Text(
+    """
+    # api.cai.canine.dev is the CAI API. The standard is published as pages on https://cai.canine.dev
+    User-agent: *
+    Disallow: /
+
+    """,
+    "text/plain; charset=utf-8"));
+
 // The standard's UI (static-SSR Blazor). Public — opt out of the default-deny fallback policy (C2).
 app.MapRazorComponents<App>().AllowAnonymous();
+
+// Anything else is genuinely absent — say so. Without an endpoint here the fallback POLICY turns every typo and every
+// retired URL into a 401, which is how /robots.txt came to answer "present a registry bearer token".
+//
+// /api keeps the old behaviour deliberately, and it is finer-grained than "always 404": an ANONYMOUS caller probing
+// an unmatched path there must still fail CLOSED through the bearer challenge (401 + JSON, never 500), while an
+// AUTHENTICATED one is simply told the endpoint does not exist. AuthSurfaceTests pins both halves. So only the page
+// host gains a plain 404 — which is all that was needed to stop /robots.txt answering "present a registry bearer token".
+app.MapFallback([AllowAnonymous] async (HttpContext http) =>
+{
+    if (http.Request.Path.StartsWithSegments("/api") && http.User.Identity?.IsAuthenticated != true)
+    {
+        await http.ChallengeAsync(RegistryTokenAuthenticationHandler.Scheme).ConfigureAwait(false);
+        return;
+    }
+
+    http.Response.StatusCode = StatusCodes.Status404NotFound;
+    await http.Response.WriteAsJsonAsync(
+        new { error = "no such endpoint", standard = "https://cai.canine.dev" }).ConfigureAwait(false);
+});
 
 app.Run();
 
@@ -513,4 +596,11 @@ public partial class Program;
 public static partial class CaiCors
 {
     public const string PolicyName = "cai-public-islands";
+}
+
+/// <summary>The first-party origins the island CORS policy trusts, bound so the rate limiter can read the same list.</summary>
+public sealed class PublicCorsOptions
+{
+    /// <summary>Absolute origins (scheme + host + optional port), exactly as a browser sends <c>Origin</c>.</summary>
+    public string[] AllowedOrigins { get; set; } = [];
 }

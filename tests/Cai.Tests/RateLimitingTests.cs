@@ -182,4 +182,55 @@ public sealed class RateLimitingTests(RateLimitingFixture fx) : IClassFixture<Ra
 
         Assert.True(throttled, "a 601-request anonymous burst on /api/registry/keys must hit the ceiling");
     }
+
+    // ── The reader-facing half: the standard's own pages were the first casualty of a limit written for scrapers ──
+
+    [Fact]
+    public async Task The_self_service_checks_survive_a_burst_the_open_budget_would_kill()
+    {
+        // /api/score and /api/verify-delivery are what the calculator and verifier islands on cai.canine.dev call
+        // from the reader's browser. Under the open-API budget the eighth paste of the day 429ed — for everyone
+        // sharing the office's IP — so the one check the standard invites anyone to run did not work in practice.
+        using var client = fx.Client(token: null, "203.0.113.20");
+        for (var i = 0; i < 25; i++)
+        {
+            // Deliberately malformed: this asserts the LIMITER let it through, not that the payload scored.
+            var response = await client.PostAsync("/api/score", JsonContent(), Ct);
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task A_first_party_page_read_of_the_catalogue_is_not_throttled_as_a_scraper()
+    {
+        // The catalogue island fetches the version list and then a catalog on every page view. "Cache the immutable
+        // catalog" is right for a program and impossible for a browser, so a browser read from a trusted origin
+        // rides its own budget.
+        using var client = fx.Client(token: null, "203.0.113.21");
+        client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "same-origin");
+
+        for (var i = 0; i < 25; i++)
+        {
+            var response = await client.GetAsync("/api/rubrics", Ct);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task A_script_reading_the_catalogue_keeps_the_tight_budget()
+    {
+        // The exemption is for pages, not for everyone: with no browser fetch metadata the caller is a program, and
+        // programs are exactly who "cache the rubric you use" is addressed to.
+        using var client = fx.Client(token: null, "203.0.113.22");
+        var statuses = new List<HttpStatusCode>();
+        for (var i = 0; i < 10; i++)
+        {
+            statuses.Add((await client.GetAsync("/api/rubrics", Ct)).StatusCode);
+        }
+
+        Assert.Contains(HttpStatusCode.TooManyRequests, statuses);
+    }
+
+    private static StringContent JsonContent() =>
+        new("{\"rubricVersion\":\"\"}", System.Text.Encoding.UTF8, "application/json");
 }

@@ -25,6 +25,22 @@ internal enum ApiTrafficClass
     /// generous enough that a full-corpus verify loop cannot trip it while a flood still hits a ceiling.</summary>
     RegistryPublic,
 
+    /// <summary>Anonymous traffic to the SELF-SERVICE verification endpoints (<c>/api/score</c>, <c>/api/verify</c>,
+    /// <c>/api/verify-delivery</c>). These are the public half of "don't trust the number, reproduce it" — the
+    /// calculator and verifier embedded on cai.canine.dev call them from the reader's own browser. The open API's
+    /// 15/day per-IP budget is sized for fetching an IMMUTABLE catalog once and caching it; applied here it would
+    /// exhaust after a handful of pastes and take out everyone behind the same NAT, so the one check the standard
+    /// invites anyone to run would fail for whole offices. Same shape as the registry probes: a dedicated per-IP
+    /// budget, generous for a person working through packages, still a ceiling against a flood.</summary>
+    SelfServiceVerify,
+
+    /// <summary>A read issued by a BROWSER from one of the first-party sites (the catalogue island on
+    /// cai.canine.dev reading <c>/api/rubrics</c> and a version's catalog). The open API's 15/day per-IP budget is
+    /// advice aimed at PROGRAMMATIC consumers — "the catalog is immutable, so cache it" — and it is good advice, but
+    /// a reader's browser cannot act on it: eight page views from one office exhausted the day. The standard's own
+    /// pages were the first casualty of a limit written for scrapers.</summary>
+    SiteReader,
+
     /// <summary>Everything else under <c>/api</c>: the open standard API's anonymous per-IP budget
     /// (1/s · 3/min · 15/day). A request presenting an UNRESOLVED bearer token stays HERE — which also throttles
     /// token guessing.</summary>
@@ -50,7 +66,53 @@ internal static class ApiRateLimiting
     /// a scraper does not.</summary>
     public const int RegistryPublicPermitsPerMinute = 300;
 
+    /// <summary>The per-IP budget for the anonymous self-service checks: 60/min (1 rps sustained). A reader working
+    /// through a stack of deliveries by hand never approaches it; a scripted flood of folds still meets a ceiling.
+    /// Deliberately lower than the registry probes' 300/min because a fold costs real work, where a key fetch does not.</summary>
+    public const int SelfServiceVerifyPermitsPerMinute = 60;
+
+    /// <summary>The endpoints that carry <see cref="ApiTrafficClass.SelfServiceVerify"/>. Kept as one list so the
+    /// classifier and the API reference cannot drift apart about which checks are open to the public.</summary>
+    public static readonly string[] SelfServiceVerifyPaths = ["/api/score", "/api/verify", "/api/verify-delivery"];
+
+    /// <summary>The per-IP budget for first-party browser reads: 120/min. A page view costs two calls (the version
+    /// list, then one catalog), so this is roughly a reader opening the catalogue once a second all minute.</summary>
+    public const int SiteReaderPermitsPerMinute = 120;
+
     private static readonly object CacheKey = new();
+
+    /// <summary>
+    /// Whether this looks like a page on one of our own sites reading the standard, rather than a script.
+    /// <para>
+    /// <c>Sec-Fetch-Site</c> is set by the browser and cannot be set by page script, and the origin must be one the
+    /// island CORS policy already trusts. It is a FUSE, not a security boundary — anything can send these headers by
+    /// hand — and that is fine: this only moves a caller between two per-IP budgets, both of which are still ceilings.
+    /// Nothing is authorized by it, and every endpoint it reaches is anonymous and read-only in effect.
+    /// </para>
+    /// </summary>
+    private static bool IsFirstPartyBrowserRead(HttpContext ctx)
+    {
+        var fetchSite = ctx.Request.Headers["Sec-Fetch-Site"].ToString();
+        if (string.IsNullOrEmpty(fetchSite) || string.Equals(fetchSite, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            // "none" is a typed-in address bar; no header at all is a script, a proxy, or curl.
+            return false;
+        }
+
+        if (string.Equals(fetchSite, "same-origin", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var origin = ctx.Request.Headers.Origin.ToString();
+        if (string.IsNullOrEmpty(origin))
+        {
+            return false;
+        }
+
+        var allowed = ctx.RequestServices.GetRequiredService<IOptions<PublicCorsOptions>>().Value.AllowedOrigins;
+        return allowed.Any(o => string.Equals(o, origin, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>The request's traffic class plus the partition key its budget is accounted against
     /// (the principal for <see cref="ApiTrafficClass.Principal"/>, the client IP for the anonymous classes).</summary>
@@ -94,8 +156,18 @@ internal static class ApiRateLimiting
         }
 
         var clientIp = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return path.StartsWithSegments("/api/registry/keys") || path.StartsWithSegments("/api/registry/health")
-            ? new(ApiTrafficClass.RegistryPublic, clientIp)
+        if (path.StartsWithSegments("/api/registry/keys") || path.StartsWithSegments("/api/registry/health"))
+        {
+            return new(ApiTrafficClass.RegistryPublic, clientIp);
+        }
+
+        if (SelfServiceVerifyPaths.Any(p => path.StartsWithSegments(p)))
+        {
+            return new(ApiTrafficClass.SelfServiceVerify, clientIp);
+        }
+
+        return IsFirstPartyBrowserRead(ctx)
+            ? new(ApiTrafficClass.SiteReader, clientIp)
             : new(ApiTrafficClass.Public, clientIp);
     }
 

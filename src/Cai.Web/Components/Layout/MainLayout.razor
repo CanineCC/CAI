@@ -1,14 +1,15 @@
 @inherits LayoutComponentBase
 
+@* This host is the API. The only page left on it is the API reference, so the chrome points OUT to the standard's
+   site rather than presenting a second navigation of its own — the duplicate nav is what made api.cai.canine.dev
+   read as a rival website to cai.canine.dev instead of as its backend. *@
+
 <header class="site"><div class="wrap">
-    <a class="brand" href="/">CA<b>I</b></a>
+    <a class="brand" href="https://cai.canine.dev">CA<b>I</b></a>
     <nav>
-        <a href="/spec">The Standard</a>
-        <a href="/lenses">Lenses</a>
-        <a href="/dimensions">Dimensions</a>
-        <a href="/cli">Compute it yourself</a>
-        <a href="/calculator">Calculator</a>
-        <a href="/verify">Verify</a>
+        <a href="https://cai.canine.dev/spec/">The standard</a>
+        <a href="https://cai.canine.dev/dimensions/">Dimensions</a>
+        <a href="https://cai.canine.dev/verify/">Verify</a>
         <a href="/api-reference">API</a>
     </nav>
     <a class="cta" href="https://watchdog.canine.dev">Get a survey →</a>
@@ -23,8 +24,7 @@
         <span class="muted">Stewarded by <a href="https://watchdog.canine.dev">Watchdog</a>, the independent surveyor.</span><br>
         <a class="canine-by" href="https://canine.dev" aria-label="Canine Development — parent studio"><span class="canine-badge" aria-hidden="true"></span>by Canine&nbsp;Development</a></div>
     <nav>
-        <a href="/spec">Spec</a><a href="/lenses">Lenses</a><a href="/dimensions">Dimensions</a>
-        <a href="/cli">CLI</a><a href="/calculator">Calculator</a><a href="/verify">Verify</a><a href="/registry">Registry</a>
-        <a href="/badge">Badge</a><a href="/api-reference">API</a><a href="/glossary.jsonld">Glossary</a><a href="https://github.com/CanineCC/CAI">GitHub</a>
+        <a href="https://cai.canine.dev/">The standard</a><a href="/api-reference">API reference</a>
+        <a href="/glossary.jsonld">Glossary</a><a href="https://github.com/CanineCC/CAI">GitHub</a>
     </nav>
 </div></footer>
