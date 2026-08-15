@@ -77,6 +77,15 @@ public static class NoiseStandardEndpoints
               + "and the cheapest way to improve one is to report less — so a specification publishing "
               + "precision alone would reward under-detection across every tool that adopted it.",
 
+            // ★★ And the counterpart is REACHABLE, not merely required in prose. A rule that names an
+            // obligation without providing a way to meet it gets skipped by everyone and blamed on nobody.
+            recallEndpoint = "/api/noise/pooled",
+            recallMethodNote =
+                "Recall has no ground truth on real repositories, so the reference is POOLED: the union of "
+              + "what participating tools reported and a human adjudicated as valid. POST findings from two "
+              + "or more tools to /api/noise/pooled. One tool alone gets no recall figure — its recall "
+              + "against a union it alone defines is 100% by construction.",
+
             // The absolutes are what expose suppression; the ratio alone hides it. A tool at 42 valid /
             // 8 noise per 100k LoC has a WORSE ratio than one at 12 valid / 2 noise, and is plainly the
             // better instrument.
@@ -545,6 +554,56 @@ public static class NoiseStandardEndpoints
         .AllowAnonymous()
         .WithName("NoiseCrowdRaters");
 
+        // ★★ THE COUNTERWEIGHT TO THE NOISE RATE. Precision alone rewards under-firing: a tool reporting
+        // one finding it is certain about scores a perfect 0%, and a tool reporting everything worth
+        // knowing scores worse. There is no ground truth on real repositories, so the reference is the
+        // union of what participating tools reported and a human adjudicated valid — which is the
+        // standard's strongest reason to exist, because no single vendor can build it alone.
+        endpoints.MapPost("/api/noise/pooled", (PooledRecallRequest request) =>
+        {
+            if (request?.Findings is not { Count: > 0 })
+            {
+                return Results.BadRequest(new { error = "at least one finding is required" });
+            }
+
+            var findings = request.Findings
+                .Select(f => new PooledFinding(
+                    f.Tool ?? "", f.RepoId ?? "", f.FilePath ?? "", f.Line ?? 0, f.Valid ?? false))
+                .ToList();
+
+            var summary = PooledRecall.Compute(
+                findings,
+                request.LineWindow ?? PooledRecall.DefaultLineWindow,
+                request.SilentTools ?? []);
+
+            return Results.Ok(new
+            {
+                methodVersion = MethodVersion,
+                participatingTools = summary.ParticipatingTools,
+                unionSize = summary.UnionSize,
+
+                // ★ The matching window travels with the figures it produced — an undeclared tolerance is
+                // a knob whoever computes the number can quietly turn.
+                lineWindow = summary.LineWindow,
+
+                tools = summary.Tools.Select(t => new
+                {
+                    tool = t.Tool,
+                    reported = t.Reported,
+                    valid = t.Valid,
+                    matchedUnion = t.MatchedUnion,
+                    uniqueContribution = t.UniqueContribution,
+                    precision = t.Precision,
+                    pooledRecall = t.PooledRecall,
+                }),
+
+                // ★★ In the response, not in a document nobody reads.
+                caveat = summary.Caveat,
+            });
+        })
+        .AllowAnonymous()
+        .WithName("NoisePooledRecall");
+
         // ★★ The anchor that needs nobody's opinion. Every other number here rests on a judgement; this
         // one rests on commits, and no amount of shared bias among raters can move it.
         endpoints.MapPost("/api/noise/fixrate", (FixRateRequest request) =>
@@ -762,6 +821,20 @@ public static class NoiseStandardEndpoints
         "not-observable" => FixOutcome.NotObservable,
         _ => null,
     };
+
+    /// <summary>One tool's finding and its adjudication, as it arrives on the wire.</summary>
+    public sealed record PooledFindingEntry(
+        string? Tool, string? RepoId, string? FilePath, int? Line, bool? Valid);
+
+    /// <summary>
+    /// The pooled reference to build.
+    /// </summary>
+    /// <param name="SilentTools">
+    /// ★ Tools that submitted a run and reported nothing. Named explicitly, or they vanish from the table
+    /// and a tool that found nothing looks identical to one that never entered.
+    /// </param>
+    public sealed record PooledRecallRequest(
+        int? LineWindow, IReadOnlyList<string>? SilentTools, IReadOnlyList<PooledFindingEntry>? Findings);
 
     /// <summary>What a rater declares about themselves, as it arrives on the wire.</summary>
     public sealed record RaterDeclarationRequest(
