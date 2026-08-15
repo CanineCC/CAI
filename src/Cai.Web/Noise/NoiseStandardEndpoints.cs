@@ -550,7 +550,10 @@ public static class NoiseStandardEndpoints
                     error = "an affiliation is required, and 'unknown' is not one of them — a vendor "
                           + "rating its own tool's findings is the conflict this standard exists to "
                           + "remove, and it cannot be declared by omission.",
-                    affiliations = new[] { "independent", "vendor-employed", "vendor-contracted" },
+                    affiliations = new[]
+                    {
+                        "independent", "vendor-employed", "vendor-contracted", "compensated-in-product",
+                    },
                 });
             }
 
@@ -930,6 +933,11 @@ public static class NoiseStandardEndpoints
                     independent = c.Independent,
                     vendorAffiliated = c.VendorAffiliated,
 
+                    // ★★ Counted apart. A cohort granted a paid tier for answering is compensated by the
+                    // vendor, and counting them as independent would let a vendor manufacture its own
+                    // independent bucket — the most valuable number on the page and the cheapest to fake.
+                    compensated = c.Compensated,
+
                     // ★ Undeclared is its own bucket. Counting it as independence lets the most
                     // interesting bias in the pool hide in a default.
                     undeclared = c.Undeclared,
@@ -984,6 +992,10 @@ public static class NoiseStandardEndpoints
             "independent" => RaterAffiliation.Independent,
             "vendor-employed" => RaterAffiliation.VendorEmployed,
             "vendor-contracted" => RaterAffiliation.VendorContracted,
+
+            // ★★ A rater earning the vendor's product by answering. Compensated in kind rather than in
+            // cash — which changes the accounting and not the incentive.
+            "compensated-in-product" => RaterAffiliation.CompensatedInProduct,
             _ => null,
         };
 

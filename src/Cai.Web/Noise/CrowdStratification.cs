@@ -15,6 +15,20 @@ public enum RaterAffiliation
 
     /// <summary>Paid by that vendor without being employed — a contractor, a sponsored maintainer.</summary>
     VendorContracted,
+
+    /// <summary>
+    /// Earning the vendor's product by answering — a contributor cohort, a free tier granted for a daily
+    /// question.
+    /// </summary>
+    /// <remarks>
+    /// ★★ ITS OWN BUCKET, and the reason this enum has four members rather than three. Someone granted a
+    /// paid tier in exchange for answering is compensated in kind rather than in cash, which changes the
+    /// accounting and not the incentive — so counting them as independent would let a vendor manufacture
+    /// its own independent bucket, the most valuable number on the page and the cheapest to fake. They are
+    /// equally not the vendor's staff, and folding them in there would overstate the conflict as surely as
+    /// ignoring it understates it.
+    /// </remarks>
+    CompensatedInProduct,
 }
 
 /// <summary>What a rater declared about themselves.</summary>
@@ -25,8 +39,12 @@ public sealed record RaterStratum(string RaterId, string PrimaryLanguage, RaterA
 /// ★ Answers from raters who declared nothing. Their own bucket, never folded into Independent: counting
 /// an undeclared affiliation as independence lets the most interesting bias in the pool hide in a default.
 /// </param>
+/// <param name="Compensated">
+/// ★★ Answers from raters earning the vendor's product by giving them. Neither independent nor staff —
+/// see <see cref="RaterAffiliation.CompensatedInProduct"/>.
+/// </param>
 public sealed record CrowdComposition(
-    int Answers, int Independent, int VendorAffiliated, int Undeclared,
+    int Answers, int Independent, int VendorAffiliated, int Compensated, int Undeclared,
     string? LargestLanguage, double? LargestLanguageShare, bool Dominated,
     IReadOnlyDictionary<string, int> ByLanguage);
 
@@ -76,6 +94,7 @@ public static class CrowdStratification
             Independent: declared.Count(s => s?.Affiliation == RaterAffiliation.Independent),
             VendorAffiliated: declared.Count(s =>
                 s?.Affiliation is RaterAffiliation.VendorEmployed or RaterAffiliation.VendorContracted),
+            Compensated: declared.Count(s => s?.Affiliation == RaterAffiliation.CompensatedInProduct),
             Undeclared: declared.Count(s => s is null),
             LargestLanguage: declaredCount > 0 ? largest.Key : null,
             LargestLanguageShare: share,

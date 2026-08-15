@@ -116,6 +116,44 @@ public sealed class CrowdStratificationTests
     }
 
     /// <summary>
+    /// ★★ A RATER PAID IN PRODUCT IS NOT AN INDEPENDENT RATER. A cohort granted a paid tier in exchange
+    /// for answering a daily question is compensated by the vendor — in kind rather than in cash, which
+    /// changes the accounting and not the incentive. Counting them as independent would let a vendor
+    /// manufacture its own independent bucket, which is the most valuable number on the page and the
+    /// cheapest to fake.
+    /// </summary>
+    [Fact]
+    public void STAR_a_rater_compensated_in_product_is_counted_apart_from_the_independent()
+    {
+        var summary = CrowdStratification.Summarise(
+            [Answer("indie"), Answer("contributor", "f2")],
+            [
+                Stratum("indie", RaterAffiliation.Independent),
+                Stratum("contributor", RaterAffiliation.CompensatedInProduct),
+            ]);
+
+        Assert.Equal(1, summary.Independent);
+        Assert.Equal(1, summary.Compensated);
+    }
+
+    /// <summary>
+    /// ★ Compensated is NOT vendor-affiliated either. Someone earning a subscription by answering is not
+    /// on the vendor's staff, and folding the two together would overstate the conflict as surely as
+    /// ignoring it understates it. Three buckets, because there are three situations.
+    /// </summary>
+    [Fact]
+    public void STAR_compensated_is_neither_independent_nor_vendor_staff()
+    {
+        var summary = CrowdStratification.Summarise(
+            [Answer("contributor")],
+            [Stratum("contributor", RaterAffiliation.CompensatedInProduct)]);
+
+        Assert.Equal(0, summary.Independent);
+        Assert.Equal(0, summary.VendorAffiliated);
+        Assert.Equal(1, summary.Compensated);
+    }
+
+    /// <summary>
     /// ★★ Nothing is excluded. Dropping raters by who they are selects on a variable correlated with the
     /// outcome; publishing the composition costs nothing and leaves the reader to discount.
     /// </summary>
