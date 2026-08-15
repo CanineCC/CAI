@@ -257,7 +257,72 @@ public static class NoiseStandardEndpoints
         })
         .AllowAnonymous()
         .WithName("NoiseSubmission");
+
+        // ── The cascade ───────────────────────────────────────────────────────────────────────────
+        //
+        // ★ Published as an endpoint so every participant resolves a disagreement THE SAME WAY. Two
+        // vendors applying different escalation rules would produce numbers that look comparable and are
+        // not — which is the failure a shared method exists to prevent. It is pure: votes in, outcome
+        // out, no model and no state.
+        endpoints.MapPost("/api/noise/cascade/resolve", (CascadeRequest request) =>
+        {
+            if (request?.Round1 is null || request.Round1.Count != 2)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "a round is exactly two independent judges — one is not a cascade, and three "
+                          + "invites a majority that hides a genuine split.",
+                });
+            }
+
+            var round1 = request.Round1.Select(ToVote).ToList();
+            var round2 = (request.Round2 ?? []).Select(ToVote).ToList();
+
+            if (round1.Any(v => v is null) || round2.Any(v => v is null))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "every vote must be one of the six published verdicts",
+                    verdicts = Enum.GetValues<NoiseVerdict>().Select(v => v.Wire()),
+                });
+            }
+
+            var outcome = JudgingCascade.Resolve([.. round1!], [.. round2!]);
+
+            return Results.Ok(new
+            {
+                methodVersion = MethodVersion,
+                state = outcome.State.ToString(),
+                verdict = outcome.Verdict?.Wire(),
+                settledAtRound = outcome.SettledAtRound,
+
+                // ★ Published separately: the judges can agree a finding is valid and split on whether
+                // anyone could act on it. Picking one view would put a figure nobody agreed on into the
+                // actionability axis.
+                actionabilityContested = outcome.ActionabilityContested,
+                actionable = outcome.Actionable,
+
+                reason = outcome.Reason,
+            });
+
+            static JudgeVote? ToVote(CascadeVote v) =>
+                NoiseVerdicts.ParseOrNull(v.Verdict) is { } parsed
+                    ? new JudgeVote(v.Judge ?? "unnamed", parsed)
+                    : null;
+        })
+        .AllowAnonymous()
+        .WithName("NoiseCascadeResolve");
     }
+
+    /// <summary>One judge's vote as it arrives on the wire.</summary>
+    public sealed record CascadeVote(string? Judge, string? Verdict);
+
+    /// <summary>
+    /// The votes to resolve. Round two is absent until round one has actually split — sending both at
+    /// once would mean the second pair had been convened before there was anything to convene them for.
+    /// </summary>
+    public sealed record CascadeRequest(
+        IReadOnlyList<CascadeVote>? Round1, IReadOnlyList<CascadeVote>? Round2);
 
     /// <summary>The receipt as it publishes — what was checked, and what it found.</summary>
     private static object Render(SubmissionReceipt r) => new
