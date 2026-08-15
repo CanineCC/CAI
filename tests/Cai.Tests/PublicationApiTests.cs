@@ -18,10 +18,20 @@ public sealed class PublicationApiTests(RegistryUnconfiguredFixture fx) : IClass
         return (response.StatusCode, JsonDocument.Parse(text).RootElement.Clone());
     }
 
+    /// <remarks>
+    /// ★ Every run here declares why it has no fix-rate anchor. The anchor is REQUIRED with each
+    /// publication — see <see cref="FixRateHeadlineApiTests"/> — and these tests are about the census,
+    /// the actionability split and the detectable difference, so they declare the absence rather than
+    /// carry observations irrelevant to what they check.
+    /// </remarks>
     private static object Run(
         int reported = 100, int adjudicated = 80, int excluded = 5, int unrated = 15,
         int validAndActionable = 30, int validNotActionable = 20, int noise = 30, int clusters = 12) =>
-        new { reported, adjudicated, excluded, unrated, validAndActionable, validNotActionable, noise, clusters };
+        new
+        {
+            reported, adjudicated, excluded, unrated, validAndActionable, validNotActionable, noise, clusters,
+            fixRateUnavailable = "fixture — this test is about the census and the threshold",
+        };
 
     /// <summary>
     /// ★★ A census that does not balance is REFUSED, not published with a note. Findings that fall out of
@@ -59,6 +69,7 @@ public sealed class PublicationApiTests(RegistryUnconfiguredFixture fx) : IClass
             validAndActionable = 900, validNotActionable = 660, noise = 440,
             clusters = 12,
             previousRate = 0.20,
+            fixRateUnavailable = "fixture — this test is about the detectable difference",
         });
 
         Assert.True(body.GetProperty("minimumDetectableDifference").GetDouble() > 0.02);

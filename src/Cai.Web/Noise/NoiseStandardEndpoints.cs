@@ -80,6 +80,13 @@ public static class NoiseStandardEndpoints
             // ★★ And the counterpart is REACHABLE, not merely required in prose. A rule that names an
             // obligation without providing a way to meet it gets skipped by everyone and blamed on nobody.
             recallEndpoint = "/api/noise/pooled",
+
+            // ★★ Required WITH EVERY PUBLICATION, not merely offered. A number nobody is obliged to fetch
+            // does not get fetched: the noise rate has an audience and a marketing use, the fix rate has
+            // neither, so left optional the published claim stays "our tool is quiet" instead of "our tool
+            // is acted upon". Send the observations, or send a reason — the reason publishes too.
+            requiresFixRateAnchor = true,
+            fixRateEndpoint = "/api/noise/fixrate",
             recallMethodNote =
                 "Recall has no ground truth on real repositories, so the reference is POOLED: the union of "
               + "what participating tools reported and a human adjudicated as valid. POST findings from two "
@@ -563,28 +570,80 @@ public static class NoiseStandardEndpoints
                 return Results.BadRequest(new { error = "a run is required" });
             }
 
-            var summary = PublicationSurface.Summarise(
-                request.Reported, request.Adjudicated, request.Excluded, request.Unrated,
-                request.ValidAndActionable, request.ValidNotActionable, request.Noise,
-                request.Clusters);
+            // ★ The census is checked FIRST. Whether the numbers can be trusted at all comes before
+            // whether the publication is complete — told both at once, an operator fixes the easier one.
+            var census = PublicationSurface.CheckCensus(
+                request.Reported, request.Adjudicated, request.Excluded, request.Unrated);
 
-            // ★★ REFUSED, not published with a note. A rate computed over a subset nobody can see is the
-            // easiest dishonest number there is, and the easiest to produce by accident — so the gap is
-            // named and the publication does not happen.
-            if (!summary.Census.Balances)
+            if (!census.Balances)
             {
                 return Results.BadRequest(new
                 {
                     error = "the census does not balance: reported must equal adjudicated + excluded + "
                           + "unrated. A funnel that does not add up has a step nobody is reporting, and "
                           + "the missing findings are exactly the ones a reader would want to see.",
-                    reported = summary.Census.Reported,
-                    adjudicated = summary.Census.Adjudicated,
-                    excluded = summary.Census.Excluded,
-                    unrated = summary.Census.Unrated,
-                    shortfall = summary.Census.Shortfall,
+                    reported = census.Reported,
+                    adjudicated = census.Adjudicated,
+                    excluded = census.Excluded,
+                    unrated = census.Unrated,
+                    shortfall = census.Shortfall,
                 });
             }
+
+            // ★★ THE ANCHOR IS NOT OPTIONAL. It was computable at /api/noise/fixrate from the start, and
+            // that was the problem: a number nobody is obliged to fetch does not get fetched. The noise
+            // rate has an audience and a marketing use; the fix rate has neither, so left optional the
+            // published claim stays "our tool is quiet" rather than "our tool is acted upon".
+            var hasObservations = request.FixRateObservations is { Count: > 0 };
+            var hasReason = !string.IsNullOrWhiteSpace(request.FixRateUnavailable);
+
+            if (!hasObservations && !hasReason)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "a publication carries the fix-rate anchor, or says why it cannot. Every other "
+                          + "number here rests on a judgement; this one rests on commits, and publishing "
+                          + "only the judged half is publishing only the half that opinion can move. Send "
+                          + "fixRateObservations with a fixRateWindowDays, or fixRateUnavailable with a "
+                          + "reason — the reason publishes, so the absence is one a reader can weigh.",
+                });
+            }
+
+            if (hasObservations && request.FixRateWindowDays is not > 0)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "fixRateObservations need a fixRateWindowDays — a fix rate without a period is "
+                          + "unfalsifiable, because over a long enough window nearly all code changes.",
+                });
+            }
+
+            FixRateSummary? anchor = null;
+            if (hasObservations)
+            {
+                List<FixObservation> observations = [];
+                foreach (var o in request.FixRateObservations!)
+                {
+                    if (ParseOutcome(o.Outcome) is not { } outcome)
+                    {
+                        return Results.BadRequest(new
+                        {
+                            error = $"unrecognised fix-rate outcome '{o.Outcome}'",
+                            outcomes = new[] { "cited-location-changed", "unchanged", "file-deleted", "not-observable" },
+                        });
+                    }
+
+                    observations.Add(new FixObservation(
+                        o.FindingId ?? "", o.RepoId ?? "", outcome, NoiseVerdicts.ParseOrNull(o.CrowdVerdict)));
+                }
+
+                anchor = FixRateAnchor.Compute(observations, request.FixRateWindowDays!.Value);
+            }
+
+            var summary = PublicationSurface.Summarise(
+                request.Reported, request.Adjudicated, request.Excluded, request.Unrated,
+                request.ValidAndActionable, request.ValidNotActionable, request.Noise,
+                request.Clusters);
 
             var judged = request.ValidAndActionable + request.ValidNotActionable + request.Noise;
             var rate = judged > 0 ? (double?)request.Noise / judged : null;
@@ -621,6 +680,43 @@ public static class NoiseStandardEndpoints
                 // neither an improvement nor a regression.
                 distinguishableFromPrevious = request.PreviousRate is { } previous && rate is { } current
                     && PublicationSurface.Distinguishable(current, previous, summary.MinimumDetectableDifference),
+
+                // ★★ Beside the judged numbers, not in a side endpoint. It is the only figure here that
+                // no amount of shared bias among raters can move.
+                fixRate = anchor is null
+                    ? new
+                    {
+                        declared = false,
+                        unavailableReason = request.FixRateUnavailable,
+                        windowDays = (int?)null,
+                        observed = (int?)null,
+                        fixedFindings = (int?)null,
+                        rate = (double?)null,
+                        excludedFileDeleted = (int?)null,
+                        unobservable = (int?)null,
+                        calledNoiseThenFixed = Array.Empty<string>(),
+                    }
+                    : new
+                    {
+                        declared = true,
+                        unavailableReason = (string?)null,
+                        windowDays = (int?)anchor.WindowDays,
+                        observed = (int?)anchor.Observed,
+                        fixedFindings = (int?)anchor.Fixed,
+                        rate = anchor.Rate,
+                        excludedFileDeleted = (int?)anchor.ExcludedFileDeleted,
+                        unobservable = (int?)anchor.Unobservable,
+
+                        // ★★ Promoted with it: a finding the crowd called noise that the maintainer then
+                        // fixed is evidence the crowd was wrong, from a source independent of every rater.
+                        // In a side endpoint it is a curiosity; here it is a check on the rate above it.
+                        calledNoiseThenFixed = anchor.CalledNoiseThenFixed.ToArray(),
+                    },
+
+                fixRateNote =
+                    "An anchor, not a complement — never one minus the noise rate. Valid findings go "
+                  + "unfixed for want of time, and worthless ones are 'fixed' by a refactor that touched "
+                  + "the line. Read side by side; a sharp disagreement means one of them is wrong.",
 
                 mddNote =
                     "Findings are not independent observations — they cluster by repository, so power is "
@@ -908,10 +1004,18 @@ public static class NoiseStandardEndpoints
     /// correlated findings as independent observations and understates the detectable difference.
     /// </param>
     /// <param name="PreviousRate">The last published rate, when there is one to compare against.</param>
+    /// <param name="FixRateUnavailable">
+    /// ★ Why the anchor is missing, when it is. A first cycle genuinely has no window yet, and refusing
+    /// that outright would push everyone towards inventing observations — so the reason publishes, and the
+    /// absence becomes one a reader can weigh instead of one they cannot see.
+    /// </param>
     public sealed record PublicationRequest(
         int Reported, int Adjudicated, int Excluded, int Unrated,
         int ValidAndActionable, int ValidNotActionable, int Noise,
-        int Clusters, double? PreviousRate);
+        int Clusters, double? PreviousRate,
+        int? FixRateWindowDays,
+        IReadOnlyList<FixObservationEntry>? FixRateObservations,
+        string? FixRateUnavailable);
 
     /// <summary>One tool's finding and its adjudication, as it arrives on the wire.</summary>
     public sealed record PooledFindingEntry(
