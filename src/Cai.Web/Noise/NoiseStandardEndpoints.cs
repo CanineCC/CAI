@@ -312,7 +312,184 @@ public static class NoiseStandardEndpoints
         })
         .AllowAnonymous()
         .WithName("NoiseCascadeResolve");
+
+        // ── The crowd layer ───────────────────────────────────────────────────────────────────────
+        //
+        // ★★ The only check in the method that comes from OUTSIDE the model family. Four judges agreeing
+        // shows they are consistent; it does not show they are right, and adding judges never converts
+        // one into the other. So a sample of what they AGREED on goes to people too — not only the
+        // contested tail, which is the efficient choice and exactly where the independence is wasted.
+        endpoints.MapPost("/api/noise/crowd/queue", (CrowdQueueRequest request) =>
+        {
+            if (string.IsNullOrWhiteSpace(request?.Period) || request.Candidates is not { Count: > 0 })
+            {
+                return Results.BadRequest(new { error = "a period and at least one candidate are required" });
+            }
+
+            List<CrowdCandidate> candidates = [];
+            foreach (var c in request.Candidates)
+            {
+                if (CrowdQueues.ParseState(c.State) is not { } state)
+                {
+                    return Results.BadRequest(new
+                    {
+                        error = $"unrecognised cascade state '{c.State}' — a candidate CAI cannot place is "
+                              + "rejected, never dropped, because a sample that silently shrank looks "
+                              + "exactly like one drawn correctly.",
+                        states = new[] { "accepted", "needs-round-2", "needs-human" },
+                    });
+                }
+
+                candidates.Add(new CrowdCandidate(c.FindingId ?? "", state, c.OwnerId ?? ""));
+            }
+
+            var queue = CrowdQueue.Build(
+                candidates, request.Seed ?? request.Period, Math.Max(0, request.SpotCheck));
+            CrowdQueues.Register(request.Period, queue);
+
+            // ★ COUNTS, never names. The operator needs to know a sample was drawn; publishing which
+            // findings are in it lets a participant recognise them, and a spot-check you can identify is
+            // a spot-check you can prepare for.
+            return Results.Ok(new
+            {
+                methodVersion = MethodVersion,
+                period = request.Period,
+                queued = queue.Count,
+                contested = queue.Count(i => i.Reason == CrowdReason.Contested),
+                spotCheck = queue.Count(i => i.Reason == CrowdReason.SpotCheck),
+            });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseCrowdQueue");
+
+        // ★ ONE ITEM. The nine-second median in the pilot came from a 500-item list to get through;
+        // there is no slog to race when the ask is a single question.
+        endpoints.MapGet("/api/noise/crowd/next", (string period, string raterId) =>
+        {
+            if (CrowdQueues.Find(period) is not { } round)
+            {
+                return Results.NotFound(new { error = $"no crowd queue is registered for period '{period}'" });
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var answered = round.Answers.Where(a => Same(a.RaterId, raterId)).Select(a => a.FindingId).ToList();
+
+            // ★★ Load-aware, or the queue's head goes to everybody — which is what the live run did,
+            // handing eight raters the same finding while seven others, contested ones included, went
+            // unanswered.
+            if (CrowdQueue.Next(round.Queue, raterId, answered, round.Load(now)) is not { } item)
+            {
+                return Results.NoContent();
+            }
+
+            round.Offered[(raterId, item.FindingId)] = now;
+
+            // ★★ THE FINDING AND NOTHING ELSE. Told four judges already agreed, a reasonable person
+            // reads "probably fine" and rubber-stamps — and the spot-check exists precisely to catch the
+            // case where all four were wrong together. A reason on the wire would destroy the only
+            // evidence it was built to gather, and nothing downstream would ever show that it had.
+            return Results.Ok(new { findingId = item.FindingId });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseCrowdNext");
+
+        endpoints.MapPost("/api/noise/crowd/answers", (CrowdAnswerRequest request) =>
+        {
+            if (string.IsNullOrWhiteSpace(request?.Period) || CrowdQueues.Find(request.Period) is not { } round)
+            {
+                return Results.NotFound(new { error = "no crowd queue is registered for that period" });
+            }
+
+            if (NoiseVerdicts.ParseOrNull(request.Verdict) is not { } verdict)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "an answer must be one of the six published verdicts",
+                    verdicts = Enum.GetValues<NoiseVerdict>().Select(v => v.Wire()),
+                });
+            }
+
+            // ★ An answer to a finding this rater was never handed is REFUSED. Without the check the
+            // queue is only a suggestion, and a participant could answer the whole accepted pool —
+            // including the items they were deliberately not shown, which is what the disguise exists
+            // to prevent.
+            if (!round.Offered.ContainsKey((request.RaterId ?? "", request.FindingId ?? "")))
+            {
+                return Results.Conflict(new
+                {
+                    error = "that finding was never handed to that rater",
+                    findingId = request.FindingId,
+                });
+            }
+
+            round.Answers.Add(new CrowdAnswer(
+                request.FindingId!, request.RaterId!, verdict, NoiseVerdicts.ParseOrNull(request.MachineVerdict)));
+
+            return Results.Ok(new { recorded = true, findingId = request.FindingId });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseCrowdAnswer");
+
+        endpoints.MapGet("/api/noise/crowd/results/{period}", (string period) =>
+        {
+            if (CrowdQueues.Find(period) is not { } round)
+            {
+                return Results.NotFound(new { error = $"no crowd queue is registered for period '{period}'" });
+            }
+
+            var byFinding = round.Queue.ToDictionary(i => i.FindingId, i => i.Reason, StringComparer.OrdinalIgnoreCase);
+
+            // ★★ REPORTED SEPARATELY, never merged. The contested items are hard BY CONSTRUCTION and the
+            // accepted ones are the pipeline's own claim; averaging them hides exactly the disagreement
+            // rate on auto-accepted findings that the layer exists to measure. There is deliberately no
+            // combined figure — one would be quoted.
+            return Results.Ok(new
+            {
+                methodVersion = MethodVersion,
+                period,
+                contested = Slice(CrowdReason.Contested),
+                spotCheck = Slice(CrowdReason.SpotCheck),
+            });
+
+            object Slice(CrowdReason reason)
+            {
+                var queued = round.Queue.Count(i => i.Reason == reason);
+                var answers = round.Answers
+                    .Where(a => byFinding.TryGetValue(a.FindingId, out var r) && r == reason)
+                    .ToList();
+
+                return new
+                {
+                    queued,
+                    answered = answers.Count,
+
+                    // ★ A contradiction is the whole point of the spot-check: four models agreed, and a
+                    // person outside the family says otherwise.
+                    contradicted = answers.Count(a =>
+                        a.MachineVerdict is { } m && a.Verdict.IsNoise() != m.IsNoise()),
+
+                    // ★ Answers with no machine verdict to compare against are counted HERE rather than
+                    // as agreement — otherwise omitting one field hides every disagreement.
+                    notComparable = answers.Count(a => a.MachineVerdict is null),
+                };
+            }
+        })
+        .AllowAnonymous()
+        .WithName("NoiseCrowdResults");
     }
+
+    private static bool Same(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A finding the cascade has finished with, as it arrives on the wire.</summary>
+    public sealed record CrowdCandidateRequest(string? FindingId, string? State, string? OwnerId);
+
+    /// <summary>A period's crowd queue, as a participant registers it.</summary>
+    public sealed record CrowdQueueRequest(
+        string? Period, string? Seed, int SpotCheck, IReadOnlyList<CrowdCandidateRequest>? Candidates);
+
+    /// <summary>One person's answer to one finding.</summary>
+    public sealed record CrowdAnswerRequest(
+        string? Period, string? RaterId, string? FindingId, string? Verdict, string? MachineVerdict);
 
     /// <summary>One judge's vote as it arrives on the wire.</summary>
     public sealed record CascadeVote(string? Judge, string? Verdict);
