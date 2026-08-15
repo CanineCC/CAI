@@ -5,6 +5,7 @@ using Cai.Delivery;
 using Cai.Scoring;
 using Cai.Web;
 using Cai.Web.Components;
+using Cai.Web.Noise;
 using Cai.Web.Registry;
 using FluentValidation;
 using Microsoft.AspNetCore.Antiforgery;
@@ -475,6 +476,12 @@ The standard is free to use. An independent, signed CAI survey — with the dedu
 // ── The registry (ADR-0010) — the identity-gated push/pull/grant surface; /api/registry/keys is its one public
 // endpoint. Everything else is protected by the default-deny fallback policy + the RegistryBearer scheme. ─────────
 app.MapRegistryEndpoints();
+
+// ── The noise-measurement standard — the verdict set an engine implements and the method's own rules.
+// ANONYMOUS on purpose: a standard nobody can read without credentials is not a standard. CAI specifies
+// and verifies here; it never runs anyone's scanner and never owns a verdict, because the standard is
+// owned by a participant and a referee that plays for one team is worth nothing. ────────────────────
+app.MapNoiseStandard();
 
 // The CAI vocabulary as a schema.org DefinedTermSet (JSON-LD) — the citable, machine-readable definition (referenceable pillar).
 app.MapGet("/glossary.jsonld", [AllowAnonymous] () => Results.Text(Cai.Web.CaiGlossary.Build(), "application/ld+json; charset=utf-8"));
