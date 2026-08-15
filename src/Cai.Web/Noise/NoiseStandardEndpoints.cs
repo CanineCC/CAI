@@ -117,5 +117,91 @@ public static class NoiseStandardEndpoints
         }))
         .AllowAnonymous()
         .WithName("NoiseMethod");
+
+        // ── The holdout ───────────────────────────────────────────────────────────────────────────
+        //
+        // ★★ Published WITH ITS SEED AND RULES, so a third party re-derives the draw and confirms it was
+        // not chosen to flatter anybody. A holdout published without them is an assertion, and the whole
+        // standard rests on it being a fact.
+        endpoints.MapGet("/api/noise/holdout/{period}", (string period) =>
+        {
+            if (!NoiseCorpus.Draws.TryGetValue(period, out var draw))
+            {
+                // ★ 404, never an empty draw. An empty holdout reads as "we measured nothing there",
+                // which is a different and false claim from "no draw has been published for that period".
+                return Results.NotFound(new
+                {
+                    period,
+                    error = "no holdout has been published for that period",
+                    published = NoiseCorpus.Draws.Keys.OrderBy(k => k, StringComparer.Ordinal),
+                });
+            }
+
+            var repos = HoldoutSampler.Draw(draw.Seed, NoiseCorpus.Candidates, NoiseCorpus.Rules);
+
+            return Results.Ok(new
+            {
+                period,
+                methodVersion = MethodVersion,
+                samplerVersion = NoiseCorpus.SamplerVersion,
+
+                // Everything needed to re-run the draw, and nothing that could have steered it.
+                seed = draw.Seed,
+                drawnAt = draw.DrawnAt,
+                rules = new
+                {
+                    targetProductionLocPerLanguage = NoiseCorpus.Rules.TargetProductionLocPerLanguage,
+                    maxRepositoryLoc = NoiseCorpus.Rules.MaxRepositoryLoc,
+                    minRepositoriesPerLanguage = NoiseCorpus.Rules.MinRepositoriesPerLanguage,
+                    minRepositoriesPerSlice = NoiseCorpus.Rules.MinRepositoriesPerSlice,
+                },
+                reproduce =
+                    "Rank each candidate by SHA-256(seed + NUL + repoId), ascending, tie-broken by "
+                  + "repoId; per language take in that order until BOTH the LoC target and the "
+                  + "repository floor are met. Candidates above maxRepositoryLoc are excluded first.",
+
+                languages = repos.GroupBy(r => r.Language, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(g => g.Key, StringComparer.Ordinal)
+                    .Select(g => new
+                    {
+                        language = g.Key,
+                        repositories = g.Count(),
+                        productionLoc = g.Sum(r => r.ProductionLoc),
+                    }),
+
+                repositories = repos.Select(r => new
+                {
+                    repoId = r.RepoId,
+                    language = r.Language,
+                    pinnedSha = r.PinnedSha,
+                    productionLoc = r.ProductionLoc,
+                    licence = r.Licence,
+                }),
+            });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseHoldout");
+
+        // ★ The pool publishes too. A third party re-deriving a draw needs the seed AND the candidates
+        // it was drawn from — publishing only the seed proves nothing, because the pool could have been
+        // chosen after the fact.
+        endpoints.MapGet("/api/noise/corpus", () => Results.Ok(new
+        {
+            samplerVersion = NoiseCorpus.SamplerVersion,
+            note = "Public repositories only. Everything a human rater is shown must already be public.",
+            count = NoiseCorpus.Candidates.Count,
+            repositories = NoiseCorpus.Candidates
+                .OrderBy(c => c.RepoId, StringComparer.Ordinal)
+                .Select(c => new
+                {
+                    repoId = c.RepoId,
+                    language = c.Language,
+                    productionLoc = c.ProductionLoc,
+                    licence = c.Licence,
+                    pinnedSha = c.PinnedSha,
+                }),
+        }))
+        .AllowAnonymous()
+        .WithName("NoiseCorpus");
     }
 }

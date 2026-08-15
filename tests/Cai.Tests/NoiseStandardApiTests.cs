@@ -166,4 +166,102 @@ public sealed class NoiseStandardApiTests(RegistryUnconfiguredFixture fx) : ICla
         var json = await GetJsonAsync("/api/noise/method");
         Assert.False(string.IsNullOrWhiteSpace(json.GetProperty("version").GetString()));
     }
+
+    // ── The holdout ───────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ★★ THE PUBLISHED HOLDOUT CARRIES ITS SEED AND ITS RULES, so a third party can re-derive the draw
+    /// and confirm it was not chosen to flatter anybody. A holdout published without them is an
+    /// assertion.
+    /// </summary>
+    [Fact]
+    public async Task STAR_the_holdout_publishes_the_seed_and_rules_that_reproduce_it()
+    {
+        var json = await GetJsonAsync("/api/noise/holdout/2026-09");
+
+        Assert.False(string.IsNullOrWhiteSpace(json.GetProperty("seed").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(json.GetProperty("samplerVersion").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(json.GetProperty("drawnAt").GetString()));
+
+        var rules = json.GetProperty("rules");
+        Assert.True(rules.GetProperty("targetProductionLocPerLanguage").GetInt32() > 0);
+        Assert.True(rules.GetProperty("maxRepositoryLoc").GetInt32() > 0);
+        Assert.True(rules.GetProperty("minRepositoriesPerLanguage").GetInt32() > 0);
+    }
+
+    /// <summary>Every drawn repository is pinned, or "the same code" means nothing across two runs.</summary>
+    [Fact]
+    public async Task Every_drawn_repository_is_pinned_to_a_sha()
+    {
+        var json = await GetJsonAsync("/api/noise/holdout/2026-09");
+
+        var repos = json.GetProperty("repositories").EnumerateArray().ToList();
+        Assert.NotEmpty(repos);
+        foreach (var r in repos)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(r.GetProperty("pinnedSha").GetString()));
+            Assert.False(string.IsNullOrWhiteSpace(r.GetProperty("repoId").GetString()));
+            Assert.False(string.IsNullOrWhiteSpace(r.GetProperty("language").GetString()));
+        }
+    }
+
+    /// <summary>
+    /// ★★ AND IT REPRODUCES. Asking twice returns the same repositories — the property the whole
+    /// standard rests on, checked through the API rather than only in the sampler, because a caller
+    /// verifies against what the endpoint serves.
+    /// </summary>
+    [Fact]
+    public async Task STAR_asking_twice_returns_the_identical_draw()
+    {
+        var a = await GetJsonAsync("/api/noise/holdout/2026-09");
+        var b = await GetJsonAsync("/api/noise/holdout/2026-09");
+
+        static List<string> Ids(JsonElement j) =>
+            [.. j.GetProperty("repositories").EnumerateArray()
+                .Select(r => r.GetProperty("repoId").GetString()!)];
+
+        Assert.Equal(Ids(a), Ids(b));
+        Assert.Equal(a.GetProperty("seed").GetString(), b.GetProperty("seed").GetString());
+    }
+
+    /// <summary>
+    /// ★ Nothing about any scanner's output appears in a published holdout, asserted on the SERIALISED
+    /// document rather than only on the type — a field can be added at the endpoint without touching the
+    /// candidate record.
+    /// </summary>
+    [Fact]
+    public async Task STAR_the_published_holdout_mentions_no_outcome()
+    {
+        using var client = fx.Client();
+        var body = await client.GetStringAsync("/api/noise/holdout/2026-09", Ct);
+
+        foreach (var w in new[] { "noisePct", "findingCount", "verdict", "judged", "score" })
+        {
+            Assert.DoesNotContain(w, body, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>
+    /// A period with no published draw is 404, not an empty holdout. An empty draw reads as "we measured
+    /// nothing there", which is a different and false claim.
+    /// </summary>
+    [Fact]
+    public async Task An_unpublished_period_is_not_found_rather_than_empty()
+    {
+        using var client = fx.Client();
+        var response = await client.GetAsync("/api/noise/holdout/1999-01", Ct);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    /// <summary>The corpus the draw is made from publishes too — a pool nobody can see is not auditable.</summary>
+    [Fact]
+    public async Task The_candidate_corpus_publishes_so_the_draw_can_be_re_run()
+    {
+        var json = await GetJsonAsync("/api/noise/corpus");
+
+        var repos = json.GetProperty("repositories").EnumerateArray().ToList();
+        Assert.NotEmpty(repos);
+        Assert.True(json.GetProperty("count").GetInt32() == repos.Count);
+    }
 }
