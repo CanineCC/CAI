@@ -554,6 +554,84 @@ public static class NoiseStandardEndpoints
         .AllowAnonymous()
         .WithName("NoiseCrowdRaters");
 
+        // ★★ What has to travel with a rate for the rate to mean anything: the funnel it was computed
+        // over, the actionability split, and the difference this sample could actually detect.
+        endpoints.MapPost("/api/noise/publication", (PublicationRequest request) =>
+        {
+            if (request is null)
+            {
+                return Results.BadRequest(new { error = "a run is required" });
+            }
+
+            var summary = PublicationSurface.Summarise(
+                request.Reported, request.Adjudicated, request.Excluded, request.Unrated,
+                request.ValidAndActionable, request.ValidNotActionable, request.Noise,
+                request.Clusters);
+
+            // ★★ REFUSED, not published with a note. A rate computed over a subset nobody can see is the
+            // easiest dishonest number there is, and the easiest to produce by accident — so the gap is
+            // named and the publication does not happen.
+            if (!summary.Census.Balances)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "the census does not balance: reported must equal adjudicated + excluded + "
+                          + "unrated. A funnel that does not add up has a step nobody is reporting, and "
+                          + "the missing findings are exactly the ones a reader would want to see.",
+                    reported = summary.Census.Reported,
+                    adjudicated = summary.Census.Adjudicated,
+                    excluded = summary.Census.Excluded,
+                    unrated = summary.Census.Unrated,
+                    shortfall = summary.Census.Shortfall,
+                });
+            }
+
+            var judged = request.ValidAndActionable + request.ValidNotActionable + request.Noise;
+            var rate = judged > 0 ? (double?)request.Noise / judged : null;
+
+            return Results.Ok(new
+            {
+                methodVersion = MethodVersion,
+
+                census = new
+                {
+                    reported = summary.Census.Reported,
+                    adjudicated = summary.Census.Adjudicated,
+                    excluded = summary.Census.Excluded,
+                    unrated = summary.Census.Unrated,
+                    balances = summary.Census.Balances,
+                },
+
+                // ★ Published as counts as well as a rate. The absolutes are what expose suppression; the
+                // ratio alone hides it.
+                validAndActionable = summary.ValidAndActionable,
+                validNotActionable = summary.ValidNotActionable,
+                noise = summary.Noise,
+                noiseRate = rate,
+
+                // ★★ Over VALID findings only. Divided by everything reported it would mix precision in,
+                // and a tool could improve its actionability by producing more noise.
+                actionabilityRate = summary.ActionabilityRate,
+
+                clusters = summary.Clusters,
+                intraClusterCorrelation = PublicationSurface.DefaultIntraClusterCorrelation,
+                minimumDetectableDifference = summary.MinimumDetectableDifference,
+
+                // ★★ And the threshold is APPLIED, not merely published: a move smaller than it is
+                // neither an improvement nor a regression.
+                distinguishableFromPrevious = request.PreviousRate is { } previous && rate is { } current
+                    && PublicationSurface.Distinguishable(current, previous, summary.MinimumDetectableDifference),
+
+                mddNote =
+                    "Findings are not independent observations — they cluster by repository, so power is "
+                  + "computed from the repository count with a design effect, not from the finding count. "
+                  + "Treating 2,000 correlated findings as 2,000 observations is how a two-point move gets "
+                  + "published as progress when it is a statement about which repositories were drawn.",
+            });
+        })
+        .AllowAnonymous()
+        .WithName("NoisePublication");
+
         // ★★ THE COUNTERWEIGHT TO THE NOISE RATE. Precision alone rewards under-firing: a tool reporting
         // one finding it is certain about scores a perfect 0%, and a tool reporting everything worth
         // knowing scores worse. There is no ground truth on real repositories, so the reference is the
@@ -821,6 +899,19 @@ public static class NoiseStandardEndpoints
         "not-observable" => FixOutcome.NotObservable,
         _ => null,
     };
+
+    /// <summary>
+    /// A run being published.
+    /// </summary>
+    /// <param name="Clusters">
+    /// ★★ Repositories, not findings. Required, because computing power from the finding count treats
+    /// correlated findings as independent observations and understates the detectable difference.
+    /// </param>
+    /// <param name="PreviousRate">The last published rate, when there is one to compare against.</param>
+    public sealed record PublicationRequest(
+        int Reported, int Adjudicated, int Excluded, int Unrated,
+        int ValidAndActionable, int ValidNotActionable, int Noise,
+        int Clusters, double? PreviousRate);
 
     /// <summary>One tool's finding and its adjudication, as it arrives on the wire.</summary>
     public sealed record PooledFindingEntry(
