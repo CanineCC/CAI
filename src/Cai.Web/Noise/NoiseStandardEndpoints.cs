@@ -374,10 +374,18 @@ public static class NoiseStandardEndpoints
             var now = DateTimeOffset.UtcNow;
             var answered = round.Answers.Where(a => Same(a.RaterId, raterId)).Select(a => a.FindingId).ToList();
 
+            // ★★ Dosed, or calibration is unreachable. The live round left both raters below the minimum
+            // sample because honeypots came up only by chance; among hundreds of findings a person
+            // answering one question a day would never be calibrated at all.
+            var honeypotsAnswered = answered.Count(round.Honeypots.ContainsKey);
+            var due = HoneypotDosing.IsDue(raterId, answered.Count, honeypotsAnswered);
+
             // ★★ Load-aware, or the queue's head goes to everybody — which is what the live run did,
             // handing eight raters the same finding while seven others, contested ones included, went
             // unanswered.
-            if (CrowdQueue.Next(round.Queue, raterId, answered, round.Load(now)) is not { } item)
+            if (CrowdQueue.Next(
+                    round.Queue, raterId, answered, round.Load(now),
+                    honeypots: [.. round.Honeypots.Keys], preferHoneypot: due) is not { } item)
             {
                 return Results.NoContent();
             }
@@ -430,6 +438,118 @@ public static class NoiseStandardEndpoints
         .AllowAnonymous()
         .WithName("NoiseCrowdAnswer");
 
+        // ★★ Calibration against findings that were settled OUTSIDE the rating process. The obvious
+        // construction — score raters against what the crowd agreed — measures conformity and calls it
+        // accuracy: highest for repeating the majority, lowest for catching what everyone missed. So a
+        // honeypot's truth must be a fact about the world that would hold if nobody had rated anything.
+        endpoints.MapPost("/api/noise/crowd/honeypots", (HoneypotRequest request) =>
+        {
+            if (string.IsNullOrWhiteSpace(request?.Period) || CrowdQueues.Find(request.Period) is not { } round)
+            {
+                return Results.NotFound(new { error = "no crowd queue is registered for that period" });
+            }
+
+            if (request.Honeypots is not { Count: > 0 })
+            {
+                return Results.BadRequest(new { error = "at least one honeypot is required" });
+            }
+
+            List<Honeypot> planted = [];
+            foreach (var h in request.Honeypots)
+            {
+                if (RaterCalibration.ParseSource(h.Source) is not { } source)
+                {
+                    return Results.BadRequest(new
+                    {
+                        error = $"'{h.Source}' is not an earned source. A honeypot's answer must be settled "
+                              + "outside the rating process — scoring raters against what the crowd agreed "
+                              + "measures conformity, not accuracy, and rewards repeating the majority.",
+                        sources = new[] { "upstream-fix-merged", "vendor-withdrew", "advisory-retracted" },
+                    });
+                }
+
+                if (NoiseVerdicts.ParseOrNull(h.Truth) is not { } truth)
+                {
+                    return Results.BadRequest(new
+                    {
+                        error = "a honeypot's truth must be one of the six published verdicts",
+                        verdicts = Enum.GetValues<NoiseVerdict>().Select(v => v.Wire()),
+                    });
+                }
+
+                var honeypot = new Honeypot(h.FindingId ?? "", truth, source, h.Evidence);
+                if (!RaterCalibration.IsWellFormed(honeypot))
+                {
+                    return Results.BadRequest(new
+                    {
+                        error = "evidence must be a link a third party can open — \"we checked\" is the "
+                              + "same claim the honeypot exists to be independent of.",
+                        findingId = h.FindingId,
+                    });
+                }
+
+                // ★ Planted into the EXISTING queue. A honeypot that is not already a question somebody
+                // could be asked is a separate exam, and a separate exam is one a rater can recognise.
+                if (!round.Queue.Any(i => string.Equals(i.FindingId, honeypot.FindingId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return Results.Conflict(new
+                    {
+                        error = "that finding is not in this period's queue",
+                        findingId = honeypot.FindingId,
+                    });
+                }
+
+                planted.Add(honeypot);
+            }
+
+            foreach (var honeypot in planted)
+            {
+                round.Honeypots[honeypot.FindingId] = honeypot;
+            }
+
+            return Results.Ok(new { period = request.Period, planted = planted.Count });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseCrowdHoneypots");
+
+        endpoints.MapGet("/api/noise/crowd/calibration/{period}", (string period) =>
+        {
+            if (CrowdQueues.Find(period) is not { } round)
+            {
+                return Results.NotFound(new { error = $"no crowd queue is registered for period '{period}'" });
+            }
+
+            var scores = RaterCalibration.Score([.. round.Answers], [.. round.Honeypots.Values]);
+
+            return Results.Ok(new
+            {
+                methodVersion = MethodVersion,
+                period,
+                minimumSample = RaterCalibration.MinimumSample,
+                planted = round.Honeypots.Count,
+
+                // ★ The COUNT travels with the figure. A reader who wants to discount four-of-five can; a
+                // reader shown only "80%" cannot. Uncalibrated raters are listed too — leaving them out
+                // would make the published list look like the whole crowd.
+                raters = scores.Select(s => new
+                {
+                    raterId = s.RaterId,
+                    answered = s.Answered,
+                    agreed = s.Agreed,
+                    accuracy = s.Accuracy,
+                    calibrated = s.Calibrated,
+                }),
+
+                // ★★ Stated on the surface itself, because the temptation is specific and strong: a poor
+                // score never removes that rater's answers. Dropping them selects on the outcome and
+                // leaves the subset that agreed — a cleaner number that means less.
+                note = "scores are published, never applied. No answer is dropped for a poor score: "
+                     + "excluding raters by the variable being measured is selection on the outcome.",
+            });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseCrowdCalibration");
+
         endpoints.MapGet("/api/noise/crowd/results/{period}", (string period) =>
         {
             if (CrowdQueues.Find(period) is not { } round)
@@ -438,6 +558,11 @@ public static class NoiseStandardEndpoints
             }
 
             var byFinding = round.Queue.ToDictionary(i => i.FindingId, i => i.Reason, StringComparer.OrdinalIgnoreCase);
+
+            // ★★ Honeypot answers leave the measurement they calibrate. Their answer was known before it
+            // was asked, so counting them would measure the mixture of honeypots that happened to be
+            // planted rather than anything about the tool.
+            var measured = RaterCalibration.ExcludeHoneypots([.. round.Answers], [.. round.Honeypots.Values]);
 
             // ★★ REPORTED SEPARATELY, never merged. The contested items are hard BY CONSTRUCTION and the
             // accepted ones are the pipeline's own claim; averaging them hides exactly the disagreement
@@ -449,12 +574,22 @@ public static class NoiseStandardEndpoints
                 period,
                 contested = Slice(CrowdReason.Contested),
                 spotCheck = Slice(CrowdReason.SpotCheck),
+
+                // ★ Its own slice, so the calibration work is visible rather than invisible. A round that
+                // spent a third of its questions on honeypots and one that spent none look identical from
+                // the measured slices alone.
+                honeypots = new
+                {
+                    planted = round.Honeypots.Count,
+                    answered = round.Answers.Count(a => round.Honeypots.ContainsKey(a.FindingId)),
+                },
             });
 
             object Slice(CrowdReason reason)
             {
-                var queued = round.Queue.Count(i => i.Reason == reason);
-                var answers = round.Answers
+                var queued = round.Queue.Count(i =>
+                    i.Reason == reason && !round.Honeypots.ContainsKey(i.FindingId));
+                var answers = measured
                     .Where(a => byFinding.TryGetValue(a.FindingId, out var r) && r == reason)
                     .ToList();
 
@@ -486,6 +621,12 @@ public static class NoiseStandardEndpoints
     /// <summary>A period's crowd queue, as a participant registers it.</summary>
     public sealed record CrowdQueueRequest(
         string? Period, string? Seed, int SpotCheck, IReadOnlyList<CrowdCandidateRequest>? Candidates);
+
+    /// <summary>A honeypot as it arrives on the wire.</summary>
+    public sealed record HoneypotEntry(string? FindingId, string? Truth, string? Source, string? Evidence);
+
+    /// <summary>Honeypots to plant into a period's queue.</summary>
+    public sealed record HoneypotRequest(string? Period, IReadOnlyList<HoneypotEntry>? Honeypots);
 
     /// <summary>One person's answer to one finding.</summary>
     public sealed record CrowdAnswerRequest(

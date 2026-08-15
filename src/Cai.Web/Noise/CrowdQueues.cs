@@ -23,6 +23,15 @@ public sealed class CrowdRound
     public ConcurrentBag<CrowdAnswer> Answers { get; } = [];
 
     /// <summary>
+    /// Findings in this queue whose answer is already settled by evidence outside the rating process.
+    /// </summary>
+    /// <remarks>
+    /// ★ Planted INTO the ordinary queue, never alongside it. A calibration item a rater can recognise
+    /// measures how carefully someone answers while being watched, which is not the quantity anyone wants.
+    /// </remarks>
+    public ConcurrentDictionary<string, Honeypot> Honeypots { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// How long a hand-out holds a place before the finding returns to circulation.
     /// </summary>
     /// <remarks>

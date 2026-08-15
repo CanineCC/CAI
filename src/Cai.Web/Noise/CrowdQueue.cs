@@ -120,20 +120,41 @@ public static class CrowdQueue
     /// is what keeps two simultaneous raters apart; abandoned ones are released by the caller's lease, or
     /// the item would be held out of circulation by someone who simply closed the tab.
     /// </param>
+    /// <param name="honeypots">
+    /// ★★ Findings whose answer is already settled. EXEMPT from the per-item cap: capped like a real
+    /// finding, six planted honeypots would supply eighteen answers in total and could calibrate three
+    /// people ever — whereas every rater needs their own five, and a honeypot's answer being known
+    /// already means extra answers cost the measurement nothing.
+    /// </param>
+    /// <param name="preferHoneypot">
+    /// Whether this rater is due one (see <see cref="HoneypotDosing"/>). A preference, never a promise:
+    /// when none is left to give, the rater gets an ordinary question rather than nothing.
+    /// </param>
     public static CrowdItemView? Next(
         IReadOnlyList<CrowdQueueItem> queue,
         string raterId,
         IReadOnlyCollection<string> answered,
         IReadOnlyDictionary<string, int>? load = null,
-        int answersPerItem = AnswersPerItem)
+        int answersPerItem = AnswersPerItem,
+        IReadOnlyCollection<string>? honeypots = null,
+        bool preferHoneypot = false)
     {
         ArgumentNullException.ThrowIfNull(answered);
 
         var seen = answered.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var next = For(queue, raterId)
+        var planted = (honeypots ?? []).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var eligible = For(queue, raterId)
             .Where(i => !seen.Contains(i.FindingId))
-            .Where(i => Load(i.FindingId) < answersPerItem)
-            .OrderBy(i => Load(i.FindingId))
+            .Where(i => planted.Contains(i.FindingId) || Load(i.FindingId) < answersPerItem)
+            .ToList();
+
+        var next = eligible
+            // ★ The dose first when one is due, then breadth-first over what is left. Ties break on a
+            // rank derived from the RATER, so two people arriving at once are sent to different findings
+            // with no coordination between them.
+            .OrderByDescending(i => preferHoneypot && planted.Contains(i.FindingId))
+            .ThenBy(i => planted.Contains(i.FindingId) ? 0 : Load(i.FindingId))
             .ThenBy(i => HoldoutSampler.Rank(raterId, i.FindingId), StringComparer.Ordinal)
             .FirstOrDefault();
 
