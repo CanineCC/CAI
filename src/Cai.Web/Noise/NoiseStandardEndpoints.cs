@@ -203,5 +203,96 @@ public static class NoiseStandardEndpoints
         }))
         .AllowAnonymous()
         .WithName("NoiseCorpus");
+
+        // ── Submissions ───────────────────────────────────────────────────────────────────────────
+        //
+        // ★ CAI never runs anyone's scanner. A vendor runs their own tool against the published holdout,
+        // on their own infrastructure, and submits findings — so CAI needs no credentials, no access and
+        // no licence to anybody's product. What it does is VERIFY the run covered the holdout that was
+        // published, at the shas that were published.
+        endpoints.MapPost("/api/noise/submissions", (NoiseSubmission submission) =>
+        {
+            if (submission is null || string.IsNullOrWhiteSpace(submission.Period))
+            {
+                return Results.BadRequest(new { error = "a submission names the period it answers" });
+            }
+
+            if (!NoiseCorpus.Draws.TryGetValue(submission.Period, out var draw))
+            {
+                return Results.NotFound(new
+                {
+                    submission.Period,
+                    error = "no holdout has been published for that period",
+                });
+            }
+
+            // ★★ NO WITHDRAWAL, and therefore no quiet re-run. Otherwise a vendor runs, dislikes the
+            // result and submits again, and the published set silently becomes "the results people were
+            // happy with" — which is the whole failure the rule exists to prevent.
+            if (NoiseSubmissions.AlreadySubmitted(submission.Tool, submission.Period))
+            {
+                return Results.Conflict(new
+                {
+                    submission.Tool,
+                    submission.Period,
+                    error = "this tool has already submitted for this period, and a submission cannot be "
+                          + "withdrawn or replaced. Register intent before the next draw instead.",
+                });
+            }
+
+            var holdout = HoldoutSampler.Draw(draw.Seed, NoiseCorpus.Candidates, NoiseCorpus.Rules);
+            var receipt = NoiseSubmissions.Accept(submission, holdout, DateTimeOffset.UtcNow);
+
+            return Results.Ok(Render(receipt));
+        })
+        .AllowAnonymous()
+        .WithName("NoiseSubmit");
+
+        endpoints.MapGet("/api/noise/submissions/{submissionId}", (string submissionId) =>
+        {
+            var receipt = NoiseSubmissions.Find(submissionId);
+            return receipt is null
+                ? Results.NotFound(new { submissionId, error = "no such submission" })
+                : Results.Ok(Render(receipt));
+        })
+        .AllowAnonymous()
+        .WithName("NoiseSubmission");
     }
+
+    /// <summary>The receipt as it publishes — what was checked, and what it found.</summary>
+    private static object Render(SubmissionReceipt r) => new
+    {
+        submissionId = r.SubmissionId,
+        period = r.Period,
+        tool = r.Tool,
+        toolVersion = r.ToolVersion,
+        receivedAt = r.ReceivedAt,
+        methodVersion = MethodVersion,
+        samplerVersion = NoiseCorpus.SamplerVersion,
+        accepted = r.Accepted,
+
+        // ★★ "Accepted" must not be readable as "complete". A run covering two of twelve repositories
+        // is well-formed and is accepted — refusing it outright would push a vendor whose tool genuinely
+        // lacks a language into not participating at all. But a receipt saying only accepted:true can be
+        // quoted as a clean bill by somebody who scanned a sixth of the holdout, so completeness is its
+        // own flag and partial coverage says so in words.
+        complete = r.Accepted && r.Uncovered.Count == 0,
+        completenessNote = r.Uncovered.Count == 0
+            ? "full coverage: every drawn repository appears in this run."
+            : $"PARTIAL coverage: {r.CoveredRepositories} of {r.HoldoutRepositories} drawn repositories "
+              + "appear in this run. A rate computed over a subset is not comparable with one computed "
+              + "over the whole holdout.",
+
+        problems = r.Problems,
+
+        // ★ Coverage publishes whether or not it is complete — "zero uncovered" is a stated fact rather
+        // than the absence of a complaint, and partial coverage is the most obvious route to a
+        // flattering number.
+        coverage = new
+        {
+            holdoutRepositories = r.HoldoutRepositories,
+            coveredRepositories = r.CoveredRepositories,
+            uncovered = r.Uncovered,
+        },
+    };
 }
