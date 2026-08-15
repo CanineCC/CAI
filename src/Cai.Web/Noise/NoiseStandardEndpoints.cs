@@ -512,6 +512,104 @@ public static class NoiseStandardEndpoints
         .AllowAnonymous()
         .WithName("NoiseCrowdHoneypots");
 
+        // ★★ Who answered. Agreement statistics are blind to shared bias: ten raters who all work in one
+        // language, or all work for the vendor, agree at a rate that reads as reliability and is nothing
+        // of the kind. κ measures whether raters agree, never whether what they agree on is true.
+        endpoints.MapPost("/api/noise/crowd/raters", (RaterDeclarationRequest request) =>
+        {
+            if (string.IsNullOrWhiteSpace(request?.Period) || CrowdQueues.Find(request.Period) is not { } round)
+            {
+                return Results.NotFound(new { error = "no crowd queue is registered for that period" });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.RaterId) || string.IsNullOrWhiteSpace(request.PrimaryLanguage))
+            {
+                return Results.BadRequest(new { error = "a raterId and a primaryLanguage are required" });
+            }
+
+            if (ParseAffiliation(request.Affiliation) is not { } affiliation)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "an affiliation is required, and 'unknown' is not one of them — a vendor "
+                          + "rating its own tool's findings is the conflict this standard exists to "
+                          + "remove, and it cannot be declared by omission.",
+                    affiliations = new[] { "independent", "vendor-employed", "vendor-contracted" },
+                });
+            }
+
+            round.Strata[request.RaterId] = new RaterStratum(request.RaterId, request.PrimaryLanguage, affiliation);
+
+            return Results.Ok(new { period = request.Period, raterId = request.RaterId });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseCrowdRaters");
+
+        // ★★ The anchor that needs nobody's opinion. Every other number here rests on a judgement; this
+        // one rests on commits, and no amount of shared bias among raters can move it.
+        endpoints.MapPost("/api/noise/fixrate", (FixRateRequest request) =>
+        {
+            if (request?.Observations is not { Count: > 0 })
+            {
+                return Results.BadRequest(new { error = "at least one observation is required" });
+            }
+
+            if (request.WindowDays is not > 0)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "a window in days is required — \"60% of findings get fixed\" without a period "
+                          + "is unfalsifiable, because over a long enough window nearly all code changes "
+                          + "and the number converges on the churn rate.",
+                });
+            }
+
+            List<FixObservation> observations = [];
+            foreach (var o in request.Observations)
+            {
+                if (ParseOutcome(o.Outcome) is not { } outcome)
+                {
+                    return Results.BadRequest(new
+                    {
+                        error = $"unrecognised outcome '{o.Outcome}'",
+                        outcomes = new[] { "cited-location-changed", "unchanged", "file-deleted", "not-observable" },
+                    });
+                }
+
+                observations.Add(new FixObservation(
+                    o.FindingId ?? "", o.RepoId ?? "", outcome, NoiseVerdicts.ParseOrNull(o.CrowdVerdict)));
+            }
+
+            var summary = FixRateAnchor.Compute(observations, request.WindowDays.Value);
+
+            return Results.Ok(new
+            {
+                methodVersion = MethodVersion,
+                windowDays = summary.WindowDays,
+                observed = summary.Observed,
+                fixedFindings = summary.Fixed,
+                rate = summary.Rate,
+                minimumObservations = FixRateAnchor.MinimumObservations,
+
+                // ★ Both exclusions are published. A deleted file is not a fix — counting it hands a
+                // flattering rate to any repository mid-refactor — and a vanished repository is
+                // unobservable rather than unfixed.
+                excludedFileDeleted = summary.ExcludedFileDeleted,
+                unobservable = summary.Unobservable,
+
+                // ★★ The contradiction is the point: a finding the crowd called noise that the maintainer
+                // then fixed is evidence the crowd was wrong, from a source independent of every rater.
+                // Each is a candidate honeypot — an upstream fix is exactly the earned source they need.
+                calledNoiseThenFixed = summary.CalledNoiseThenFixed,
+
+                note = "an anchor, not a complement. The fix rate is not one minus the noise rate: valid "
+                     + "findings go unfixed for want of time, and worthless ones are 'fixed' by a refactor "
+                     + "that touched the line. Read them side by side; a sharp disagreement means one is wrong.",
+            });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseFixRate");
+
         endpoints.MapGet("/api/noise/crowd/calibration/{period}", (string period) =>
         {
             if (CrowdQueues.Find(period) is not { } round)
@@ -583,7 +681,31 @@ public static class NoiseStandardEndpoints
                     planted = round.Honeypots.Count,
                     answered = round.Answers.Count(a => round.Honeypots.ContainsKey(a.FindingId)),
                 },
+
+                // ★★ Published beside the figures, never as a footnote elsewhere. A reader who cannot see
+                // that four fifths of the answers came from one language, or from the vendor, is reading
+                // an agreement rate as if it measured truth.
+                composition = Composition(),
             });
+
+            object Composition()
+            {
+                var c = CrowdStratification.Summarise([.. measured], [.. round.Strata.Values]);
+                return new
+                {
+                    answers = c.Answers,
+                    independent = c.Independent,
+                    vendorAffiliated = c.VendorAffiliated,
+
+                    // ★ Undeclared is its own bucket. Counting it as independence lets the most
+                    // interesting bias in the pool hide in a default.
+                    undeclared = c.Undeclared,
+                    largestLanguage = c.LargestLanguage,
+                    largestLanguageShare = c.LargestLanguageShare,
+                    dominated = c.Dominated,
+                    byLanguage = c.ByLanguage,
+                };
+            }
 
             object Slice(CrowdReason reason)
             {
@@ -614,6 +736,43 @@ public static class NoiseStandardEndpoints
     }
 
     private static bool Same(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Parse an affiliation, or null when it is not one of the three.
+    /// </summary>
+    /// <remarks>
+    /// ★ There is deliberately no "unknown" to declare. Undeclared is a state the store can be IN — a
+    /// rater who never said — but not a claim anyone may make, or the conflict of interest becomes
+    /// something a vendor can assert its way out of.
+    /// </remarks>
+    private static RaterAffiliation? ParseAffiliation(string? affiliation) =>
+        affiliation?.Trim().ToLowerInvariant() switch
+        {
+            "independent" => RaterAffiliation.Independent,
+            "vendor-employed" => RaterAffiliation.VendorEmployed,
+            "vendor-contracted" => RaterAffiliation.VendorContracted,
+            _ => null,
+        };
+
+    private static FixOutcome? ParseOutcome(string? outcome) => outcome?.Trim().ToLowerInvariant() switch
+    {
+        "cited-location-changed" => FixOutcome.CitedLocationChanged,
+        "unchanged" => FixOutcome.Unchanged,
+        "file-deleted" => FixOutcome.FileDeleted,
+        "not-observable" => FixOutcome.NotObservable,
+        _ => null,
+    };
+
+    /// <summary>What a rater declares about themselves, as it arrives on the wire.</summary>
+    public sealed record RaterDeclarationRequest(
+        string? Period, string? RaterId, string? PrimaryLanguage, string? Affiliation);
+
+    /// <summary>One finding's fate in the repository, as the history reports it.</summary>
+    public sealed record FixObservationEntry(
+        string? FindingId, string? RepoId, string? Outcome, string? CrowdVerdict);
+
+    /// <summary>A fix-rate calculation over a declared window.</summary>
+    public sealed record FixRateRequest(int? WindowDays, IReadOnlyList<FixObservationEntry>? Observations);
 
     /// <summary>A finding the cascade has finished with, as it arrives on the wire.</summary>
     public sealed record CrowdCandidateRequest(string? FindingId, string? State, string? OwnerId);

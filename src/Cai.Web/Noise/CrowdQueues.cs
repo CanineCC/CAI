@@ -31,6 +31,9 @@ public sealed class CrowdRound
     /// </remarks>
     public ConcurrentDictionary<string, Honeypot> Honeypots { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>What raters declared about themselves — see <see cref="CrowdStratification"/>.</summary>
+    public ConcurrentDictionary<string, RaterStratum> Strata { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// How long a hand-out holds a place before the finding returns to circulation.
     /// </summary>
