@@ -10,7 +10,7 @@ the decisions behind it are recorded as [ADRs](adr/README.md).
 C4Context
     title CAI — system context
     Person(consumer, "Developer / Agent", "Reads the standard, scores or verifies an evidence bundle")
-    System(cai, "cai.canine.dev", "The open standard: rubric API + UI + reference scorer")
+    System(cai, "codeassuranceindex.info", "The open standard: rubric API + UI + reference scorer")
     System_Ext(surveyor, "watchdog.canine.dev", "Independent surveyor — signed surveys & advisory deductions (paid)")
     Rel(consumer, cai, "Reads spec; POSTs evidence to /api/score, /api/verify")
     Rel(cai, surveyor, "Fetches PUBLIC aggregate scan stats (best-effort, server-side)")
@@ -58,7 +58,7 @@ flowchart TD
 - **`Cai.Web`** — a Blazor static-SSR site that documents the standard and a minimal HTTP API
   (`/api/rubrics`, `/api/score`, `/api/verify`) plus `/llms.txt` and a JSON-LD glossary. The public
   API is rate-limited; `/score` and `/verify` validate inbound evidence before folding.
-- **`rubrics/`** — the versioned, frozen rubric catalogs cai.canine.dev owns
+- **`rubrics/`** — the versioned, frozen rubric catalogs codeassuranceindex.info owns
   ([ADR-0004](adr/0004-versioned-frozen-rubrics.md)).
 
 ## Repository layout

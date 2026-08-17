@@ -1,6 +1,6 @@
 # Cai.Web
 
-The cai.canine.dev site: the public face of the CAI standard. A Blazor static-SSR app that documents
+The codeassuranceindex.info site: the public face of the CAI standard. A Blazor static-SSR app that documents
 the standard and exposes the rubric + scoring **JSON API**.
 
 ## What it serves
@@ -32,5 +32,5 @@ the standard and exposes the rubric + scoring **JSON API**.
 dotnet run --project src/Cai.Web
 ```
 
-Deployed to cai.canine.dev by [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml);
+Deployed to codeassuranceindex.info by [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml);
 see [docs/architecture.md](../../docs/architecture.md) and the [ADRs](../../docs/adr/README.md).

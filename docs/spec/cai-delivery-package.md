@@ -3,7 +3,7 @@
 - Version: **1.0** (format MAJOR 1)
 - Status: Draft (closed-loop: Watchdog producer ↔ cai registry ↔ Assay consumer)
 - JSON Schema: [`schemas/cai-delivery-1.0.schema.json`](../../schemas/cai-delivery-1.0.schema.json)
-  (`$id`: `https://cai.canine.dev/schemas/cai-delivery-1.0.schema.json`)
+  (`$id`: `https://codeassuranceindex.info/schemas/cai-delivery-1.0.schema.json`)
 - Reference implementation: [`src/Cai.Delivery`](../../src/Cai.Delivery) · sample: [`examples/cai-delivery.sample.json`](../../examples/cai-delivery.sample.json)
 - See also: [ADR-0010](../adr/0010-signed-cai-delivery-package-and-registry.md) (decision + trust model),
   [registry design](cai-registry.md) (push / pull / grants).
@@ -130,7 +130,7 @@ five: `cai verify-delivery <package.json> --keys <keys.json>`.
 
 ### What the signature does and does not attest
 
-It attests: *"cai.canine.dev folded this evidence under this rubric to this CAI, for this subject, as submitted by this
+It attests: *"codeassuranceindex.info folded this evidence under this rubric to this CAI, for this subject, as submitted by this
 producer, at this time."* It does **not** attest that the evidence is a truthful measurement of the real repository —
 that is the producer's claim. Closed-loop, the producer is the trusted Watchdog surveyor; proving a *3rd-party*
 producer's evidence honestly reflects its code is the deferred conformance regime.
@@ -172,7 +172,7 @@ frozen-forever discipline as rubric versions ([ADR-0004](../adr/0004-versioned-f
 
 ```
 $ cai verify-delivery examples/cai-delivery.sample.json --keys examples/cai-delivery.keys.json
-✓ signature verified — signed by cai.canine.dev (key cai-ed25519-2026-07), Ed25519
+✓ signature verified — signed by codeassuranceindex.info (key cai-ed25519-2026-07), Ed25519
   subject   acme/checkout-api @ 3f9a1c2
   verdict   CAI 70.3 (Strong)  ·  rubric rubric-2026.08.15  ·  issued 2026-07-01T10:32:04Z
 ✓ headline reproduces from embedded evidence (70.3 = claimed 70.3)

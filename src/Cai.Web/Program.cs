@@ -34,7 +34,7 @@ builder.Services.AddHttpClient("watchdog").AddStandardResilienceHandler(o =>
     o.Retry.MaxRetryAttempts = 2;
 });
 
-// cai.canine.dev OWNS the rubric catalogs (the versioned, archived standard). Resolve their root from config, else the
+// codeassuranceindex.info OWNS the rubric catalogs (the versioned, archived standard). Resolve their root from config, else the
 // repo's /rubrics dir relative to the app — so it runs from a clone with no extra setup.
 var rubricsRoot = builder.Configuration["Rubrics:Root"]
     ?? Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "..", "rubrics"));
@@ -84,7 +84,7 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy(RegistryClaims.ProducerPolicy, p => p.RequireRole(RegistryClaims.ProducerRole));
 
 // ── CORS for the marketing islands ────────────────────────────────────────────────────────────────────────────
-// cai.canine.dev is served by the imprint CMS, and its widgets are cross-origin web components that call this API
+// codeassuranceindex.info is served by the imprint CMS, and its widgets are cross-origin web components that call this API
 // from the reader's browser (score an evidence bundle, verify a delivery). Without an explicit allow they simply
 // cannot: the standard would ship interactive proof tools that only work on a hostname nobody links to.
 //
@@ -165,7 +165,7 @@ builder.Services.AddRateLimiter(options =>
         }
 
         await ctx.HttpContext.Response.WriteAsJsonAsync(
-            new { error = "rate limit exceeded — cache the rubric you use; see https://cai.canine.dev/api-reference" }, ct).ConfigureAwait(false);
+            new { error = "rate limit exceeded — cache the rubric you use; see https://api.codeassuranceindex.info/api-reference" }, ct).ConfigureAwait(false);
     };
 });
 
@@ -455,17 +455,17 @@ The score is deterministic: identical evidence under the same rubric version alw
 - Spec: versioned, CC-BY. Free to copy, protected to call it CAI — only spec-reproducible results may carry the CAI mark.
 
 ## Pages
-- The standard and definition: https://cai.canine.dev/
-- The open algorithm, versioned: https://cai.canine.dev/spec
-- The {lensCount} lenses and the dimensions under each: https://cai.canine.dev/lenses
-- The {dimCount}-dimension catalog, by lens and rubric version: https://cai.canine.dev/dimensions
-- Compute it yourself (the reference CLI): https://cai.canine.dev/cli
-- Score your evidence in the browser: https://cai.canine.dev/calculator
-- Verify a published number reproduces: https://cai.canine.dev/verify
-- The public registry of signed surveys: https://cai.canine.dev/registry
-- The badge and mark-usage policy: https://cai.canine.dev/badge
-- The JSON API (rubric and scoring): https://cai.canine.dev/api-reference
-- The vocabulary as schema.org DefinedTermSet (JSON-LD): https://cai.canine.dev/glossary.jsonld
+- The standard and definition: https://codeassuranceindex.info/
+- The open algorithm, versioned: https://codeassuranceindex.info/spec
+- The {lensCount} lenses and the dimensions under each: https://codeassuranceindex.info/lenses
+- The {dimCount}-dimension catalog, by lens and rubric version: https://codeassuranceindex.info/dimensions
+- Compute it yourself (the reference CLI): https://codeassuranceindex.info/cli
+- Score your evidence in the browser: https://codeassuranceindex.info/calculator
+- Verify a published number reproduces: https://codeassuranceindex.info/verify
+- The public registry of signed surveys: https://codeassuranceindex.info/registry
+- The badge and mark-usage policy: https://codeassuranceindex.info/badge
+- The JSON API (rubric and scoring): https://api.codeassuranceindex.info/api-reference
+- The vocabulary as schema.org DefinedTermSet (JSON-LD): https://codeassuranceindex.info/glossary.jsonld
 
 ## Get an independent survey
 The standard is free to use. An independent, signed CAI survey — with the deductions and what to do about them — is a service from the surveyor: https://watchdog.canine.dev
@@ -489,29 +489,29 @@ app.MapGet("/glossary.jsonld", [AllowAnonymous] () => Results.Text(Cai.Web.CaiGl
 // Browsers auto-request /favicon.ico; we only ship favicon.svg. Redirect so non-HTML responses (e.g. /llms.txt) don't 404.
 app.MapGet("/favicon.ico", [AllowAnonymous] () => Results.Redirect("/favicon.svg", permanent: true));
 
-// ── This host is the API; cai.canine.dev is the standard's site ───────────────────────────────────────────────────
-// It used to be both, and the copy that had the working tools was the one nobody could find: api.cai.canine.dev
+// ── This host is the API; codeassuranceindex.info is the standard's site ──────────────────────────────────────────
+// It used to be both, and the copy that had the working tools was the one nobody could find: the API host
 // served a COMPLETE second website — its own nav, its own /spec, /dimensions, /verify, /registry — whose content
-// disagreed with the pages of the same name on cai.canine.dev. The site showed 42 of the 127 dimensions; this host
+// disagreed with the pages of the same name on the marketing site. The site showed 42 of the 127 dimensions; this host
 // showed all of them. The site told you to install a CLI; this host had a working verifier. Neither linked to the
 // other, and this one's robots.txt answered 401, so search engines could not even find the better copy.
 //
-// The pages now live on cai.canine.dev, where the catalogue, the calculator and the verifier are rendered by islands
+// The pages now live on codeassuranceindex.info, where the catalogue, the calculator and the verifier are rendered by islands
 // that read THIS API — one copy of the content, one copy of the data, and the API feeding both. These redirects
 // retire the duplicates without breaking any link that was ever published to them.
 foreach (var (from, to) in new[]
 {
-    ("/", "https://cai.canine.dev/"),
-    ("/spec", "https://cai.canine.dev/spec/"),
-    ("/dimensions", "https://cai.canine.dev/dimensions/"),
+    ("/", "https://codeassuranceindex.info/"),
+    ("/spec", "https://codeassuranceindex.info/spec/"),
+    ("/dimensions", "https://codeassuranceindex.info/dimensions/"),
     // The lens list is part of the catalogue island, which renders lenses and their dimensions together.
-    ("/lenses", "https://cai.canine.dev/dimensions/"),
-    ("/registry", "https://cai.canine.dev/registry/"),
-    ("/cli", "https://cai.canine.dev/page-cli/"),
-    ("/badge", "https://cai.canine.dev/badge/"),
+    ("/lenses", "https://codeassuranceindex.info/dimensions/"),
+    ("/registry", "https://codeassuranceindex.info/registry/"),
+    ("/cli", "https://codeassuranceindex.info/page-cli/"),
+    ("/badge", "https://codeassuranceindex.info/badge/"),
     // Both self-service checks are on one page now: paste a delivery, or paste a bundle.
-    ("/verify", "https://cai.canine.dev/verify/"),
-    ("/calculator", "https://cai.canine.dev/verify/"),
+    ("/verify", "https://codeassuranceindex.info/verify/"),
+    ("/calculator", "https://codeassuranceindex.info/verify/"),
 })
 {
     app.MapGet(from, [AllowAnonymous] () => Results.Redirect(to, permanent: true));
@@ -527,7 +527,7 @@ app.MapGet("/api/score/example", [AllowAnonymous] (HttpContext http) =>
     return Results.Text(CalculatorSample.Json, "application/json");
 });
 
-// Crawlers belong on cai.canine.dev, which serves the same standard as pages with its own robots.txt and sitemap.
+// Crawlers belong on codeassuranceindex.info, which serves the same standard as pages with its own robots.txt and sitemap.
 //
 // Without this route /robots.txt matched no endpoint, and a request that matches no endpoint is evaluated against the
 // default-deny FALLBACK policy — so the file every crawler fetches first answered
@@ -536,7 +536,7 @@ app.MapGet("/api/score/example", [AllowAnonymous] (HttpContext http) =>
 // standard's API.
 app.MapGet("/robots.txt", [AllowAnonymous] () => Results.Text(
     """
-    # api.cai.canine.dev is the CAI API. The standard is published as pages on https://cai.canine.dev
+    # api.codeassuranceindex.info is the CAI API. The standard is published as pages on https://codeassuranceindex.info
     User-agent: *
     Disallow: /
 
@@ -563,7 +563,7 @@ app.MapFallback([AllowAnonymous] async (HttpContext http) =>
 
     http.Response.StatusCode = StatusCodes.Status404NotFound;
     await http.Response.WriteAsJsonAsync(
-        new { error = "no such endpoint", standard = "https://cai.canine.dev" }).ConfigureAwait(false);
+        new { error = "no such endpoint", standard = "https://codeassuranceindex.info" }).ConfigureAwait(false);
 });
 
 app.Run();
@@ -589,7 +589,12 @@ static string[] ReadCorsOrigins(IConfiguration cfg)
     // them, which is the failure that actually costs something. Override the key to narrow or extend it.
     return configured.Length > 0
         ? configured
-        : ["https://cai.canine.dev", "https://imprint.canine.dev",
+        : ["https://codeassuranceindex.info", "https://www.codeassuranceindex.info",
+           // Kept through the domain move: cai.canine.dev still serves pages until its vhost
+           // becomes 301-only, and a page that has loaded cannot be un-served. Drop it once the
+           // redirect is in place and nothing is rendered on the old hostname any more.
+           "https://cai.canine.dev",
+           "https://imprint.canine.dev",
            "https://watchdog.canine.dev", "https://assay.canine.dev"];
 }
 

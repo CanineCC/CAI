@@ -6,7 +6,7 @@
 <div class="hero"><div class="wrap">
     <p class="eyebrow">API</p>
     <h1>Use the standard from anything.</h1>
-    <p class="lede">cai.canine.dev is the authority for the rubric catalogs and the scoring fold, served over a small
+    <p class="lede">codeassuranceindex.info is the authority for the rubric catalogs and the scoring fold, served over a small
         JSON API. The catalogs are the open standard, so the read endpoints are public — the Watchdog surveyor and
         anyone else call these instead of carrying their own copy.</p>
 </div></div>
@@ -37,14 +37,14 @@
 
     <h3>GET <code>/api/rubrics</code></h3>
     <p class="muted">The published rubric versions, newest first.</p>
-    <pre>curl https://cai.canine.dev/api/rubrics
+    <pre>curl https://api.codeassuranceindex.info/api/rubrics
 
 { "latest": "@(_latest ?? "rubric-…")", "versions": [@string.Join(", ", _versions.Select(v => $"\"{v}\""))] }</pre>
 
     <h3>GET <code>/api/rubrics/{version}/catalog</code></h3>
     <p class="muted">A version's full catalog — every lens and dimension it defines (<code>latest</code> resolves to the
         newest). This is the versioned, archived definition of the standard.</p>
-    <pre>curl https://cai.canine.dev/api/rubrics/latest/catalog
+    <pre>curl https://api.codeassuranceindex.info/api/rubrics/latest/catalog
 
 {
   "rubricVersion": "@(_latest ?? "rubric-…")",
@@ -63,7 +63,7 @@
     <h3>POST <code>/api/score</code></h3>
     <p class="muted">Fold an <a href="/spec#evidence">evidence bundle</a> (measured dimensions) into the CAI + per-lens
         roll-up. The body is the bundle JSON.</p>
-    <pre>curl -X POST https://cai.canine.dev/api/score \
+    <pre>curl -X POST https://api.codeassuranceindex.info/api/score \
   -H 'Content-Type: application/json' \
   --data @@evidence.json
 
@@ -76,7 +76,7 @@
 
     <h3>POST <code>/api/verify</code></h3>
     <p class="muted">Reproduce a published headline from its evidence (the bundle carries <code>headlineScore</code>).</p>
-    <pre>curl -X POST https://cai.canine.dev/api/verify -H 'Content-Type: application/json' --data @@survey.json
+    <pre>curl -X POST https://api.codeassuranceindex.info/api/verify -H 'Content-Type: application/json' --data @@survey.json
 
 { "reproduced": true, "computed": 69.56, "claimed": 69.6, "delta": 0.04, "tolerance": 0.5 }</pre>
 

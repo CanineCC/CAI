@@ -27,7 +27,7 @@ internal enum ApiTrafficClass
 
     /// <summary>Anonymous traffic to the SELF-SERVICE verification endpoints (<c>/api/score</c>, <c>/api/verify</c>,
     /// <c>/api/verify-delivery</c>). These are the public half of "don't trust the number, reproduce it" — the
-    /// calculator and verifier embedded on cai.canine.dev call them from the reader's own browser. The open API's
+    /// calculator and verifier embedded on codeassuranceindex.info call them from the reader's own browser. The open API's
     /// 15/day per-IP budget is sized for fetching an IMMUTABLE catalog once and caching it; applied here it would
     /// exhaust after a handful of pastes and take out everyone behind the same NAT, so the one check the standard
     /// invites anyone to run would fail for whole offices. Same shape as the registry probes: a dedicated per-IP
@@ -35,7 +35,7 @@ internal enum ApiTrafficClass
     SelfServiceVerify,
 
     /// <summary>A read issued by a BROWSER from one of the first-party sites (the catalogue island on
-    /// cai.canine.dev reading <c>/api/rubrics</c> and a version's catalog). The open API's 15/day per-IP budget is
+    /// codeassuranceindex.info reading <c>/api/rubrics</c> and a version's catalog). The open API's 15/day per-IP budget is
     /// advice aimed at PROGRAMMATIC consumers — "the catalog is immutable, so cache it" — and it is good advice, but
     /// a reader's browser cannot act on it: eight page views from one office exhausted the day. The standard's own
     /// pages were the first casualty of a limit written for scrapers.</summary>

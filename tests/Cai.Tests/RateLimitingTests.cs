@@ -188,7 +188,7 @@ public sealed class RateLimitingTests(RateLimitingFixture fx) : IClassFixture<Ra
     [Fact]
     public async Task The_self_service_checks_survive_a_burst_the_open_budget_would_kill()
     {
-        // /api/score and /api/verify-delivery are what the calculator and verifier islands on cai.canine.dev call
+        // /api/score and /api/verify-delivery are what the calculator and verifier islands on codeassuranceindex.info call
         // from the reader's browser. Under the open-API budget the eighth paste of the day 429ed — for everyone
         // sharing the office's IP — so the one check the standard invites anyone to run did not work in practice.
         using var client = fx.Client(token: null, "203.0.113.20");

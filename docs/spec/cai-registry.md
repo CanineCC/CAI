@@ -1,7 +1,7 @@
 # CAI registry — API contract (producer push / consumer pull / access grants)
 
 - Status: **Implemented (v1, closed-loop)** — this document IS the wire contract; the kennel client is built against it 1:1.
-- Base URL: `https://api.cai.canine.dev` (the registry endpoints live in the cai app under `/api/registry`).
+- Base URL: `https://api.codeassuranceindex.info` (the registry endpoints live in the cai app under `/api/registry`).
 - Companion to: [CAI-delivery package format](cai-delivery-package.md), [ADR-0010](../adr/0010-signed-cai-delivery-package-and-registry.md)
   (incl. its v1 addendum), reference implementation `src/Cai.Web/Registry/`, contract tests `tests/Cai.Tests/RegistryApiTests.cs`.
 - Backs mockup 5: `~/watchdog-mock-5-access-sharing.html` (seller "Del bevis" / buyer "Anmod om adgang") — the grant flows.
@@ -246,6 +246,6 @@ schema-invalid or dishonest packages. Reasons:
    not fold to its own headline is ever stored or served).
 
 Key custody amendment (ADR-0010): in closed-loop v1 the signing key pair is **issued by cai and operated inside the
-trusted producer's push path**; the registry holds only public keys. `payload.issuer` remains `cai.canine.dev` — the
+trusted producer's push path**; the registry holds only public keys. `payload.issuer` remains `codeassuranceindex.info` — the
 signature is still the standard's attestation, exercised at its one trusted producer. Third-party producers (deferred)
 will NOT receive cai-issued keys; that is where registry-side minting or a conformance regime becomes necessary.

@@ -4,12 +4,12 @@ using Cai.Scoring;
 namespace Cai.Delivery;
 
 /// <summary>
-/// The signed content of a CAI-delivery package — the point-in-time, self-contained record that cai.canine.dev attests.
+/// The signed content of a CAI-delivery package — the point-in-time, self-contained record that codeassuranceindex.info attests.
 /// Everything under <see cref="DeliveryPackage.Payload"/> is covered by the Ed25519 signature; editing any field breaks
 /// verification. It carries the CAI verdict cai RECOMPUTED (never one it was handed), the evidence that verdict folds
 /// from (so a consumer can reproduce it), and the provenance that says who measured what, when, under which ruleset.
 ///
-/// The signature attests: "cai.canine.dev folded THIS evidence under rubric <c>rubricVersion</c> to CAI
+/// The signature attests: "codeassuranceindex.info folded THIS evidence under rubric <c>rubricVersion</c> to CAI
 /// <c>Verdict.Cai</c> for <c>Subject</c>, as submitted by <c>Producer</c>, at <c>IssuedAt</c>." It does NOT attest that
 /// the evidence is a truthful measurement of the real repository — that is the producer's claim (closed-loop: the
 /// producer is the trusted Watchdog surveyor; 3rd-party producer conformance is deferred).
@@ -82,7 +82,7 @@ public sealed record DeliveryPayload
 public sealed record DeliveryIssuer
 {
     /// <summary>The issuer identity — always cai for a valid delivery.</summary>
-    [JsonPropertyName("name")] public string Name { get; init; } = "cai.canine.dev";
+    [JsonPropertyName("name")] public string Name { get; init; } = "codeassuranceindex.info";
 
     /// <summary>The signing key id — selects the public key a verifier uses. Retained forever once used, so old
     /// deliveries verify after key rotation (frozen-key policy, analogous to frozen rubrics).</summary>

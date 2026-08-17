@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace Cai.Scoring;
 
 /// <summary>
-/// Loads + caches the versioned rubric catalogs cai.canine.dev owns — the authoritative, archived definitions of the
+/// Loads + caches the versioned rubric catalogs codeassuranceindex.info owns — the authoritative, archived definitions of the
 /// standard. Reads <c>{root}/&lt;rubricVersion&gt;/rubric-catalog.json</c>. Catalogs are immutable once published, so
 /// each version is parsed once and cached. This is the source the API + UI serve and that the Watchdog surveyor calls
 /// instead of carrying its own copy.
