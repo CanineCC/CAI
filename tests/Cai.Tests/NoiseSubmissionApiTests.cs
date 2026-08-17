@@ -84,6 +84,9 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             },
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = holdout.Select(h => Finding(h.RepoId, h.Sha)),
+            // ★ What the RUN produced, required since #7a: dropping findings between the run and the
+            // submission is the simplest route to a flattering rate, and coverage cannot show it.
+            reportedFindingCount = holdout.Count,
         };
     }
 
@@ -259,6 +262,7 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             tool = Tool(),
             toolVersion = "v1",
             findings = holdout.Select(h => Finding(h.RepoId, h.Sha)),
+            reportedFindingCount = holdout.Count,
         };
 
         var (_, body) = await PostAsync(submission);
@@ -378,6 +382,7 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             },
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = holdout.Select(h => Finding(h.RepoId, h.Sha)),
+            reportedFindingCount = holdout.Count,
         };
 
         var first = await PostAsync(Payload(Tool()));
@@ -424,6 +429,9 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             },
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = holdout.Take(2).Select(h => Finding(h.RepoId, h.Sha)),
+            // ★ A run that genuinely reaches two repositories reports two findings. Partial coverage is a
+            // different claim from a truncated payload, and #7a must not conflate them.
+            reportedFindingCount = 2,
         };
 
         var (_, body) = await PostAsync(submission);

@@ -188,6 +188,61 @@ public static class NoiseStandardEndpoints
             // switched on, so the right version against the right shas with the noisiest rules off passes all
             // of them. Required, and it publishes.
             requiresConfigurationDeclaration = true,
+
+            // ★★ WHAT VERIFICATION ACTUALLY CHECKS, enumerated. "Verified" is the only thing CAI does and the
+            // whole neutrality argument, and a reader had no way to find out what it covered — so a submission
+            // that passed the easy checks and skipped the hard ones read exactly like one that passed them all.
+            verificationChecks = new object[]
+            {
+                new
+                {
+                    check = "holdout-membership",
+                    asks = "is every finding on a repository this period's draw published?",
+                },
+                new
+                {
+                    check = "pinned-sha",
+                    asks = "does each finding cite the revision the holdout pinned? A different revision is "
+                         + "different code.",
+                },
+                new
+                {
+                    check = "run-ordering",
+                    asks = "did the run START after the draw was published? A result produced before its own "
+                         + "holdout answers something else.",
+                },
+                new
+                {
+                    check = "claim-class",
+                    asks = "does each finding declare one of the published claim classes?",
+                },
+                new
+                {
+                    check = "recency-declaration",
+                    asks = "for each drawn repository, has the tool been developed against it?",
+                },
+                new
+                {
+                    check = "configuration-declaration",
+                    asks = "which ruleset ran, and is it what customers get?",
+                },
+                new
+                {
+                    // ★★ The one added by #7a, and the reason the list exists at all.
+                    check = "finding-count",
+                    asks = "does the number of findings submitted equal the number the run reports it "
+                         + "produced? Dropping findings between the run and the submission is the simplest "
+                         + "route to a flattering rate, and coverage cannot show it — a repository with one "
+                         + "surviving finding is covered.",
+                },
+                new
+                {
+                    check = "coverage",
+                    asks = "which drawn repositories does the run not reach? Reported rather than refused, "
+                         + "and a partial run is marked partial.",
+                },
+            },
+
             exclusionRule =
                 "Items nobody could judge leave the rate. Their counts publish per dimension, and a run "
               + "whose combined exclusions exceed the ceiling is VOID — not a pass with a caveat and not "
@@ -1622,6 +1677,16 @@ public static class NoiseStandardEndpoints
         // lacks a language into not participating at all. But a receipt saying only accepted:true can be
         // quoted as a clean bill by somebody who scanned a sixth of the holdout, so completeness is its
         // own flag and partial coverage says so in words.
+        // ★★ THE COUNTS, published even when they agree. A check whose inputs are not shown cannot be
+        // re-derived by the reader it exists for, and this is the one check that says how much of the run
+        // reached the standard at all.
+        findingCount = new
+        {
+            reportedByRun = r.ReportedFindingCount,
+            submitted = r.SubmittedFindingCount,
+            agrees = r.ReportedFindingCount == r.SubmittedFindingCount,
+        },
+
         complete = r.Accepted && r.Uncovered.Count == 0,
         completenessNote = r.Uncovered.Count == 0
             ? "full coverage: every drawn repository appears in this run."

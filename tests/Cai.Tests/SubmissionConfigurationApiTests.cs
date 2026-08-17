@@ -48,6 +48,7 @@ public sealed class SubmissionConfigurationApiTests(RegistryUnconfiguredFixture 
             configuration,
             recency = holdout.Select(r => new { repoId = r, stratum = "never-trained" }),
             findings = Array.Empty<object>(),
+            reportedFindingCount = 0,
         }, Ct);
 
         return JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct)).RootElement.Clone();

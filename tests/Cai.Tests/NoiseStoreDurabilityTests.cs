@@ -95,6 +95,7 @@ public sealed class NoiseStoreDurabilityTests : IDisposable
             },
             recency = holdout.Select(r => new { repoId = r, stratum = "never-trained" }),
             findings = Array.Empty<object>(),
+            reportedFindingCount = 0,
         };
     }
 
@@ -160,6 +161,7 @@ public sealed class NoiseStoreDurabilityTests : IDisposable
             },
             recency = holdout.Select(r => new { repoId = r, stratum = "quite-fresh" }),
             findings = Array.Empty<object>(),
+            reportedFindingCount = 0,
         }));
         Assert.False(bad.GetProperty("accepted").GetBoolean());
 

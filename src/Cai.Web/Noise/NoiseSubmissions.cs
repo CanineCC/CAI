@@ -67,19 +67,37 @@ public sealed record RunConfiguration(
 /// draw somebody saw early. Optional on the wire so existing submitters are not broken, but a submission that
 /// omits it cannot be checked and says so.
 /// </param>
+/// <param name="ReportedFindingCount">
+/// ★★ HOW MANY FINDINGS THE RUN ITSELF PRODUCED, which is not the same claim as the payload's length. Every
+/// other check constrains the findings that ARRIVE — right repositories, right shas, known claim classes, a run
+/// that began after the draw. None of them constrains what was left out, so a run that produced 400 findings
+/// could submit the 120 it liked and still report full coverage: a repository with one surviving finding is
+/// covered. Declaring the run's own count turns a silent omission into a specific number somebody can ask
+/// about, exactly as the recency and configuration declarations do.
+/// <para>Optional on the wire so an old client gets a message rather than a 400, but a submission that omits it
+/// cannot be checked and is refused for saying so — a gate that is present for the honest and absent for
+/// everyone else is worse than no gate, because the receipt still says accepted.</para>
+/// </param>
 public sealed record NoiseSubmission(
     string Period, string Tool, string ToolVersion,
     IReadOnlyList<RecencyDeclaration> Recency,
     IReadOnlyList<SubmittedFinding> Findings,
     DateTimeOffset? RunStartedAt = null,
-    RunConfiguration? Configuration = null);
+    RunConfiguration? Configuration = null,
+    int? ReportedFindingCount = null);
 
 /// <summary>What CAI checked, and what it found.</summary>
+/// <param name="ReportedFindingCount">What the run said it produced, as declared. Null when not declared.</param>
+/// <param name="SubmittedFindingCount">
+/// What actually arrived. ★ Both counts are on the receipt even when they agree: a check whose inputs are not
+/// published cannot be re-derived by the reader it exists for.
+/// </param>
 public sealed record SubmissionReceipt(
     string SubmissionId, string Period, string Tool, string ToolVersion,
     DateTimeOffset ReceivedAt, bool Accepted,
     IReadOnlyList<string> Problems,
-    int HoldoutRepositories, int CoveredRepositories, IReadOnlyList<string> Uncovered);
+    int HoldoutRepositories, int CoveredRepositories, IReadOnlyList<string> Uncovered,
+    int? ReportedFindingCount = null, int SubmittedFindingCount = 0);
 
 /// <summary>
 /// The submission surface: validate a run against the published holdout, and keep the receipt.
@@ -152,6 +170,37 @@ public static class NoiseSubmissions
                     + "else or run against a draw seen early; either way it cannot answer this holdout.");
             }
         }
+        // ── What the run produced, against what arrived ────────────────────────────────────────────
+        //
+        // ★★ THE CHECK NOTHING ELSE MAKES. See NoiseSubmission.ReportedFindingCount: dropping findings between
+        // the run and the submission is the simplest route to a flattering rate, it leaves coverage looking
+        // complete, and from outside the vendor it is invisible.
+        var submittedCount = submission.Findings?.Count ?? 0;
+        if (submission.ReportedFindingCount is not { } reportedCount)
+        {
+            problems.Add(
+                "the submission does not say how many findings the run produced, so the standard cannot check "
+                + "that they were all sent — which leaves the simplest route to a flattering rate open, and "
+                + "leaves coverage reading complete while it is not. Send reportedFindingCount.");
+        }
+        else if (reportedCount < 0)
+        {
+            problems.Add(
+                $"the declared finding count is {reportedCount}. A run cannot produce a negative number of "
+                + "findings, so this declaration says nothing the check can use.");
+        }
+        else if (reportedCount != submittedCount)
+        {
+            // ★★ BOTH DIRECTIONS. Fewer submitted than produced is the flattering-rate manoeuvre; more
+            // submitted than produced means the payload was assembled somewhere other than the run, and a
+            // rate over an assembled set measures the assembler.
+            problems.Add(
+                $"the run reports a finding count of {reportedCount} but {submittedCount} findings were "
+                + "submitted. A rate is taken over what the run produced, not over a subset of it — and "
+                + "coverage cannot show the difference, because a repository with one surviving finding is "
+                + "covered.");
+        }
+
         var byRepo = holdout.ToDictionary(h => h.RepoId, StringComparer.OrdinalIgnoreCase);
 
         // ★ The recency declaration is required — see RecencyDeclaration.
@@ -287,7 +336,9 @@ public static class NoiseSubmissions
             Problems: problems,
             HoldoutRepositories: holdout.Count,
             CoveredRepositories: covered.Count,
-            Uncovered: uncovered);
+            Uncovered: uncovered,
+            ReportedFindingCount: submission.ReportedFindingCount,
+            SubmittedFindingCount: submittedCount);
 
         // ★ Persistence is the CALLER's, via INoiseStore. This method decides only whether the run
         // answers the holdout it names; storing it is where the no-withdrawal claim is enforced.
