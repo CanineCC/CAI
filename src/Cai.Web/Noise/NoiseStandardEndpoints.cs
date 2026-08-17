@@ -314,6 +314,23 @@ public static class NoiseStandardEndpoints
               + "leave-one-out range. Excluding an outlying repository is NOT permitted — dropping a "
               + "repo for having a high or low rate is selecting on the outcome.",
 
+            // ★★ THE INTENT REGISTER (#14). The no-withdrawal refusal told vendors to "register intent before the
+            // next draw instead" and there was nowhere to do it — a rule whose remedy does not exist reads as an
+            // excuse.
+            intentRegister = new
+            {
+                endpoint = "/api/noise/intent",
+                published = "/api/noise/intent/{period}",
+                closesWhen = "the period's holdout is drawn. Intent registered after the draw is a decision made "
+                           + "with the sample in hand, so it must be declared BEFORE — that ordering is the whole "
+                           + "value of the register.",
+                why = "The no-withdrawal rule cannot see a run that was never submitted: a vendor can simply skip "
+                    + "the periods that went badly, and the published set quietly becomes 'the results people "
+                    + "were happy with'. The register names who said they would take part, so not submitting is "
+                    + "visible.",
+                idempotent = "registering twice keeps the FIRST timestamp — the moment it was made is the claim.",
+            },
+
             // ★★ THE TWO BEHAVIOURAL QUESTIONS (#13), verbatim. Two clients asking "would you fix this?" and
             // "is this worth fixing?" are asking different questions, and the answers stop being comparable.
             behaviouralQuestions = new
@@ -670,7 +687,9 @@ public static class NoiseStandardEndpoints
                     submission.Tool,
                     submission.Period,
                     error = "this tool has already submitted for this period, and a submission cannot be "
-                          + "withdrawn or replaced. Register intent before the next draw instead.",
+                          + "withdrawn or replaced. Register intent for a period whose holdout has not been "
+                          + "drawn yet, at POST /api/noise/intent — it publishes, and it is what makes "
+                          + "not submitting visible.",
                 });
             }
 
@@ -699,7 +718,9 @@ public static class NoiseStandardEndpoints
                     submission.Tool,
                     submission.Period,
                     error = "this tool has already submitted for this period, and a submission cannot be "
-                          + "withdrawn or replaced. Register intent before the next draw instead.",
+                          + "withdrawn or replaced. Register intent for a period whose holdout has not been "
+                          + "drawn yet, at POST /api/noise/intent — it publishes, and it is what makes "
+                          + "not submitting visible.",
                 });
             }
 
@@ -1102,6 +1123,94 @@ public static class NoiseStandardEndpoints
 
         // ★★ What has to travel with a rate for the rate to mean anything: the funnel it was computed
         // over, the actionability split, and the difference this sample could actually detect.
+        // ── The intent register ───────────────────────────────────────────────────────────────────
+        //
+        // ★★ THE NO-WITHDRAWAL RULE HAD NOWHERE TO SEND ANYBODY. Its refusal already said "register intent before
+        // the next draw instead", and there was no endpoint to do it at. Worse, the rule without a before is only
+        // half a rule: a vendor can simply never submit the periods that went badly, and the published set quietly
+        // becomes "the results people were happy with".
+        endpoints.MapPost("/api/noise/intent", (IntentRequest request, INoiseStore store) =>
+        {
+            if (string.IsNullOrWhiteSpace(request?.Period) || string.IsNullOrWhiteSpace(request.Tool))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "registering intent names the period and the tool. Both publish.",
+                });
+            }
+
+            // ★★ CLOSED ONCE THE HOLDOUT IS DRAWN. Intent registered after seeing the draw is not intent — it is
+            // a decision made with the sample in hand, which is the one thing the ordering exists to prevent. The
+            // draw date travels with the refusal, so it can be checked against the published draw rather than
+            // taken on this endpoint's word.
+            if (NoiseCorpus.Draws.TryGetValue(request.Period, out var draw))
+            {
+                return Results.Conflict(new
+                {
+                    request.Period,
+                    request.Tool,
+                    error = $"the holdout for {request.Period} has already been drawn, so intent for it can no "
+                          + "longer be registered: a decision made with the sample in hand is not intent. "
+                          + "Register for a period whose draw has not been published.",
+                    drawnAt = draw.DrawnAt,
+                });
+            }
+
+            var record = store.RegisterIntent(request.Period, request.Tool, DateTimeOffset.UtcNow);
+
+            return Results.Ok(new
+            {
+                record.Period,
+                record.Tool,
+                record.RegisteredAt,
+                note = "This registration publishes. A tool that registers and then does not submit is named in "
+                     + "the register — which is the point: the no-withdrawal rule cannot catch a run that was "
+                     + "never submitted, and this can.",
+            });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseIntentRegister");
+
+        endpoints.MapGet("/api/noise/intent/{period}", (string period, INoiseStore store) =>
+        {
+            var registered = store.ListIntent(period);
+            var submitted = store.ListSubmissions(period)
+                .Select(r => r.Tool)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // ★★ THE FIGURE THE REGISTER EXISTS FOR. A vendor who registered and then published nothing is the
+            // case the no-withdrawal rule cannot catch on its own — they never submitted, so there is nothing to
+            // withdraw. Naming them is the entire enforcement mechanism, and it costs a set lookup.
+            var missing = registered.Where(r => !submitted.Contains(r.Tool)).Select(r => r.Tool).ToList();
+
+            return Results.Ok(new
+            {
+                period,
+                drawn = NoiseCorpus.Draws.TryGetValue(period, out var draw) ? draw.DrawnAt : (DateTimeOffset?)null,
+                open = !NoiseCorpus.Draws.ContainsKey(period),
+
+                registered = registered.Select(r => new
+                {
+                    tool = r.Tool,
+                    registeredAt = r.RegisteredAt,
+                    submitted = submitted.Contains(r.Tool),
+                }),
+
+                registeredAndDidNotSubmit = missing,
+
+                note = registered.Count == 0
+                    ? "nobody has registered intent for this period yet. That is an absence, not a statement "
+                    + "about anybody."
+                    : missing.Count == 0
+                        ? "everybody who registered intent for this period has submitted."
+                        : $"{missing.Count} tool(s) registered and did not submit: "
+                        + string.Join(", ", missing)
+                        + ". The no-withdrawal rule cannot see a run that was never submitted; this can.",
+            });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseIntentPeriod");
+
         // ── Contestation ──────────────────────────────────────────────────────────────────────────
         //
         // ★★ 01 §5: "a vendor who thinks a verdict is wrong can contest it in public, against published
@@ -2606,6 +2715,9 @@ public static class NoiseStandardEndpoints
     /// <summary>A period's crowd queue, as a participant registers it.</summary>
     public sealed record CrowdQueueRequest(
         string? Period, string? Seed, int SpotCheck, IReadOnlyList<CrowdCandidateRequest>? Candidates);
+
+    /// <summary>A declared intent to submit for a period.</summary>
+    public sealed record IntentRequest(string? Period, string? Tool);
 
     /// <summary>A verdict being contested.</summary>
     public sealed record DisputeRequest(string? Period, string? RaisedBy, string? Reason);

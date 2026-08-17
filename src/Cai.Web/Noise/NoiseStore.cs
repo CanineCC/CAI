@@ -62,6 +62,14 @@ public sealed record DisputeRecord(
     string DisputeId, string Period, string FindingId, string RaisedBy, string Reason, DateTimeOffset RaisedAt,
     string? Outcome, string? ResolutionReasoning, DateTimeOffset? ResolvedAt);
 
+/// <summary>A vendor's declared intent to submit for a period, registered before that period was drawn.</summary>
+/// <remarks>
+/// ★★ THE "BEFORE" THE NO-WITHDRAWAL RULE WORKS FROM. Without it the rule is half a rule: a vendor can simply
+/// never submit the periods that went badly, and the published set quietly becomes "the results people were happy
+/// with". The register's value is its TIMESTAMP, so a second registration keeps the first.
+/// </remarks>
+public sealed record IntentRecord(string Period, string Tool, DateTimeOffset RegisteredAt);
+
 /// <summary>A judge prompt, stored once and published in full.</summary>
 public sealed record PromptRecord(string PromptId, string Text, DateTimeOffset FirstSeenAt);
 
@@ -160,6 +168,19 @@ public interface INoiseStore
 
     /// <summary>Every dispute for a period, oldest first.</summary>
     IReadOnlyList<DisputeRecord> ListDisputes(string period);
+
+    /// <summary>
+    /// Register intent, or keep the existing registration. Returns the record that now stands.
+    /// </summary>
+    /// <remarks>
+    /// ★★ IDEMPOTENT, AND THE FIRST TIME STANDS. The registration's whole value is the moment it was made — "before
+    /// the draw" is the claim it makes — so a re-post that moved the time forward would let a vendor register
+    /// early, watch, and quietly refresh the record to a moment that suited them.
+    /// </remarks>
+    IntentRecord RegisterIntent(string period, string tool, DateTimeOffset now);
+
+    /// <summary>Every intent registered for a period, oldest first.</summary>
+    IReadOnlyList<IntentRecord> ListIntent(string period);
 
     /// <summary>Periods that have any judging recorded, newest first — what a record page can be asked for.</summary>
     /// <remarks>
@@ -289,6 +310,15 @@ public sealed class SqliteNoiseStore : INoiseStore
             -- ★★ BESIDE the verdicts, never instead of them. A dispute that could delete what it overturned
             -- would be a withdrawal mechanism, and the register would quietly become "the verdicts nobody
             -- objected to". noise_verdicts is untouched by anything in here.
+            -- ★★ (period, tool) is the KEY, so a second registration cannot move the timestamp: the moment it
+            -- was made is the entire claim.
+            CREATE TABLE IF NOT EXISTS noise_intent (
+                period        TEXT NOT NULL,
+                tool          TEXT NOT NULL,
+                registered_at TEXT NOT NULL,
+                PRIMARY KEY (period, tool)
+            );
+
             CREATE TABLE IF NOT EXISTS noise_disputes (
                 dispute_id           TEXT PRIMARY KEY,
                 period               TEXT NOT NULL,
@@ -722,6 +752,62 @@ public sealed class SqliteNoiseStore : INoiseStore
         reader.IsDBNull(8)
             ? null
             : DateTimeOffset.Parse(reader.GetString(8), System.Globalization.CultureInfo.InvariantCulture));
+
+    /// <inheritdoc />
+    public IntentRecord RegisterIntent(string period, string tool, DateTimeOffset now)
+    {
+        using var conn = Open();
+
+        using (var insert = conn.CreateCommand())
+        {
+            // ★ DO NOTHING on conflict — the first registration's timestamp is the claim, and a later one must
+            // not overwrite it. Enforced by the key rather than by a read-then-write above it.
+            insert.CommandText =
+                """
+                INSERT INTO noise_intent (period, tool, registered_at)
+                VALUES ($period, $tool, $at)
+                ON CONFLICT (period, tool) DO NOTHING
+                """;
+            insert.Parameters.AddWithValue("$period", period);
+            insert.Parameters.AddWithValue("$tool", tool);
+            insert.Parameters.AddWithValue("$at", now.ToString("O"));
+            insert.ExecuteNonQuery();
+        }
+
+        using var read = conn.CreateCommand();
+        read.CommandText =
+            "SELECT period, tool, registered_at FROM noise_intent WHERE period = $period AND tool = $tool";
+        read.Parameters.AddWithValue("$period", period);
+        read.Parameters.AddWithValue("$tool", tool);
+        using var reader = read.ExecuteReader();
+        reader.Read();
+
+        return new IntentRecord(
+            reader.GetString(0), reader.GetString(1),
+            DateTimeOffset.Parse(reader.GetString(2), System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<IntentRecord> ListIntent(string period)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT period, tool, registered_at FROM noise_intent WHERE period = $period "
+          + "ORDER BY registered_at, tool";
+        cmd.Parameters.AddWithValue("$period", period ?? "");
+        using var reader = cmd.ExecuteReader();
+
+        var list = new List<IntentRecord>();
+        while (reader.Read())
+        {
+            list.Add(new IntentRecord(
+                reader.GetString(0), reader.GetString(1),
+                DateTimeOffset.Parse(reader.GetString(2), System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
+        return list;
+    }
 
     /// <inheritdoc />
     public IReadOnlyList<string> JudgedPeriods()

@@ -108,6 +108,55 @@
     }
 </div></section>
 
+@{
+    var intent = Store.ListIntent(Period ?? "");
+    var submittedTools = Store.ListSubmissions(Period ?? "")
+        .Select(r => r.Tool)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+}
+
+<section data-region="intent"><div class="wrap">
+    <h2>Who said they would take part</h2>
+
+    @if (intent.Count == 0)
+    {
+        <p class="muted">
+            <strong>Nobody registered intent for this period.</strong> That is an absence, not a statement about
+            anybody — the register opens before a period's holdout is drawn and closes when it is.
+        </p>
+    }
+    else
+    {
+        @* ★★ THE FIGURE THE REGISTER EXISTS FOR. The no-withdrawal rule cannot see a run that was never
+           submitted: a vendor can simply skip the periods that went badly, and the published set quietly becomes
+           "the results people were happy with". Naming who registered and did not submit is the whole
+           enforcement mechanism, and it is only enforcement if a person can read it. *@
+        <table class="lenses">
+            <thead><tr><th>Tool</th><th>Registered</th><th>Submitted</th></tr></thead>
+            <tbody>
+                @foreach (var i in intent)
+                {
+                    var submitted = submittedTools.Contains(i.Tool);
+                    <tr>
+                        <td class="mono">@i.Tool</td>
+                        <td>@i.RegisteredAt.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
+                        <td>
+                            <span class="pill @(submitted ? "upheld" : "open")">
+                                @(submitted ? "Submitted" : "Did not submit")
+                            </span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="muted">
+            Intent is registered <strong>before</strong> a period's holdout is drawn, and the register closes when
+            it is: a decision made with the sample in hand is not intent. Registering twice keeps the first
+            timestamp, because the moment it was made is the claim.
+        </p>
+    }
+</div></section>
+
 <section data-region="disputes"><div class="wrap">
     <h2>Disputes</h2>
 
