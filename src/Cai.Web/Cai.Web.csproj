@@ -19,7 +19,10 @@
          verification, which is the behaviour signing is for. -->
     <EmbeddedResource Include="Noise\corpus\noise-corpus-1.0.json" LogicalName="Cai.Web.Noise.corpus.noise-corpus-1.0.json" />
     <EmbeddedResource Include="Noise\corpus\noise-corpus-1.0.json.sig" LogicalName="Cai.Web.Noise.corpus.noise-corpus-1.0.json.sig" />
-    <EmbeddedResource Include="Noise\corpus\cai-corpus-dev-2026-08.pub.pem" LogicalName="Cai.Web.Noise.corpus.cai-corpus-dev-2026-08.pub.pem" />
+    <!-- ★★ GLOB, not a fixed name: the public key is written by the deploy under the manifest's own keyId, so a
+         hard-coded filename here would have to be edited in lockstep with a key rotation and would silently ship
+         the old key if it were not. -->
+    <EmbeddedResource Include="Noise\corpus\*.pub.pem" LogicalName="Cai.Web.Noise.corpus.%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="12.1.1" />

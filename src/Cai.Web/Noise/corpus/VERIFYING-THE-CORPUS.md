@@ -7,13 +7,13 @@ everything needed to check it, and nothing else is required — no CAI code runs
 | --- | --- |
 | `noise-corpus-1.0.json` | the manifest: the rules, the draws with their seeds and timestamps, and the pool |
 | `noise-corpus-1.0.json.sig` | a detached signature over that file's **exact bytes** |
-| `cai-corpus-dev-2026-08.pub.pem` | the public key the signature verifies against |
+| `cai-corpus-2026-08.pub.pem` | the public key the signature verifies against (named by the manifest's `keyId`) |
 
 ## Check it
 
 ```sh
 openssl dgst -sha256 \
-  -verify cai-corpus-dev-2026-08.pub.pem \
+  -verify cai-corpus-2026-08.pub.pem \
   -signature noise-corpus-1.0.json.sig \
   noise-corpus-1.0.json
 ```
@@ -38,19 +38,39 @@ manifest version, the key id, the algorithm and the signature itself, so you can
 draw at all. A holdout endpoint that quietly degraded to "here is the pool, unsigned" would be worse than one
 that stops, because the degradation is invisible in the thing it hands back.
 
-## ★★ The key is a DEVELOPMENT key
+## ★★ What this signature is worth — and what it is not
 
-`cai-corpus-dev-2026-08` is a development key. The mechanism is complete and the signature verifies, but the
-custody of a production signing key — who holds it and who can use it — has not been decided, and that decision
-is the whole value of a signature. The key id says `dev` so a reader learns this rather than assuming. Treat a
-`dev`-keyed signature as evidence that the manifest has not changed **since it was built**, and not as evidence
-about who built it.
+The signing key is **generated on, and never leaves, the CAI production host**, and the manifest is signed by the
+**deploy** that ships it. So a verifying signature proves:
+
+> this manifest has not changed since the deploy that produced it.
+
+It does **not** prove that an independent party vouched for it. Who holds a key is what a signature is worth, and
+this one is held by the same operator who runs the service. Upgrading to an offline key or a hosted KMS changes
+who can produce a signature — it changes nothing about the format, the file names, or the command above.
+
+The manifest states this itself, in `keyCustody`, and `/api/noise/corpus` publishes it beside the signature.
 
 ## Re-signing after a change
 
-```sh
-tools/sign-corpus.sh <path-to-private-key.pem>
+You do not need to. **The deploy signs the corpus before it builds**, with the key on the server:
+
+```yaml
+- name: Sign the noise corpus
+  run: tools/sign-corpus.sh
+  env:
+    CAI_CORPUS_SIGNING_KEY: /home/jimmy/apps/cai-web/registry-data/cai-corpus.key.pem
 ```
 
-The private key is **not in this repository** and must not be. The script signs the manifest in place and
-verifies the result before it finishes.
+Edit the manifest, commit it, deploy — the signature and the public key are regenerated from the key on the box,
+before the tests run. The key is created on first use and then reused, so a fresh host provisions itself.
+
+To sign locally (for a test run against an edited manifest), the same script works with any key:
+
+```sh
+tools/sign-corpus.sh ~/.cai-signing/cai-corpus.key.pem
+```
+
+The private key is **not in this repository** and must not be. Signing is deliberately **not** an API endpoint:
+an endpoint that can sign means whoever can call it can re-sign a tampered corpus, and the thing doing the
+verifying becomes the thing being checked.

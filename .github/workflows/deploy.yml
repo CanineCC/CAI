@@ -39,6 +39,21 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
+      # ★★ SIGN THE CORPUS FIRST, on this host, with a key that never leaves it — BEFORE the build and the tests,
+      # because the tests verify the signature and nobody outside this box has the key. Signing later would mean a
+      # manifest edited anywhere else could never pass CI at all.
+      #
+      # ★★ Deliberately NOT an API endpoint. An endpoint that can sign means whoever can call it can re-sign a
+      # TAMPERED corpus, and the thing doing the verifying becomes the thing being checked. Here no request can
+      # reach the key, and the signature is produced by the deploy that ships the artifact.
+      #
+      # ★ The key is generated on first run and then reused from registry-data/, which a deploy never replaces —
+      # so a new host provisions itself instead of waiting for somebody to remember a manual step.
+      - name: Sign the noise corpus
+        run: tools/sign-corpus.sh
+        env:
+          CAI_CORPUS_SIGNING_KEY: /home/jimmy/apps/cai-web/registry-data/cai-corpus.key.pem
+
       # VERIFY (the old service keeps serving; any failure here = safe no-op).
       - name: Verify build (Release)
         run: dotnet build src/Cai.Web -c Release -m:1 /p:UseSharedCompilation=false

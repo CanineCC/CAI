@@ -1,7 +1,7 @@
 {
   "manifestVersion": "noise-corpus-1.0",
   "samplerVersion": "cai-holdout-1.0",
-  "keyId": "cai-corpus-dev-2026-08",
+  "keyId": "cai-corpus-2026-08",
   "note": "The candidate pool and the periods drawn from it. THE POOL IS PUBLIC OR THE DRAW IS UNVERIFIABLE: a third party re-deriving a holdout needs the seed AND the pool it was drawn from, because a pool chosen after the fact makes a reproducible draw meaningless. Public repositories only — everything a rater is shown must already be public, which removes every data-handling question rather than managing it. Signed detached; see VERIFYING-THE-CORPUS.md.",
   "rules": {
     "targetProductionLocPerLanguage": 60000,
@@ -140,5 +140,6 @@
     }
   ],
   "reservedSliceNote": "Repositories marked `reserved` are PERMANENTLY PRISTINE: no participant develops against them, ever. They are in every draw, and a submission declaring one as trained is refused. Without such an endpoint the recency decay curve has nothing to measure against — the never-trained bucket would empty as the standard matures, and the overfitting gap would become uncomputable exactly when tools have had time to overfit. One per language, chosen as the smallest so the reservation costs the least coverage.",
-  "embargoNote": "`publishesAt` is when a period's record opens to everyone. Before it, a participant sees only its own submissions and everything else is withheld — from every caller including Watchdog, which owns this standard and competes in it. The date is signed with the draw precisely so it cannot be moved when it suits."
+  "embargoNote": "`publishesAt` is when a period's record opens to everyone. Before it, a participant sees only its own submissions and everything else is withheld — from every caller including Watchdog, which owns this standard and competes in it. The date is signed with the draw precisely so it cannot be moved when it suits.",
+  "keyCustody": "The signing key is generated on, and never leaves, the CAI production host; the manifest is signed by the deploy that ships it. A verifying signature therefore proves this manifest has not changed since that deploy. It does NOT prove an independent party vouched for it — that needs an offline key or a hosted KMS, and nothing about the format or the verification command changes when it does."
 }

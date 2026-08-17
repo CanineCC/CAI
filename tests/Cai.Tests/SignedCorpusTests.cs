@@ -94,12 +94,16 @@ public sealed class SignedCorpusTests
     }
 
     [Fact]
-    public void STAR_The_Key_Is_Marked_As_A_DEVELOPMENT_Key_While_It_Is_One()
+    public void STAR_The_Manifest_Says_What_The_SIGNATURE_IS_WORTH()
     {
-        // ★★ A signature nobody should trust must SAY so. The mechanism is complete and the custody of the
-        // production key is a decision nobody has made yet — so the key id carries `dev`, and a reader who checks
-        // it learns exactly what the signature is worth rather than assuming.
-        Assert.Contains("dev", CorpusManifest.Load().KeyId, StringComparison.OrdinalIgnoreCase);
+        // ★★ WHO HOLDS THE KEY IS THE VALUE OF A SIGNATURE. The key is generated on and never leaves the CAI
+        // host, and the deploy signs the manifest it ships — so a verifying signature proves this manifest has
+        // not changed since that deploy, and NOT that an independent party vouched for it. Claiming the second
+        // would be exactly the overreach the standard exists to prevent, so the custody says both halves.
+        var custody = CorpusManifest.Load().KeyCustody;
+
+        Assert.Contains("never leaves", custody, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does NOT prove", custody, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -155,8 +159,9 @@ public sealed class SignedCorpusApiTests(RegistryUnconfiguredFixture fx)
         Assert.Equal(CorpusManifest.Algorithm, manifest.GetProperty("algorithm").GetString());
         Assert.False(string.IsNullOrWhiteSpace(manifest.GetProperty("signature").GetString()));
 
-        // ★★ And the key says what it is worth, rather than leaving a reader to assume.
-        Assert.True(manifest.GetProperty("keyIsDevelopmentOnly").GetBoolean());
+        // ★★ And the custody claim travels with it, rather than leaving a reader to interpret a key id.
+        Assert.Contains("never leaves", manifest.GetProperty("keyCustody").GetString()!,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

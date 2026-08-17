@@ -10,10 +10,15 @@ namespace Cai.Web.Noise;
 /// drifted, which is the only thing signing was for.
 /// </param>
 /// <param name="Problem">Why it did not verify, when it did not.</param>
+/// <param name="KeyCustody">
+/// ★★ WHAT THE SIGNATURE IS WORTH, in the manifest's own words. Who holds the key IS the value of a signature, so
+/// a reader needs the custody claim beside it rather than a key id they have to interpret.
+/// </param>
 public sealed record CorpusManifestDocument(
     string Version,
     string SamplerVersion,
     string KeyId,
+    string KeyCustody,
     string Signature,
     bool SignatureValid,
     string? Problem,
@@ -48,8 +53,25 @@ public static class CorpusManifest
     /// <summary>The detached signature over <see cref="ManifestFileName"/>'s exact bytes.</summary>
     public const string SignatureFileName = "noise-corpus-1.0.json.sig";
 
-    /// <summary>The public key the signature verifies against.</summary>
-    public const string PublicKeyFileName = "cai-corpus-dev-2026-08.pub.pem";
+    /// <summary>
+    /// The public key the signature verifies against — named by the manifest's own <c>keyId</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>★★ DERIVED, NOT A SECOND CONSTANT. Rotating the key is then one edit in the manifest, and there is
+    /// no second place to forget: a filename const left pointing at the old key would fail verification at startup
+    /// and take the standard down (it fails closed) — safe, and still an avoidable outage.</para>
+    ///
+    /// <para>★★ READ FROM THE MANIFEST'S BYTES, never from the parsed document. Going through
+    /// <see cref="Load"/> would be circular — Load verifies, and verifying needs the key — and the bytes are the
+    /// right source anyway: the manifest NAMES the key it was signed with, and editing that name changes the
+    /// bytes, so the signature fails regardless.</para>
+    /// </remarks>
+    public static string PublicKeyFileName => $"{KeyIdOf(ReadShippedBytes())}.pub.pem";
+
+    /// <summary>The keyId out of raw manifest bytes, without verifying anything.</summary>
+    private static string KeyIdOf(byte[] manifestBytes) =>
+        JsonDocument.Parse(manifestBytes).RootElement.GetProperty("keyId").GetString()
+        ?? throw new InvalidOperationException("the corpus manifest names no keyId, so no key can verify it.");
 
     /// <summary>The signature algorithm, published so a checker knows what to run.</summary>
     public const string Algorithm = "ecdsa-p256-sha256";
@@ -61,7 +83,7 @@ public static class CorpusManifest
     /// ★ Published beside the files rather than in a document somebody has to be handed. "Verifiable" means
     /// somebody can run it, and the command is the whole claim.
     /// </remarks>
-    public static readonly string VerificationInstructions =
+    public static string VerificationInstructions =>
         $"""
         The corpus is published as three files: the manifest ({ManifestFileName}), a detached signature over its
         exact bytes ({SignatureFileName}), and the public key it verifies against ({PublicKeyFileName}).
@@ -117,8 +139,11 @@ public static class CorpusManifest
         ArgumentNullException.ThrowIfNull(manifestBytes);
         ArgumentNullException.ThrowIfNull(signature);
 
+        // ★ The key named by THESE bytes, so a tampered keyId simply fails: changing it changes the bytes the
+        // signature covers.
         using var key = ECDsa.Create();
-        key.ImportFromPem(System.Text.Encoding.UTF8.GetString(ReadResource(PublicKeyFileName)));
+        key.ImportFromPem(
+            System.Text.Encoding.UTF8.GetString(ReadResource($"{KeyIdOf(manifestBytes)}.pub.pem")));
 
         return key.VerifyData(
             manifestBytes, signature, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
@@ -179,6 +204,9 @@ public static class CorpusManifest
             Version: root.GetProperty("manifestVersion").GetString()!,
             SamplerVersion: root.GetProperty("samplerVersion").GetString()!,
             KeyId: root.GetProperty("keyId").GetString()!,
+            KeyCustody: root.TryGetProperty("keyCustody", out var custody)
+                ? custody.GetString() ?? ""
+                : "",
 
             // ★ Base64 of the DER signature, so it can travel in JSON beside the draw it covers.
             Signature: Convert.ToBase64String(signature),

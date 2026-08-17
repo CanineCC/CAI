@@ -2483,10 +2483,10 @@ public static class NoiseStandardEndpoints
             algorithm = CorpusManifest.Algorithm,
             signature = manifest.Signature,
 
-            // ★★ THE KEY SAYS WHAT IT IS WORTH. The mechanism is complete; the custody of a production signing
-            // key is a decision nobody has made yet, so a reader who checks the key id learns that rather than
-            // assuming a signature means more than it does.
-            keyIsDevelopmentOnly = manifest.KeyId.Contains("dev", StringComparison.OrdinalIgnoreCase),
+            // ★★ THE CUSTODY CLAIM, published with the signature. Who holds the key IS what a signature is worth,
+            // so a reader gets it in words rather than a key id to interpret — and it says plainly what this one
+            // does NOT prove.
+            keyCustody = manifest.KeyCustody,
 
             files = new
             {
