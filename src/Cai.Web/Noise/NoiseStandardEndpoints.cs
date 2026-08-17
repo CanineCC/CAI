@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
 namespace Cai.Web.Noise;
 
 /// <summary>
@@ -820,7 +823,7 @@ public static class NoiseStandardEndpoints
 
         // ★★ What has to travel with a rate for the rate to mean anything: the funnel it was computed
         // over, the actionability split, and the difference this sample could actually detect.
-        endpoints.MapPost("/api/noise/publication", (PublicationRequest request) =>
+        endpoints.MapPost("/api/noise/publication", (PublicationRequest request, INoiseStore store) =>
         {
             if (request is null)
             {
@@ -941,7 +944,12 @@ public static class NoiseStandardEndpoints
             var judged = request.ValidAndActionable + request.ValidNotActionable + request.Noise;
             var rate = judged > 0 ? (double?)request.Noise / judged : null;
 
-            return Results.Ok(new
+            // ★★ THE INTERVAL, COMPUTED HERE AND CARRIED WITH THE RATE. #23-4: the number never appears
+            // without its interval and its period — "if the surface cannot carry the qualifiers, it does not
+            // carry the number". Nothing computed one before, so that constraint was unsatisfiable.
+            var interval = PublicationSurface.WilsonIntervalOrNull(request.Noise, judged);
+
+            var payload = new
             {
                 period = request.Period,
 
@@ -966,6 +974,13 @@ public static class NoiseStandardEndpoints
                 validNotActionable = summary.ValidNotActionable,
                 noise = summary.Noise,
                 noiseRate = rate,
+
+                // ★★ NEVER the bare rate. A noise rate lives near the ends of the scale, which is where the
+                // normal approximation fails outright — 0 of 200 becomes "0 % to 0 %", certainty from a sample
+                // that proves nothing of the kind. Wilson stays inside [0,1] and stays honest there.
+                noiseRateInterval = interval is { } ci
+                    ? new { low = (double?)ci.Low, high = (double?)ci.High, method = "wilson-95" }
+                    : new { low = (double?)null, high = (double?)null, method = "wilson-95" },
 
                 // ★★ Over VALID findings only. Divided by everything reported it would mix precision in,
                 // and a tool could improve its actionability by producing more noise.
@@ -1114,10 +1129,54 @@ public static class NoiseStandardEndpoints
                   + "computed from the repository count with a design effect, not from the finding count. "
                   + "Treating 2,000 correlated findings as 2,000 observations is how a two-point move gets "
                   + "published as progress when it is a statement about which repositories were drawn.",
-            });
+            };
+
+            // ★★ STORED, so there is something to transclude. #23-4 has CAI own the published result and
+            // watchdog.canine.dev render it at request time rather than keeping a copy — two copies drifting
+            // is this codebase's track record, and on this number a caching bug and a suppression are the
+            // same event seen from outside. A POST that computed and forgot left nothing to render, so the
+            // Watchdog surface could only have restated a figure kennel computed itself: the rejected option.
+            //
+            // ★ APPEND-ONLY, and only on the accepted path — a refused result must not be fetchable as
+            // though it had passed the contract.
+            store.RecordPublication(
+                request.Period!, JsonSerializer.Serialize(payload), DateTimeOffset.UtcNow);
+
+            return Results.Ok(payload);
         })
         .AllowAnonymous()
         .WithName("NoisePublication");
+
+        // ★★ THE READ SIDE OF #23-4. Watchdog fetches this at request time; it is the only copy.
+        endpoints.MapGet("/api/noise/published/{period}", (string period, INoiseStore store) =>
+        {
+            var latest = store.LatestPublication(period);
+            if (latest is not { } published)
+            {
+                // ★★ NEVER a zero-filled body. "We measured that period and found nothing" and "nothing has
+                // been published for it" are different claims, and the first one is false.
+                return Results.NotFound(new
+                {
+                    period,
+                    error = $"no result has been published for period '{period}'.",
+                    published = store.PublishedPeriods(),
+                });
+            }
+
+            var node = JsonNode.Parse(published.PayloadJson)!.AsObject();
+            node["publishedAt"] = JsonValue.Create(published.PublishedAt);
+
+            // ★★ A CORRECTION IS VISIBLE AS ONE. On the single figure where §01 says that being seen to
+            // suppress ends the standard, a store that overwrote would make the second publication of a
+            // period indistinguishable from the first.
+            node["supersededCount"] = JsonValue.Create(published.History.Count - 1);
+            node["history"] = new JsonArray(
+                published.History.Select(h => (JsonNode?)JsonValue.Create(h)).ToArray());
+
+            return Results.Json(node);
+        })
+        .AllowAnonymous()
+        .WithName("NoisePublishedResult");
 
         // ★★ THE COUNTERWEIGHT TO THE NOISE RATE. Precision alone rewards under-firing: a tool reporting
         // one finding it is certain about scores a perfect 0%, and a tool reporting everything worth

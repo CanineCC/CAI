@@ -70,6 +70,19 @@ public interface INoiseStore
 
     /// <summary>The prompts referenced by a period's verdicts, in full.</summary>
     IReadOnlyList<PromptRecord> ListPrompts(string period);
+
+    /// <summary>
+    /// Store an accepted publication for a period. APPEND-ONLY: a correction is a second row.
+    /// </summary>
+    /// <param name="payloadJson">The published body verbatim — what was published, not a re-derivation.</param>
+    void RecordPublication(string period, string payloadJson, DateTimeOffset publishedAt);
+
+    /// <summary>The latest published payload for a period plus its history, or null when none exists.</summary>
+    (string PayloadJson, DateTimeOffset PublishedAt, IReadOnlyList<DateTimeOffset> History)? LatestPublication(
+        string period);
+
+    /// <summary>Periods that have a published result, newest first — what a reader can ask for.</summary>
+    IReadOnlyList<string> PublishedPeriods();
 }
 
 /// <summary>
@@ -176,6 +189,18 @@ public sealed class SqliteNoiseStore : INoiseStore
             );
             CREATE INDEX IF NOT EXISTS ix_noise_verdicts_period  ON noise_verdicts(period);
             CREATE INDEX IF NOT EXISTS ix_noise_verdicts_finding ON noise_verdicts(period, finding_id);
+
+            -- ★★ APPEND-ONLY, keyed by nothing but its own id. A correction to a published number is a
+            -- SECOND row, so it is visible as a correction: on the one figure where §01 says being seen to
+            -- suppress ends the standard, a store that overwrote would make the second publication
+            -- indistinguishable from the first.
+            CREATE TABLE IF NOT EXISTS noise_publications (
+                publication_id TEXT PRIMARY KEY,
+                period         TEXT NOT NULL,
+                payload_json   TEXT NOT NULL,
+                published_at   TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_noise_publications_period ON noise_publications(period, published_at);
 
             CREATE TABLE IF NOT EXISTS noise_resolutions (
                 period                  TEXT NOT NULL,
@@ -487,6 +512,85 @@ public sealed class SqliteNoiseStore : INoiseStore
         cmd.Parameters.AddWithValue("$id", submissionId ?? "");
         var value = cmd.ExecuteScalar();
         return value is null or DBNull ? null : (string)value;
+    }
+
+    /// <inheritdoc />
+    public void RecordPublication(string period, string payloadJson, DateTimeOffset publishedAt)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            INSERT INTO noise_publications (publication_id, period, payload_json, published_at)
+            VALUES ($id, $period, $payload, $at)
+            """;
+        cmd.Parameters.AddWithValue("$id", Guid.CreateVersion7().ToString("n"));
+        cmd.Parameters.AddWithValue("$period", period);
+        cmd.Parameters.AddWithValue("$payload", payloadJson);
+        cmd.Parameters.AddWithValue("$at", publishedAt.ToString("O"));
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <inheritdoc />
+    public (string PayloadJson, DateTimeOffset PublishedAt, IReadOnlyList<DateTimeOffset> History)?
+        LatestPublication(string period)
+    {
+        using var conn = Open();
+
+        var history = new List<DateTimeOffset>();
+        using (var all = conn.CreateCommand())
+        {
+            all.CommandText =
+                "SELECT published_at FROM noise_publications WHERE period = $period ORDER BY published_at";
+            all.Parameters.AddWithValue("$period", period ?? "");
+            using var reader = all.ExecuteReader();
+            while (reader.Read())
+            {
+                history.Add(DateTimeOffset.Parse(
+                    reader.GetString(0), System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+
+        if (history.Count == 0)
+        {
+            return null;
+        }
+
+        using var latest = conn.CreateCommand();
+        latest.CommandText =
+            """
+            SELECT payload_json, published_at FROM noise_publications
+            WHERE period = $period ORDER BY published_at DESC, publication_id DESC LIMIT 1
+            """;
+        latest.Parameters.AddWithValue("$period", period ?? "");
+        using var row = latest.ExecuteReader();
+        if (!row.Read())
+        {
+            return null;
+        }
+
+        return (
+            row.GetString(0),
+            DateTimeOffset.Parse(row.GetString(1), System.Globalization.CultureInfo.InvariantCulture),
+            history);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> PublishedPeriods()
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT DISTINCT period FROM noise_publications ORDER BY period DESC";
+        using var reader = cmd.ExecuteReader();
+
+        var periods = new List<string>();
+        while (reader.Read())
+        {
+            periods.Add(reader.GetString(0));
+        }
+
+        return periods;
     }
 
     private static SubmissionReceipt ReadReceipt(SqliteDataReader reader) => new(

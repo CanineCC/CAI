@@ -52,6 +52,46 @@ public static class PublicationSurface
     /// ★ Over valid findings, never over everything reported. Dividing by the whole set mixes precision
     /// into it, and a tool could then improve its actionability by producing more noise.
     /// </remarks>
+    /// <summary>The z for a 95 % two-sided interval.</summary>
+    public const double Z95 = 1.959963984540054;
+
+    /// <summary>
+    /// The Wilson score interval for <paramref name="successes"/> of <paramref name="trials"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>★★ WILSON, NOT THE NORMAL APPROXIMATION, and the difference is not cosmetic. A noise rate lives
+    /// near the ends of the scale, and that is exactly where the normal approximation fails: at 0 of 200 it
+    /// returns 0 % to 0 %, an interval claiming certainty from a sample that proves nothing of the kind. Wilson
+    /// keeps the bound inside [0,1] and stays honest at the extremes.</para>
+    ///
+    /// <para>★ #23-4's second constraint is that the number never appears without its interval — "if the
+    /// surface cannot carry the qualifiers, it does not carry the number". Nothing computed one, so the
+    /// constraint was unsatisfiable rather than unmet.</para>
+    /// </remarks>
+    public static (double Low, double High) WilsonInterval(int successes, int trials, double z = Z95)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(trials);
+
+        var n = (double)trials;
+        var p = successes / n;
+        var z2 = z * z;
+        var denominator = 1 + (z2 / n);
+        var centre = (p + (z2 / (2 * n))) / denominator;
+        var half = z / denominator * Math.Sqrt((p * (1 - p) / n) + (z2 / (4 * n * n)));
+
+        return (Math.Max(0, centre - half), Math.Min(1, centre + half));
+    }
+
+    /// <summary>
+    /// The interval, or null over an empty sample.
+    /// </summary>
+    /// <remarks>
+    /// ★ NULL rather than (0,1). "We measured nothing" and "it could be anything" are different claims, and
+    /// the second one reads as a measurement.
+    /// </remarks>
+    public static (double Low, double High)? WilsonIntervalOrNull(int successes, int trials, double z = Z95) =>
+        trials <= 0 ? null : WilsonInterval(successes, trials, z);
+
     public static double? ActionabilityRate(int validAndActionable, int validNotActionable, int noise)
     {
         _ = noise;
