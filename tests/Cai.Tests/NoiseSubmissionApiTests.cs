@@ -70,6 +70,9 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             period = "2026-09",
             tool,
             toolVersion = "engine-8b08d6c6",
+            // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
+            // the whole holdout rests on, and now checked rather than asserted in prose.
+            runStartedAt = "2026-08-20T09:00:00Z",
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = holdout.Select(h => Finding(h.RepoId, h.Sha)),
         };
@@ -118,6 +121,9 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             period = "2026-09",
             tool = Tool(),
             toolVersion = "v1",
+            // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
+            // the whole holdout rests on, and now checked rather than asserted in prose.
+            runStartedAt = "2026-08-20T09:00:00Z",
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = new[] { Finding("some/other-repo", holdout[0].Sha) },
         };
@@ -143,6 +149,9 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             period = "2026-09",
             tool = Tool(),
             toolVersion = "v1",
+            // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
+            // the whole holdout rests on, and now checked rather than asserted in prose.
+            runStartedAt = "2026-08-20T09:00:00Z",
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = new[] { Finding(holdout[0].RepoId, new string('f', 40)) },
         };
@@ -169,6 +178,9 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             period = "2026-09",
             tool = Tool(),
             toolVersion = "v1",
+            // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
+            // the whole holdout rests on, and now checked rather than asserted in prose.
+            runStartedAt = "2026-08-20T09:00:00Z",
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = new[] { Finding(holdout[0].RepoId, holdout[0].Sha) },
         };
@@ -235,6 +247,9 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             period = "2026-09",
             tool = Tool(),
             toolVersion = "v1",
+            // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
+            // the whole holdout rests on, and now checked rather than asserted in prose.
+            runStartedAt = "2026-08-20T09:00:00Z",
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = new[]
             {
@@ -259,6 +274,9 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             period = "2026-09",
             tool = Tool(),
             toolVersion = "v1",
+            // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
+            // the whole holdout rests on, and now checked rather than asserted in prose.
+            runStartedAt = "2026-08-20T09:00:00Z",
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = new[] { Finding(holdout[0].RepoId, holdout[0].Sha, claimClass: "vibes") },
         };
@@ -292,6 +310,9 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             period = "2026-09",
             tool,
             toolVersion = "v1",
+            // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
+            // the whole holdout rests on, and now checked rather than asserted in prose.
+            runStartedAt = "2026-08-20T09:00:00Z",
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = holdout.Select(h => Finding(h.RepoId, h.Sha)),
         };
@@ -326,6 +347,9 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             period = "2026-09",
             tool = Tool(),
             toolVersion = "v1",
+            // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
+            // the whole holdout rests on, and now checked rather than asserted in prose.
+            runStartedAt = "2026-08-20T09:00:00Z",
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = holdout.Take(2).Select(h => Finding(h.RepoId, h.Sha)),
         };

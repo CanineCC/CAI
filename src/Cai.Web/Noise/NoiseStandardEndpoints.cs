@@ -285,7 +285,10 @@ public static class NoiseStandardEndpoints
             }
 
             var holdout = HoldoutSampler.Draw(draw.Seed, NoiseCorpus.Candidates, NoiseCorpus.Rules);
-            var receipt = NoiseSubmissions.Accept(submission, holdout, DateTimeOffset.UtcNow);
+            // ★ The draw's own publication timestamp goes in, so the ordering check has something to compare
+            // against rather than trusting the submitter's word about which came first.
+            var receipt = NoiseSubmissions.Accept(
+                submission, holdout, DateTimeOffset.UtcNow, draw.DrawnAt);
 
             return Results.Ok(Render(receipt));
         })

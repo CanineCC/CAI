@@ -25,10 +25,18 @@ public sealed record SubmittedFinding(
 public sealed record RecencyDeclaration(string RepoId, string Stratum);
 
 /// <summary>A run submitted against a published holdout.</summary>
+/// <param name="RunStartedAt">
+/// ★★ WHEN THE SCANNER RAN, and it must be AFTER the draw was published. That ordering is the neutrality
+/// property the whole standard rests on: a holdout published after the results exist is worthless however it
+/// was made, and a run that predates its own holdout was either run against something else or run against a
+/// draw somebody saw early. Optional on the wire so existing submitters are not broken, but a submission that
+/// omits it cannot be checked and says so.
+/// </param>
 public sealed record NoiseSubmission(
     string Period, string Tool, string ToolVersion,
     IReadOnlyList<RecencyDeclaration> Recency,
-    IReadOnlyList<SubmittedFinding> Findings);
+    IReadOnlyList<SubmittedFinding> Findings,
+    DateTimeOffset? RunStartedAt = null);
 
 /// <summary>What CAI checked, and what it found.</summary>
 public sealed record SubmissionReceipt(
@@ -85,12 +93,38 @@ public static class NoiseSubmissions
     /// Check a submission against the holdout it names, record the receipt, and return it.
     /// </summary>
     public static SubmissionReceipt Accept(
-        NoiseSubmission submission, IReadOnlyList<HoldoutCandidate> holdout, DateTimeOffset now)
+        NoiseSubmission submission, IReadOnlyList<HoldoutCandidate> holdout, DateTimeOffset now,
+        DateTimeOffset? drawPublishedAt = null)
     {
         ArgumentNullException.ThrowIfNull(submission);
         ArgumentNullException.ThrowIfNull(holdout);
 
         var problems = new List<string>();
+
+        // ── The ordering that makes the draw mean anything ────────────────────────────────────────
+        //
+        // ★★ THE DRAW MUST PRECEDE THE RUN. This is the neutrality property everything else rests on: a
+        // holdout published after the results exist is worthless however carefully it was made. It was
+        // asserted in prose — "the draw is published, timestamped, BEFORE any scanner runs" — and checked
+        // nowhere, so a submission could carry findings produced before the holdout it claims to answer and
+        // nothing would notice.
+        if (drawPublishedAt is { } drawnAt)
+        {
+            if (submission.RunStartedAt is not { } startedAt)
+            {
+                problems.Add(
+                    "the submission does not say when the run started, so the standard cannot check that it "
+                    + "began after the holdout was published — the ordering the whole draw rests on. Send "
+                    + "runStartedAt.");
+            }
+            else if (startedAt < drawnAt)
+            {
+                problems.Add(
+                    $"the run started at {startedAt:O}, BEFORE this period's holdout was published at "
+                    + $"{drawnAt:O}. A result produced before its own draw was either run against something "
+                    + "else or run against a draw seen early; either way it cannot answer this holdout.");
+            }
+        }
         var byRepo = holdout.ToDictionary(h => h.RepoId, StringComparer.OrdinalIgnoreCase);
 
         // ★ The recency declaration is required — see RecencyDeclaration.
