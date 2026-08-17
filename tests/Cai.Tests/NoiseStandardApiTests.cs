@@ -156,8 +156,24 @@ public sealed class NoiseStandardApiTests(RegistryUnconfiguredFixture fx) : ICla
         var json = await GetJsonAsync("/api/noise/method");
 
         var classes = json.GetProperty("claimClasses").EnumerateArray()
-            .Select(v => v.GetString()).ToList();
+            .Select(v => v.GetProperty("claimClass").GetString()).ToList();
         Assert.Equal(["pointwise", "structural", "statistical", "advisory"], classes);
+
+        // ★★ And each one now says whether it admits a rate AT ALL. This list used to be four bare strings:
+        // the vocabulary was published and implemented nowhere, so a submitter could read it and have
+        // nothing to send it to. The statistical class is the whole point — a claim with no false-positive
+        // state gets "not measurable under this method", never a zero.
+        var statistical = json.GetProperty("claimClasses").EnumerateArray()
+            .Single(v => v.GetProperty("claimClass").GetString() == "statistical");
+        Assert.False(statistical.GetProperty("admitsANoiseRate").GetBoolean());
+        Assert.Contains("not directly falsifiable",
+            statistical.GetProperty("describes").GetString()!, StringComparison.OrdinalIgnoreCase);
+
+        // The ceiling is declared as ENFORCED, because it now is.
+        Assert.True(json.GetProperty("exclusionCeilingVoidsTheRun").GetBoolean());
+        Assert.True(json.GetProperty("requiresGitMiningVerified").GetBoolean());
+        Assert.Contains("pooled-union", json.GetProperty("recallMethods").EnumerateArray()
+            .Select(v => v.GetString()));
     }
 
     [Fact]

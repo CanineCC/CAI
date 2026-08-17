@@ -34,7 +34,15 @@ public static class NoiseStandardEndpoints
     /// result for reasons having nothing to do with the tool. A bounded, published exclusion is a
     /// diagnostic; an unbounded one is a laundry.
     /// </remarks>
-    public const double MaxExclusionRate = 0.05;
+    /// <summary>
+    /// Kept as a forwarder so nothing reads a second copy of the ceiling.
+    /// </summary>
+    /// <remarks>
+    /// ★★ It USED to be the definition, declared here and compared against nothing while being echoed to
+    /// readers at <c>/method</c> as though it governed something. The one definition now lives beside the
+    /// check that applies it — see <see cref="PublicationContract.MaxExclusionRate"/>.
+    /// </remarks>
+    public const double MaxExclusionRate = PublicationContract.MaxExclusionRate;
 
     public static void MapNoiseStandard(this IEndpointRouteBuilder endpoints)
     {
@@ -111,7 +119,19 @@ public static class NoiseStandardEndpoints
                 "minimumDetectableDifference",
             },
 
-            maxExclusionRate = MaxExclusionRate,
+            // ★★ ENFORCED, not merely published. This was a constant echoed here and compared against
+            // nothing: exclusions above the ceiling now VOID a publication at /api/noise/publication.
+            maxExclusionRate = PublicationContract.MaxExclusionRate,
+            exclusionCeilingVoidsTheRun = true,
+
+            // ★ Which recall methods the standard recognises. They do not measure the same thing, so an
+            // estimate must name one — and "none" is a legitimate answer that publishes with its reason.
+            recallMethods = PublicationContract.RecallMethods,
+
+            // ★★ The pre-publication gate from 05: a run without readable git history cannot publish, because
+            // its noise on the history-derived dimensions is an environment artefact rather than a capability
+            // gap, and those are exactly the dimensions facing competitors who publish no error rate at all.
+            requiresGitMiningVerified = true,
             exclusionRule =
                 "Items nobody could judge leave the rate. Their counts publish per dimension, and a run "
               + "whose combined exclusions exceed the ceiling is VOID — not a pass with a caveat and not "
@@ -120,7 +140,15 @@ public static class NoiseStandardEndpoints
             // ★ A noise rate compares only tools making comparably falsifiable claims. "Line 42
             // dereferences null" can be a false positive; "this file is a hotspot" cannot be, in the
             // same sense — so a naive pooled rate penalises the more specific tool.
-            claimClasses = new[] { "pointwise", "structural", "statistical", "advisory" },
+            // ★★ Was a bare string array — the vocabulary was PUBLISHED and never implemented, so a
+            // submitter could read it and have nowhere to send it. Now each class carries what it asserts
+            // and whether it admits a rate at all, and /publication refuses a result without the breakdown.
+            claimClasses = Enum.GetValues<ClaimClass>().Select(c => new
+            {
+                claimClass = ClaimSpecificity.Wire(c),
+                describes = ClaimSpecificity.Describes(c),
+                admitsANoiseRate = c != ClaimClass.Statistical,
+            }),
             claimClassRule =
                 "Every dimension declares its class, and rates publish PER CLASS as well as pooled. A "
               + "tool that is 95% pointwise and one that is 80% statistical do not have comparable "
@@ -593,33 +621,49 @@ public static class NoiseStandardEndpoints
                 });
             }
 
-            // ★★ THE ANCHOR IS NOT OPTIONAL. It was computable at /api/noise/fixrate from the start, and
-            // that was the problem: a number nobody is obliged to fetch does not get fetched. The noise
-            // rate has an audience and a marketing use; the fix rate has neither, so left optional the
-            // published claim stays "our tool is quiet" rather than "our tool is acted upon".
+            // ★★ THE WHOLE CONTRACT, IN ONE PASS. /api/noise/method has always published ten fields as
+            // required with every rate; nothing checked them, and the exclusion ceiling it echoed was
+            // compared against nothing at all. Every breach comes back together — told one at a time, a
+            // submitter fixes six things over six round-trips and learns nothing about the shape of it.
+            List<ClaimClassTally> claims = [];
+            foreach (var entry in request.ClaimClasses ?? [])
+            {
+                if (ClaimSpecificity.ParseOrNull(entry.ClaimClass) is not { } parsed)
+                {
+                    return Results.BadRequest(new
+                    {
+                        error = $"unrecognised claim class '{entry.ClaimClass}'",
+                        classes = Enum.GetValues<ClaimClass>().Select(ClaimSpecificity.Wire),
+                    });
+                }
+
+                claims.Add(new ClaimClassTally(parsed, entry.Judged, entry.Noise));
+            }
+
+            var breaches = PublicationContract.Check(
+                request.LocCovered,
+                request.RecallEstimate, request.RecallMethod, request.RecallNote,
+                claims,
+                request.ToolVersion, request.HoldoutSeed, request.ModelSet,
+                request.GitMiningVerified,
+                request.Adjudicated, request.Excluded,
+                hasFixRateObservations: request.FixRateObservations is { Count: > 0 },
+                fixRateUnavailable: request.FixRateUnavailable,
+                fixRateWindowDays: request.FixRateWindowDays);
+
+            if (breaches.Count > 0)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "this result does not meet the contract /api/noise/method publishes. Every "
+                          + "requirement below exists because a rate without it invites a comparison that "
+                          + "cannot be made fairly.",
+                    breaches = breaches.Select(b => new { field = b.Field, error = b.Error }),
+                    methodVersion = MethodVersion,
+                });
+            }
+
             var hasObservations = request.FixRateObservations is { Count: > 0 };
-            var hasReason = !string.IsNullOrWhiteSpace(request.FixRateUnavailable);
-
-            if (!hasObservations && !hasReason)
-            {
-                return Results.BadRequest(new
-                {
-                    error = "a publication carries the fix-rate anchor, or says why it cannot. Every other "
-                          + "number here rests on a judgement; this one rests on commits, and publishing "
-                          + "only the judged half is publishing only the half that opinion can move. Send "
-                          + "fixRateObservations with a fixRateWindowDays, or fixRateUnavailable with a "
-                          + "reason — the reason publishes, so the absence is one a reader can weigh.",
-                });
-            }
-
-            if (hasObservations && request.FixRateWindowDays is not > 0)
-            {
-                return Results.BadRequest(new
-                {
-                    error = "fixRateObservations need a fixRateWindowDays — a fix rate without a period is "
-                          + "unfalsifiable, because over a long enough window nearly all code changes.",
-                });
-            }
 
             FixRateSummary? anchor = null;
             if (hasObservations)
@@ -674,6 +718,55 @@ public static class NoiseStandardEndpoints
                 // ★★ Over VALID findings only. Divided by everything reported it would mix precision in,
                 // and a tool could improve its actionability by producing more noise.
                 actionabilityRate = summary.ActionabilityRate,
+
+                // ★★ THE ABSOLUTES, per 100k LoC. The ratio above hides suppression; these expose it. A tool
+                // that stops reporting improves its rate and cannot improve these.
+                locCovered = request.LocCovered,
+                validPer100kLoc = Per100k(request.ValidAndActionable + request.ValidNotActionable, request.LocCovered),
+                noisePer100kLoc = Per100k(request.Noise, request.LocCovered),
+
+                // ★★ Per class, never only pooled. Two tools' pooled rates are not comparable unless their
+                // output is comparably falsifiable, and the statistical class gets NO rate — "not measurable
+                // under this method" is an honest cell; a blank that reads as clean is not.
+                claimClasses = claims.Select(c => new
+                {
+                    claimClass = ClaimSpecificity.Wire(c.Class),
+                    describes = ClaimSpecificity.Describes(c.Class),
+                    judged = c.Judged,
+                    noise = c.Noise,
+                    noiseRate = c.NoiseRate,
+                    measurable = c.Measurable,
+                    notMeasurableReason = c.Measurable
+                        ? null
+                        : "a statistical claim has no false-positive state, so a rate over it would measure "
+                        + "the raters' opinions rather than the tool.",
+                }),
+                measurableShare = ClaimSpecificity.MeasurableShare(claims),
+                pooledRateComparable = !ClaimSpecificity.NothingFalsifiable(claims),
+
+                // ★★ The ceiling, APPLIED. It was published here and compared against nothing.
+                exclusionRate = PublicationContract.ExclusionRate(request.Adjudicated, request.Excluded),
+                maxExclusionRate = PublicationContract.MaxExclusionRate,
+
+                // ★ The recall counterpart, beside the precision figure rather than in a side endpoint.
+                recall = new
+                {
+                    estimate = request.RecallEstimate,
+                    method = request.RecallMethod,
+                    note = request.RecallNote,
+                },
+
+                // ★ 04 fix #1: the gap backlog IS a recall signal, and it costs a query. Published as a
+                // standing figure so a falling noise rate beside a rising gap count is visible as what it is.
+                gapsFoundSinceLastPeriod = request.GapsFoundSinceLastPeriod,
+
+                provenance = new
+                {
+                    toolVersion = request.ToolVersion,
+                    holdoutSeed = request.HoldoutSeed,
+                    modelSet = request.ModelSet,
+                    gitMiningVerified = request.GitMiningVerified,
+                },
 
                 clusters = summary.Clusters,
                 intraClusterCorrelation = PublicationSurface.DefaultIntraClusterCorrelation,
@@ -1027,7 +1120,26 @@ public static class NoiseStandardEndpoints
         int Clusters, double? PreviousRate,
         int? FixRateWindowDays,
         IReadOnlyList<FixObservationEntry>? FixRateObservations,
-        string? FixRateUnavailable);
+        string? FixRateUnavailable,
+        // ★★ The fields /api/noise/method has always listed as requiredWithEveryRate, and which this record
+        // had nowhere to put — so the contract was published and unenforceable. See PublicationContract.
+        long? LocCovered = null,
+        double? RecallEstimate = null,
+        string? RecallMethod = null,
+        string? RecallNote = null,
+        IReadOnlyList<ClaimClassEntry>? ClaimClasses = null,
+        string? ToolVersion = null,
+        string? HoldoutSeed = null,
+        string? ModelSet = null,
+        bool? GitMiningVerified = null,
+        int? GapsFoundSinceLastPeriod = null);
+
+    /// <summary>One claim class's share of the run, as it arrives on the wire.</summary>
+    public sealed record ClaimClassEntry(string? ClaimClass, int Judged, int Noise);
+
+    /// <summary>A count per 100k LoC, or null without a denominator.</summary>
+    private static double? Per100k(int count, long? loc) =>
+        loc is > 0 ? count * 100_000d / loc.Value : null;
 
     /// <summary>One tool's finding and its adjudication, as it arrives on the wire.</summary>
     public sealed record PooledFindingEntry(

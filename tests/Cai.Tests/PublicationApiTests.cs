@@ -25,12 +25,31 @@ public sealed class PublicationApiTests(RegistryUnconfiguredFixture fx) : IClass
     /// carry observations irrelevant to what they check.
     /// </remarks>
     private static object Run(
-        int reported = 100, int adjudicated = 80, int excluded = 5, int unrated = 15,
+        // ★★ excluded was 5 of 85 judged = 5.9 %, ABOVE the 5 % ceiling the specification says VOIDS a run —
+        // and nothing checked it, so this fixture published happily for as long as it existed. 3 of 83 is
+        // 3.6 %. The tests below are about the census and the detectable difference; the exclusion ceiling
+        // has its own tests, and a shared fixture that trips it teaches the wrong lesson everywhere.
+        int reported = 100, int adjudicated = 80, int excluded = 3, int unrated = 17,
         int validAndActionable = 30, int validNotActionable = 20, int noise = 30, int clusters = 12) =>
         new
         {
             reported, adjudicated, excluded, unrated, validAndActionable, validNotActionable, noise, clusters,
             fixRateUnavailable = "fixture — this test is about the census and the threshold",
+
+            // ★★ The rest of the contract /api/noise/method publishes. Omitting it does not make a shorter
+            // test; it makes a test of a publication the standard refuses. See PublicationContract.
+            locCovered = 4_200_000L,
+            recallEstimate = 0.62,
+            recallMethod = "pooled-union",
+            claimClasses = new object[]
+            {
+                new { claimClass = "pointwise", judged = validAndActionable + noise, noise },
+                new { claimClass = "advisory", judged = validNotActionable, noise = 0 },
+            },
+            toolVersion = "fixture-tool 1.0",
+            holdoutSeed = "fixture-seed",
+            modelSet = "fixture-judge@1",
+            gitMiningVerified = true,
         };
 
     /// <summary>
@@ -70,6 +89,16 @@ public sealed class PublicationApiTests(RegistryUnconfiguredFixture fx) : IClass
             clusters = 12,
             previousRate = 0.20,
             fixRateUnavailable = "fixture — this test is about the detectable difference",
+
+            // The contract, as every publication must carry it.
+            locCovered = 4_200_000L,
+            recallEstimate = 0.62,
+            recallMethod = "pooled-union",
+            claimClasses = new object[] { new { claimClass = "pointwise", judged = 2000, noise = 440 } },
+            toolVersion = "fixture-tool 1.0",
+            holdoutSeed = "fixture-seed",
+            modelSet = "fixture-judge@1",
+            gitMiningVerified = true,
         });
 
         Assert.True(body.GetProperty("minimumDetectableDifference").GetDouble() > 0.02);

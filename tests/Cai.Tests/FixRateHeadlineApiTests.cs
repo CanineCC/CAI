@@ -38,6 +38,24 @@ public sealed class FixRateHeadlineApiTests(RegistryUnconfiguredFixture fx) : IC
         ["validNotActionable"] = 460,
         ["noise"] = 440,
         ["clusters"] = 12,
+        // ★★ THE REST OF THE CONTRACT. These fields were listed at /api/noise/method as required with
+        // every rate long before anything enforced them, and this fixture is what "a complete result"
+        // looks like. A fixture that omits them is not a shorter test — it is a test of a publication
+        // the standard would refuse.
+        ["locCovered"] = 4_200_000L,
+        ["recallEstimate"] = 0.62,
+        ["recallMethod"] = "pooled-union",
+        ["claimClasses"] = new object[]
+        {
+            new { claimClass = "pointwise", judged = 1200, noise = 300 },
+            new { claimClass = "structural", judged = 400, noise = 100 },
+            new { claimClass = "statistical", judged = 140, noise = 30 },
+            new { claimClass = "advisory", judged = 60, noise = 10 },
+        },
+        ["toolVersion"] = "watchdog-engine 2026.08.3",
+        ["holdoutSeed"] = "cai-2026-08-a1b2c3",
+        ["modelSet"] = "judge-a@2026-07, judge-b@2026-07, blind-c@2026-06, blind-d@2026-06",
+        ["gitMiningVerified"] = true,
     };
 
     private static object[] Observations() =>
@@ -60,7 +78,12 @@ public sealed class FixRateHeadlineApiTests(RegistryUnconfiguredFixture fx) : IC
         var (status, body) = await PublishAsync(Run());
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
-        Assert.Contains("fix", body.GetProperty("error").GetString()!, StringComparison.OrdinalIgnoreCase);
+        // ★ Named as a FIELD in the breach list, not buried in prose. The anchor is checked alongside the
+        // rest of the contract so a submitter missing it — and the provenance, and the claim classes — is
+        // told all of it in one response rather than over six round-trips.
+        var fields = body.GetProperty("breaches").EnumerateArray()
+            .Select(b => b.GetProperty("field").GetString()).ToArray();
+        Assert.Contains("fixRateObservations", fields);
     }
 
     /// <summary>
