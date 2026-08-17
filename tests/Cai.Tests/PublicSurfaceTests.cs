@@ -32,7 +32,7 @@ public sealed class PublicSurfaceTests(RegistryUnconfiguredFixture fx) : IClassF
         Assert.Contains("User-agent: *", body, StringComparison.Ordinal);
         // This host is the API; the crawlable copy of the standard is the page site.
         Assert.Contains("Disallow: /", body, StringComparison.Ordinal);
-        Assert.Contains("cai.canine.dev", body, StringComparison.Ordinal);
+        Assert.Contains("codeassuranceindex.info", body, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -48,15 +48,15 @@ public sealed class PublicSurfaceTests(RegistryUnconfiguredFixture fx) : IClassF
     }
 
     [Theory]
-    [InlineData("/", "https://cai.canine.dev/")]
-    [InlineData("/spec", "https://cai.canine.dev/spec/")]
-    [InlineData("/dimensions", "https://cai.canine.dev/dimensions/")]
-    [InlineData("/lenses", "https://cai.canine.dev/dimensions/")]
-    [InlineData("/verify", "https://cai.canine.dev/verify/")]
-    [InlineData("/calculator", "https://cai.canine.dev/verify/")]
-    [InlineData("/registry", "https://cai.canine.dev/registry/")]
-    [InlineData("/cli", "https://cai.canine.dev/page-cli/")]
-    [InlineData("/badge", "https://cai.canine.dev/badge/")]
+    [InlineData("/", "https://codeassuranceindex.info/")]
+    [InlineData("/spec", "https://codeassuranceindex.info/spec/")]
+    [InlineData("/dimensions", "https://codeassuranceindex.info/dimensions/")]
+    [InlineData("/lenses", "https://codeassuranceindex.info/dimensions/")]
+    [InlineData("/verify", "https://codeassuranceindex.info/verify/")]
+    [InlineData("/calculator", "https://codeassuranceindex.info/verify/")]
+    [InlineData("/registry", "https://codeassuranceindex.info/registry/")]
+    [InlineData("/cli", "https://codeassuranceindex.info/page-cli/")]
+    [InlineData("/badge", "https://codeassuranceindex.info/badge/")]
     public async Task The_retired_marketing_pages_redirect_to_the_standards_site(string path, string target)
     {
         // This host served a complete second website whose content disagreed with the site of the same name. The

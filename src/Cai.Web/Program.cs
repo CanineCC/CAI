@@ -482,29 +482,29 @@ app.MapGet("/glossary.jsonld", [AllowAnonymous] () => Results.Text(Cai.Web.CaiGl
 // Browsers auto-request /favicon.ico; we only ship favicon.svg. Redirect so non-HTML responses (e.g. /llms.txt) don't 404.
 app.MapGet("/favicon.ico", [AllowAnonymous] () => Results.Redirect("/favicon.svg", permanent: true));
 
-// ── This host is the API; cai.canine.dev is the standard's site ───────────────────────────────────────────────────
-// It used to be both, and the copy that had the working tools was the one nobody could find: api.cai.canine.dev
+// ── This host is the API; codeassuranceindex.info is the standard's site ──────────────────────────────────────────
+// It used to be both, and the copy that had the working tools was the one nobody could find: the API host
 // served a COMPLETE second website — its own nav, its own /spec, /dimensions, /verify, /registry — whose content
-// disagreed with the pages of the same name on cai.canine.dev. The site showed 42 of the 127 dimensions; this host
+// disagreed with the pages of the same name on the marketing site. The site showed 42 of the 127 dimensions; this host
 // showed all of them. The site told you to install a CLI; this host had a working verifier. Neither linked to the
 // other, and this one's robots.txt answered 401, so search engines could not even find the better copy.
 //
-// The pages now live on cai.canine.dev, where the catalogue, the calculator and the verifier are rendered by islands
+// The pages now live on codeassuranceindex.info, where the catalogue, the calculator and the verifier are rendered by islands
 // that read THIS API — one copy of the content, one copy of the data, and the API feeding both. These redirects
 // retire the duplicates without breaking any link that was ever published to them.
 foreach (var (from, to) in new[]
 {
-    ("/", "https://cai.canine.dev/"),
-    ("/spec", "https://cai.canine.dev/spec/"),
-    ("/dimensions", "https://cai.canine.dev/dimensions/"),
+    ("/", "https://codeassuranceindex.info/"),
+    ("/spec", "https://codeassuranceindex.info/spec/"),
+    ("/dimensions", "https://codeassuranceindex.info/dimensions/"),
     // The lens list is part of the catalogue island, which renders lenses and their dimensions together.
-    ("/lenses", "https://cai.canine.dev/dimensions/"),
-    ("/registry", "https://cai.canine.dev/registry/"),
-    ("/cli", "https://cai.canine.dev/page-cli/"),
-    ("/badge", "https://cai.canine.dev/badge/"),
+    ("/lenses", "https://codeassuranceindex.info/dimensions/"),
+    ("/registry", "https://codeassuranceindex.info/registry/"),
+    ("/cli", "https://codeassuranceindex.info/page-cli/"),
+    ("/badge", "https://codeassuranceindex.info/badge/"),
     // Both self-service checks are on one page now: paste a delivery, or paste a bundle.
-    ("/verify", "https://cai.canine.dev/verify/"),
-    ("/calculator", "https://cai.canine.dev/verify/"),
+    ("/verify", "https://codeassuranceindex.info/verify/"),
+    ("/calculator", "https://codeassuranceindex.info/verify/"),
 })
 {
     app.MapGet(from, [AllowAnonymous] () => Results.Redirect(to, permanent: true));
@@ -520,7 +520,7 @@ app.MapGet("/api/score/example", [AllowAnonymous] (HttpContext http) =>
     return Results.Text(CalculatorSample.Json, "application/json");
 });
 
-// Crawlers belong on cai.canine.dev, which serves the same standard as pages with its own robots.txt and sitemap.
+// Crawlers belong on codeassuranceindex.info, which serves the same standard as pages with its own robots.txt and sitemap.
 //
 // Without this route /robots.txt matched no endpoint, and a request that matches no endpoint is evaluated against the
 // default-deny FALLBACK policy — so the file every crawler fetches first answered
@@ -529,7 +529,7 @@ app.MapGet("/api/score/example", [AllowAnonymous] (HttpContext http) =>
 // standard's API.
 app.MapGet("/robots.txt", [AllowAnonymous] () => Results.Text(
     """
-    # api.cai.canine.dev is the CAI API. The standard is published as pages on https://cai.canine.dev
+    # api.codeassuranceindex.info is the CAI API. The standard is published as pages on https://codeassuranceindex.info
     User-agent: *
     Disallow: /
 
@@ -556,7 +556,7 @@ app.MapFallback([AllowAnonymous] async (HttpContext http) =>
 
     http.Response.StatusCode = StatusCodes.Status404NotFound;
     await http.Response.WriteAsJsonAsync(
-        new { error = "no such endpoint", standard = "https://cai.canine.dev" }).ConfigureAwait(false);
+        new { error = "no such endpoint", standard = "https://codeassuranceindex.info" }).ConfigureAwait(false);
 });
 
 app.Run();
