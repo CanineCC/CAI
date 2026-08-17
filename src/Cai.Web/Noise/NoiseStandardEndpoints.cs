@@ -314,6 +314,28 @@ public static class NoiseStandardEndpoints
               + "leave-one-out range. Excluding an outlying repository is NOT permitted — dropping a "
               + "repo for having a high or low rate is selecting on the outcome.",
 
+            // ★★ THE PANEL'S SHAPE (#10). The cascade recorded whatever it was handed, so "four judges agreed"
+            // could have been one model counted four times — and 02 §2 is explicit that a single-family ensemble
+            // cannot see a single-family blind spot.
+            judgePanel = new
+            {
+                distinctModels = JudgePanel.FullPanelDistinctModels,
+                rule = "no model may appear twice in a panel, and the panel must span at least two families. A "
+                     + "round-one settle is therefore two distinct models from two traditions; a round-two panel "
+                     + "is four. Requiring four to RECORD would contradict the cascade — round two convenes only "
+                     + "when round one has split, so most findings could never be recorded at all.",
+                familiesRequired = JudgePanel.RequiredFamilies,
+                temperature = JudgePanel.RequiredTemperature,
+                declaredPerVerdict = new[] { "model", "modelVersion", "modelFamily", "temperature" },
+                why = JudgePanel.Why,
+                undeclaredIsNotAPass = "an undeclared family does not count as a different family, and an "
+                                     + "undeclared temperature does not count as 0. Either default would let a "
+                                     + "panel pass by omitting the field.",
+                appliesTo = "RECORDING a judgement. /api/noise/cascade/resolve still resolves votes as a "
+                          + "calculation; what it refuses is to record a judgement from a panel that breaks the "
+                          + "method.",
+            },
+
             // ★★ THE PERMANENTLY PRISTINE SLICE. 02 §1: without an endpoint the decay curve measures nothing.
             reservedSlice = ReservedSliceRule(),
 
@@ -444,6 +466,12 @@ public static class NoiseStandardEndpoints
                     judge = v.Judge,
                     model = v.Model,
                     modelVersion = v.ModelVersion,
+
+                    // ★★ The panel's shape, per verdict — a requirement whose inputs are not published cannot be
+                    // checked by the reader it exists for.
+                    modelFamily = v.ModelFamily,
+                    temperature = v.Temperature,
+
                     promptId = v.PromptId,
                     verdict = v.Verdict,
                     reasoning = v.Reasoning,
@@ -742,6 +770,14 @@ public static class NoiseStandardEndpoints
                     }
                 }
 
+                // ★★ THE PANEL'S SHAPE (#10), checked once over both rounds. The cascade recorded whatever it was
+                // handed: four votes from one model under four judge names would have been stored as a judgement,
+                // and the record would have shown four agreeing judges where there was one opinion counted four
+                // times. See JudgePanel — and note it constrains RECORDING, never the arithmetic below.
+                unrecordable.AddRange(JudgePanel.Problems(
+                    [.. all.Select(x => new JudgePanel.Declaration(
+                        x.Vote.Judge ?? "unnamed", x.Vote.Model, x.Vote.ModelFamily, x.Vote.Temperature))]));
+
                 if (unrecordable.Count == 0)
                 {
                     foreach (var (round, vote) in all)
@@ -755,7 +791,12 @@ public static class NoiseStandardEndpoints
                             period, findingId, round,
                             vote.Judge ?? "unnamed", vote.Model!, vote.ModelVersion!, vote.PromptId!,
                             NoiseVerdicts.ParseOrNull(vote.Verdict)!.Value.Wire(),
-                            vote.Reasoning!, now));
+                            vote.Reasoning!, now,
+
+                            // ★ Both travel with the raw verdict, like the model version already does: a
+                            // requirement whose inputs are not published cannot be checked by the reader it
+                            // exists for. Non-null here because JudgePanel.Problems refused otherwise.
+                            vote.ModelFamily!, vote.Temperature!.Value));
                     }
 
                     store.RecordResolution(new ResolutionRecord(
@@ -2531,7 +2572,14 @@ public static class NoiseStandardEndpoints
     public sealed record CascadeVote(
         string? Judge, string? Verdict,
         string? Model = null, string? ModelVersion = null,
-        string? PromptId = null, string? Prompt = null, string? Reasoning = null);
+        string? PromptId = null, string? Prompt = null, string? Reasoning = null,
+
+        // ★★ The panel's shape (#10). The FAMILY is the training tradition, not the product name — four models
+        // from one vendor is one family — and the TEMPERATURE must be 0 or the verdict cannot be re-run to the
+        // same answer. Both nullable on the wire so a missing one is REFUSED rather than defaulted: an undeclared
+        // family that counted as "some other family", or an undeclared temperature that counted as 0, would let
+        // every panel pass by omitting the field.
+        string? ModelFamily = null, double? Temperature = null);
 
     /// <summary>
     /// The votes to resolve. Round two is absent until round one has actually split — sending both at

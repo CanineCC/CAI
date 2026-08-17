@@ -205,7 +205,11 @@ public sealed class NoiseStoreDurabilityTests : IDisposable
     {
         judge,
         verdict,
-        model = "gpt-judge",
+
+        // ★ Distinct model per judge, two families, temperature 0 — the panel shape #10 requires to record.
+        model = judge == "judge-a" ? "gpt-judge" : "claude-judge",
+        modelFamily = judge == "judge-a" ? "openai" : "anthropic",
+        temperature = 0,
         modelVersion = "2026-07-01",
         promptId = "noise-judge-v3",
         prompt = "You are shown one finding and the code it cites. Decide whether it should have fired.",

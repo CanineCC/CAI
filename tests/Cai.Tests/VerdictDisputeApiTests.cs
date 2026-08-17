@@ -36,9 +36,11 @@ public sealed class VerdictDisputeApiTests(RegistryUnconfiguredFixture fx)
     /// <summary>Judge one finding, so there is a verdict to dispute.</summary>
     private async Task JudgeAsync(HttpClient client, string period, string findingId, string verdict = "noise")
     {
-        var vote = new
+        // ★ Two distinct models from two families at temperature 0 — the panel shape #10 requires to record.
+        object Judge(string judge, string model, string family) => new
         {
-            verdict, model = "gpt-judge", modelVersion = "2026-07-01", promptId = "p1",
+            judge, verdict, model, modelFamily = family, temperature = 0,
+            modelVersion = "2026-07-01", promptId = "p1",
             prompt = "Should this have fired?", reasoning = "the evidence shown supports it",
         };
 
@@ -47,8 +49,8 @@ public sealed class VerdictDisputeApiTests(RegistryUnconfiguredFixture fx)
             period, findingId,
             round1 = new object[]
             {
-                new { judge = "judge-a", vote.verdict, vote.model, vote.modelVersion, vote.promptId, vote.prompt, vote.reasoning },
-                new { judge = "judge-b", vote.verdict, vote.model, vote.modelVersion, vote.promptId, vote.prompt, vote.reasoning },
+                Judge("judge-a", "gpt-judge", "openai"),
+                Judge("judge-b", "claude-judge", "anthropic"),
             },
         }, Ct));
 

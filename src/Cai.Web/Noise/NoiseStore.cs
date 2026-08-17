@@ -15,10 +15,21 @@ namespace Cai.Web.Noise;
 /// <param name="PromptId">The prompt used, whose full text is published beside the record.</param>
 /// <param name="Verdict">The verdict, in the published vocabulary.</param>
 /// <param name="Reasoning">Why. ★★ A verdict a reader cannot argue with is not open judging.</param>
+/// <param name="ModelFamily">
+/// ★★ The training tradition, not the product name. 02 §2: "a blind spot lives in the weights; no rephrasing
+/// removes it — a single-family ensemble cannot see a single-family blind spot." Four different models from one
+/// vendor is still one family, and the check that they agreed says nothing about all four being wrong the same way.
+/// </param>
+/// <param name="Temperature">
+/// ★★ Must be 0. 01 §3 promises "anyone may re-run the judges and get the same answers"; a verdict produced at 0.7
+/// cannot be re-run to the same answer, so the promise is false for it — and without this field a reader could not
+/// tell which verdicts it was false for.
+/// </param>
 public sealed record VerdictRecord(
     string Period, string FindingId, int Round,
     string Judge, string Model, string ModelVersion, string PromptId,
-    string Verdict, string Reasoning, DateTimeOffset RecordedAt);
+    string Verdict, string Reasoning, DateTimeOffset RecordedAt,
+    string ModelFamily = "", double Temperature = 0);
 
 /// <summary>How one finding's cascade settled.</summary>
 public sealed record ResolutionRecord(
@@ -321,6 +332,12 @@ public sealed class SqliteNoiseStore : INoiseStore
         // ★ Additive on a table that may already exist in a dev database — SQLite has no ADD COLUMN IF NOT
         // EXISTS, so this is guarded, exactly as the registry store does it.
         AddColumnIfMissing(conn, "noise_submissions", "configuration_json", "TEXT NULL");
+
+        // ★★ The panel's shape, per verdict (#10). Additive for the same reason: a dev database already holds
+        // verdicts recorded before these were required, and dropping them to add two columns would destroy the
+        // record the standard promises to keep.
+        AddColumnIfMissing(conn, "noise_verdicts", "model_family", "TEXT NOT NULL DEFAULT ''");
+        AddColumnIfMissing(conn, "noise_verdicts", "temperature", "REAL NOT NULL DEFAULT 0");
     }
 
     /// <summary>Idempotent ALTER TABLE … ADD COLUMN, checked via PRAGMA table_info.</summary>
@@ -440,9 +457,9 @@ public sealed class SqliteNoiseStore : INoiseStore
             """
             INSERT INTO noise_verdicts
                 (verdict_id, period, finding_id, round, judge, model, model_version, prompt_id,
-                 verdict, reasoning, recorded_at)
+                 verdict, reasoning, recorded_at, model_family, temperature)
             VALUES ($id, $period, $finding, $round, $judge, $model, $modelVersion, $promptId,
-                    $verdict, $reasoning, $recordedAt)
+                    $verdict, $reasoning, $recordedAt, $family, $temperature)
             """;
         cmd.Parameters.AddWithValue("$id", Guid.CreateVersion7().ToString("n"));
         cmd.Parameters.AddWithValue("$period", verdict.Period);
@@ -455,6 +472,8 @@ public sealed class SqliteNoiseStore : INoiseStore
         cmd.Parameters.AddWithValue("$verdict", verdict.Verdict);
         cmd.Parameters.AddWithValue("$reasoning", verdict.Reasoning);
         cmd.Parameters.AddWithValue("$recordedAt", verdict.RecordedAt.ToString("O"));
+        cmd.Parameters.AddWithValue("$family", verdict.ModelFamily);
+        cmd.Parameters.AddWithValue("$temperature", verdict.Temperature);
         cmd.ExecuteNonQuery();
     }
 
@@ -538,7 +557,9 @@ public sealed class SqliteNoiseStore : INoiseStore
                 reader.GetString(reader.GetOrdinal("reasoning")),
                 DateTimeOffset.Parse(
                     reader.GetString(reader.GetOrdinal("recorded_at")),
-                    System.Globalization.CultureInfo.InvariantCulture)));
+                    System.Globalization.CultureInfo.InvariantCulture),
+                reader.GetString(reader.GetOrdinal("model_family")),
+                reader.GetDouble(reader.GetOrdinal("temperature"))));
         }
 
         return list;

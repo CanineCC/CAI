@@ -12,6 +12,130 @@ namespace Cai.Web.Noise;
 /// </remarks>
 public sealed record JudgeVote(string Judge, NoiseVerdict Verdict);
 
+/// <summary>
+/// Whether a panel may be RECORDED — the shape 02 §2 requires, checked once.
+/// </summary>
+/// <remarks>
+/// <para>★★ "A BLIND SPOT LIVES IN THE WEIGHTS; NO REPHRASING REMOVES IT. A single-family ensemble cannot see a
+/// single-family blind spot." The cascade recorded whatever it was handed: four votes from one model under four
+/// judge names would have been stored as a judgement, and the record would have shown four agreeing judges where
+/// there was one opinion counted four times.</para>
+///
+/// <para>★★ AN UNDECLARED FAMILY IS NOT A DIFFERENT FAMILY, and an undeclared temperature is not zero. Either
+/// default would let a panel pass by OMITTING the field, which enforces the requirement only against submitters who
+/// filled it in honestly.</para>
+///
+/// <para>★ A pure function over the declarations, so it is testable without a database and so the resolver stays a
+/// calculation: this constrains RECORDING, not arithmetic.</para>
+/// </remarks>
+public static class JudgePanel
+{
+    /// <summary>
+    /// Distinct models the FULL panel has, when round two convened.
+    /// </summary>
+    /// <remarks>
+    /// ★★ NOT A MINIMUM PER JUDGEMENT — and this is a deliberate reading of #10, recorded in 06-decisions.
+    /// "Four distinct models across the two rounds" describes the full panel, and requiring four to RECORD would
+    /// contradict the cascade's own design: round two convenes only when round one has actually split, so an
+    /// efficient round-one settle — which is most findings — could never be recorded at all. The enforceable rule
+    /// with the same effect is <b>no model may appear twice in a panel</b> plus <b>at least two families</b>: a
+    /// round-one pair is then two distinct models from two traditions, and a round-two panel is four.
+    /// </remarks>
+    public const int FullPanelDistinctModels = 4;
+
+    /// <summary>Distinct declared families the method requires.</summary>
+    /// <remarks>★ Two is the floor that makes the ensemble cross-family at all; more is better and not required.</remarks>
+    public const int RequiredFamilies = 2;
+
+    /// <summary>The only temperature a re-runnable verdict can have been produced at.</summary>
+    public const double RequiredTemperature = 0;
+
+    /// <summary>Why the shape is what it is, published with it.</summary>
+    public const string Why =
+        "A blind spot lives in the weights and no rephrasing removes it, so a single-family ensemble cannot see a "
+      + "single-family blind spot: four models from one vendor is one training tradition, and their agreement says "
+      + "nothing about all four being wrong the same way. Determinism is part of the same promise — a verdict "
+      + "produced above temperature 0 cannot be re-run to the same answer, which makes 'anyone may re-run the "
+      + "judges' false for it.";
+
+    /// <summary>One judge's declaration, as far as the panel check is concerned.</summary>
+    public sealed record Declaration(string Judge, string? Model, string? Family, double? Temperature);
+
+    /// <summary>
+    /// Everything wrong with a panel — empty when it may be recorded.
+    /// </summary>
+    public static IReadOnlyList<string> Problems(IReadOnlyList<Declaration> panel)
+    {
+        ArgumentNullException.ThrowIfNull(panel);
+
+        var problems = new List<string>();
+
+        var declared = panel.Where(p => !string.IsNullOrWhiteSpace(p.Model)).ToList();
+        var models = declared
+            .Select(p => p.Model)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // ★★ NO MODEL TWICE. Four votes from one model are one opinion counted four times, and the record would
+        // show four agreeing judges where there was one. See FullPanelDistinctModels for why this is the rule
+        // rather than a flat minimum of four.
+        if (models.Count < declared.Count)
+        {
+            var repeated = declared
+                .GroupBy(p => p.Model, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .Select(g => $"{g.Key} ({string.Join(", ", g.Select(p => p.Judge))})");
+
+            problems.Add(
+                "the panel votes the same model more than once: " + string.Join("; ", repeated)
+              + ". That is one opinion counted twice, and the record would show two agreeing judges where there "
+              + "was one. The method requires distinct models — four across the two rounds when round two "
+              + "convenes.");
+        }
+
+        // ★★ An UNDECLARED family is not a different family — see the class remarks.
+        var undeclared = panel.Where(p => string.IsNullOrWhiteSpace(p.Family)).Select(p => p.Judge).ToList();
+        if (undeclared.Count > 0)
+        {
+            problems.Add(
+                "these judges declare no model family: " + string.Join(", ", undeclared)
+              + ". An undeclared family cannot count as a different one, or every panel would pass by omitting "
+              + "the field.");
+        }
+
+        var families = panel
+            .Select(p => p.Family)
+            .Where(f => !string.IsNullOrWhiteSpace(f))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (undeclared.Count == 0 && families.Count < RequiredFamilies)
+        {
+            problems.Add(
+                $"the panel spans {families.Count} model family (" + string.Join(", ", families)
+              + $") and the method requires at least {RequiredFamilies}. A blind spot lives in the weights: a "
+              + "single-family ensemble cannot see a single-family blind spot, however many models it has.");
+        }
+
+        foreach (var judge in panel.Where(p => p.Temperature is null))
+        {
+            problems.Add(
+                $"judge '{judge.Judge}' declares no temperature. An undeclared temperature cannot be assumed to "
+              + "be 0, or determinism would be enforced only against the honest.");
+        }
+
+        foreach (var judge in panel.Where(p => p.Temperature is { } t && Math.Abs(t) > 1e-9))
+        {
+            problems.Add(
+                $"judge '{judge.Judge}' declares temperature {judge.Temperature}. A verdict produced above 0 "
+              + "cannot be re-run to the same answer, so 'anyone may re-run the judges and get the same answers' "
+              + "would be false for it.");
+        }
+
+        return problems;
+    }
+}
+
 /// <summary>Where a finding got to in the cascade.</summary>
 public enum CascadeState
 {

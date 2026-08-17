@@ -35,10 +35,18 @@ public sealed class RejudgeApiTests(RegistryUnconfiguredFixture fx) : IClassFixt
     private static string Period([System.Runtime.CompilerServices.CallerMemberName] string caller = "") =>
         $"rj-{caller}";
 
+    /// <remarks>
+    /// ★ The judge NAME selects the model and family, so a round-one pair is two distinct models from two
+    /// traditions — the shape #10 requires to record. A shared "gpt-judge" for both judges used to be enough and
+    /// is now one opinion counted twice.
+    /// </remarks>
     private static object Vote(string judge, string verdict) => new
     {
         judge, verdict,
-        model = "gpt-judge", modelVersion = "2026-07-01", promptId = "p1",
+        model = judge == "judge-a" ? "gpt-judge" : "claude-judge",
+        modelFamily = judge == "judge-a" ? "openai" : "anthropic",
+        temperature = 0,
+        modelVersion = "2026-07-01", promptId = "p1",
         prompt = "Is this finding worth acting on?", reasoning = "because of the evidence shown",
     };
 
@@ -316,10 +324,11 @@ public sealed class RejudgePublicationGateTests(RegistryUnconfiguredFixture fx)
                 period, findingId = id,
                 round1 = new[]
                 {
-                    new { judge = "judge-a", verdict = "noise", model = "m", modelVersion = "v",
-                          promptId = "p", prompt = "q", reasoning = "r" },
-                    new { judge = "judge-b", verdict = "noise", model = "m", modelVersion = "v",
-                          promptId = "p", prompt = "q", reasoning = "r" },
+                    new { judge = "judge-a", verdict = "noise", model = "gpt-judge", modelFamily = "openai",
+                          temperature = 0, modelVersion = "v", promptId = "p", prompt = "q", reasoning = "r" },
+                    new { judge = "judge-b", verdict = "noise", model = "claude-judge",
+                          modelFamily = "anthropic", temperature = 0, modelVersion = "v", promptId = "p",
+                          prompt = "q", reasoning = "r" },
                 },
             }, Ct);
         }
