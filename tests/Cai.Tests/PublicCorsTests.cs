@@ -41,8 +41,8 @@ public sealed class PublicCorsTests(RegistryApiFixture fx) : IClassFixture<Regis
         foreach (var origin in new[]
                  {
                      "https://codeassuranceindex.info", "https://www.codeassuranceindex.info",
-                     // The old hostname stays allowed until its vhost is 301-only.
-                     "https://cai.canine.dev",
+                     // ★ cai.canine.dev is deliberately ABSENT: the vhost is 301-only, so no page is
+                     // served from it and no browser can present it as an Origin.
                      "https://imprint.canine.dev",
                      "https://watchdog.canine.dev", "https://assay.canine.dev",
                  })

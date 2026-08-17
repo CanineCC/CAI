@@ -589,11 +589,11 @@ static string[] ReadCorsOrigins(IConfiguration cfg)
     // them, which is the failure that actually costs something. Override the key to narrow or extend it.
     return configured.Length > 0
         ? configured
+        // ★ cai.canine.dev was kept here through the domain move and is now GONE: its vhost is
+        // 301-only (deploy/nginx), so nothing is rendered on the old hostname and no browser can
+        // present it as an Origin. Removed 2026-08-17, before the public launch, with no live
+        // third-party traffic to strand.
         : ["https://codeassuranceindex.info", "https://www.codeassuranceindex.info",
-           // Kept through the domain move: cai.canine.dev still serves pages until its vhost
-           // becomes 301-only, and a page that has loaded cannot be un-served. Drop it once the
-           // redirect is in place and nothing is rendered on the old hostname any more.
-           "https://cai.canine.dev",
            "https://imprint.canine.dev",
            "https://watchdog.canine.dev", "https://assay.canine.dev"];
 }
