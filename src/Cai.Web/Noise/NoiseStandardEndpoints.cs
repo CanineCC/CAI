@@ -128,6 +128,11 @@ public static class NoiseStandardEndpoints
             // estimate must name one — and "none" is a legitimate answer that publishes with its reason.
             recallMethods = PublicationContract.RecallMethods,
 
+            // ★★ Where the judging is published. 01 promises every prompt, model version and raw verdict with
+            // its reasoning; this is the endpoint that keeps that promise, and naming it here is what makes it
+            // findable by somebody who wants to disagree with a verdict.
+            verdictRecordEndpoint = "/api/noise/record/{period}",
+
             // ★★ The pre-publication gate from 05: a run without readable git history cannot publish, because
             // its noise on the history-derived dimensions is an environment artefact rather than a capability
             // gap, and those are exactly the dimensions facing competitors who publish no error rate at all.
@@ -161,6 +166,82 @@ public static class NoiseStandardEndpoints
         }))
         .AllowAnonymous()
         .WithName("NoiseMethod");
+
+        // ── The verdict record, published in full ─────────────────────────────────────────────────
+        //
+        // ★★ THE OPEN-JUDGING CLAIM, WITH SOMETHING BEHIND IT. 01-scope-and-governance: "every judge prompt,
+        // every model and version, every raw verdict with its reasoning, and every human adjudication.
+        // Published in full. A reader who disagrees with a verdict must be able to find it, read the
+        // reasoning, and say so." Until this existed the cascade resolved in memory and kept nothing, so the
+        // claim a sceptic tests first was the one with nothing to test.
+        //
+        // ★ Anonymous, like the method and the holdout. A judging record only readable by the people who
+        // produced it is not published.
+        endpoints.MapGet("/api/noise/record/{period}", (string period, INoiseStore store) =>
+        {
+            var verdicts = store.ListVerdicts(period);
+            var resolutions = store.ListResolutions(period);
+            var prompts = store.ListPrompts(period);
+            var submissions = store.ListSubmissions(period);
+
+            return Results.Ok(new
+            {
+                period,
+                methodVersion = MethodVersion,
+
+                // ★ An empty record says so rather than looking like a clean one. "Nothing has been judged
+                // for this period" and "everything was judged and agreed" are different facts.
+                judged = resolutions.Count,
+                rawVerdicts = verdicts.Count,
+                note = resolutions.Count == 0
+                    ? "no judging has been recorded for this period yet — this is an absence, not a clean run."
+                    : null,
+
+                // ★★ The prompts, in full and once each. The same prompt answers thousands of findings; a
+                // record that repeats it per verdict is a record nobody downloads.
+                prompts = prompts.Select(p => new { promptId = p.PromptId, text = p.Text, firstSeenAt = p.FirstSeenAt }),
+
+                resolutions = resolutions.Select(r => new
+                {
+                    findingId = r.FindingId,
+                    state = r.State,
+                    verdict = r.Verdict,
+                    settledAtRound = r.SettledAtRound,
+                    actionabilityContested = r.ActionabilityContested,
+                    actionable = r.Actionable,
+                    reason = r.Reason,
+                    recordedAt = r.RecordedAt,
+                }),
+
+                verdicts = verdicts.Select(v => new
+                {
+                    findingId = v.FindingId,
+                    round = v.Round,
+                    judge = v.Judge,
+                    model = v.Model,
+                    modelVersion = v.ModelVersion,
+                    promptId = v.PromptId,
+                    verdict = v.Verdict,
+                    reasoning = v.Reasoning,
+                    recordedAt = v.RecordedAt,
+                }),
+
+                // ★ The register belongs here too: who submitted, when, and whether it was accepted —
+                // including the runs that were refused. A register of only the accepted ones is a register
+                // that has been edited.
+                submissions = submissions.Select(r => new
+                {
+                    submissionId = r.SubmissionId,
+                    tool = r.Tool,
+                    toolVersion = r.ToolVersion,
+                    receivedAt = r.ReceivedAt,
+                    accepted = r.Accepted,
+                    problems = r.Problems,
+                }),
+            });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseRecord");
 
         // ── The holdout ───────────────────────────────────────────────────────────────────────────
         //
@@ -254,7 +335,7 @@ public static class NoiseStandardEndpoints
         // on their own infrastructure, and submits findings — so CAI needs no credentials, no access and
         // no licence to anybody's product. What it does is VERIFY the run covered the holdout that was
         // published, at the shas that were published.
-        endpoints.MapPost("/api/noise/submissions", (NoiseSubmission submission) =>
+        endpoints.MapPost("/api/noise/submissions", (NoiseSubmission submission, INoiseStore store) =>
         {
             if (submission is null || string.IsNullOrWhiteSpace(submission.Period))
             {
@@ -273,7 +354,7 @@ public static class NoiseStandardEndpoints
             // ★★ NO WITHDRAWAL, and therefore no quiet re-run. Otherwise a vendor runs, dislikes the
             // result and submits again, and the published set silently becomes "the results people were
             // happy with" — which is the whole failure the rule exists to prevent.
-            if (NoiseSubmissions.AlreadySubmitted(submission.Tool, submission.Period))
+            if (store.AlreadySubmitted(submission.Tool, submission.Period))
             {
                 return Results.Conflict(new
                 {
@@ -290,14 +371,29 @@ public static class NoiseStandardEndpoints
             var receipt = NoiseSubmissions.Accept(
                 submission, holdout, DateTimeOffset.UtcNow, draw.DrawnAt);
 
+            // ★★ THE REGISTER IS THE DATABASE. A rejected run is stored too — it is evidence, and a run a
+            // vendor would like to forget is exactly the kind the no-withdrawal rule exists to keep. Only an
+            // ACCEPTED one claims the (tool, period) slot, and the claim is a UNIQUE index: losing that race
+            // is the rule working, so it comes back as the same conflict a second attempt would get.
+            if (!store.TryRecordSubmission(receipt, submission.RunStartedAt))
+            {
+                return Results.Conflict(new
+                {
+                    submission.Tool,
+                    submission.Period,
+                    error = "this tool has already submitted for this period, and a submission cannot be "
+                          + "withdrawn or replaced. Register intent before the next draw instead.",
+                });
+            }
+
             return Results.Ok(Render(receipt));
         })
         .AllowAnonymous()
         .WithName("NoiseSubmit");
 
-        endpoints.MapGet("/api/noise/submissions/{submissionId}", (string submissionId) =>
+        endpoints.MapGet("/api/noise/submissions/{submissionId}", (string submissionId, INoiseStore store) =>
         {
-            var receipt = NoiseSubmissions.Find(submissionId);
+            var receipt = store.FindSubmission(submissionId);
             return receipt is null
                 ? Results.NotFound(new { submissionId, error = "no such submission" })
                 : Results.Ok(Render(receipt));
@@ -311,7 +407,7 @@ public static class NoiseStandardEndpoints
         // vendors applying different escalation rules would produce numbers that look comparable and are
         // not — which is the failure a shared method exists to prevent. It is pure: votes in, outcome
         // out, no model and no state.
-        endpoints.MapPost("/api/noise/cascade/resolve", (CascadeRequest request) =>
+        endpoints.MapPost("/api/noise/cascade/resolve", (CascadeRequest request, INoiseStore store) =>
         {
             if (request?.Round1 is null || request.Round1.Count != 2)
             {
@@ -336,8 +432,71 @@ public static class NoiseStandardEndpoints
 
             var outcome = JudgingCascade.Resolve([.. round1!], [.. round2!]);
 
+            // ── The verdict record ────────────────────────────────────────────────────────────────
+            //
+            // ★★ 01 PROMISES THIS AND NOTHING STORED IT. "Every judge prompt, every model and version, every
+            // raw verdict with its reasoning, and every human adjudication. Published in full." The cascade
+            // resolved votes in memory and returned an answer, so the one claim a sceptic tests first was the
+            // one with nothing behind it. A judged finding now leaves a record, and the record publishes at
+            // /api/noise/record/{period}.
+            //
+            // ★ Recording is refused rather than half-done: a verdict without its model version or its
+            // reasoning is not a record a reader can argue with, and storing it would let the endpoint report
+            // "recorded" for something unusable.
+            var recorded = false;
+            List<string> unrecordable = [];
+            if (request.Period is { Length: > 0 } period && request.FindingId is { Length: > 0 } findingId)
+            {
+                var now = DateTimeOffset.UtcNow;
+                var all = request.Round1!.Select(v => (Round: 1, Vote: v))
+                    .Concat((request.Round2 ?? []).Select(v => (Round: 2, Vote: v)))
+                    .ToList();
+
+                foreach (var (round, vote) in all)
+                {
+                    if (string.IsNullOrWhiteSpace(vote.Model)
+                        || string.IsNullOrWhiteSpace(vote.ModelVersion)
+                        || string.IsNullOrWhiteSpace(vote.PromptId)
+                        || string.IsNullOrWhiteSpace(vote.Reasoning))
+                    {
+                        unrecordable.Add(
+                            $"round {round} judge '{vote.Judge}' — a recorded verdict needs model, "
+                          + "modelVersion, promptId and reasoning. A verdict a reader cannot argue with is "
+                          + "not open judging.");
+                    }
+                }
+
+                if (unrecordable.Count == 0)
+                {
+                    foreach (var (round, vote) in all)
+                    {
+                        if (vote.Prompt is { Length: > 0 } text)
+                        {
+                            store.RegisterPrompt(vote.PromptId!, text, now);
+                        }
+
+                        store.RecordVerdict(new VerdictRecord(
+                            period, findingId, round,
+                            vote.Judge ?? "unnamed", vote.Model!, vote.ModelVersion!, vote.PromptId!,
+                            NoiseVerdicts.ParseOrNull(vote.Verdict)!.Value.Wire(),
+                            vote.Reasoning!, now));
+                    }
+
+                    store.RecordResolution(new ResolutionRecord(
+                        period, findingId, outcome.State.ToString(), outcome.Verdict?.Wire(),
+                        outcome.SettledAtRound, outcome.ActionabilityContested, outcome.Actionable,
+                        outcome.Reason, now));
+                    recorded = true;
+                }
+            }
+
             return Results.Ok(new
             {
+                // ★ Says plainly whether this judgement is ON THE RECORD. A caller that meant to record and
+                // silently did not would believe the standard was keeping its promise on its behalf.
+                recorded,
+                unrecordable,
+
                 methodVersion = MethodVersion,
                 state = outcome.State.ToString(),
                 verdict = outcome.Verdict?.Wire(),
@@ -1238,14 +1397,35 @@ public static class NoiseStandardEndpoints
         string? Period, string? RaterId, string? FindingId, string? Verdict, string? MachineVerdict);
 
     /// <summary>One judge's vote as it arrives on the wire.</summary>
-    public sealed record CascadeVote(string? Judge, string? Verdict);
+    /// <param name="Judge">The judge slot, e.g. <c>judge-a</c>.</param>
+    /// <param name="Verdict">One of the six published verdicts.</param>
+    /// <param name="Model">Which model answered. Required to RECORD a verdict.</param>
+    /// <param name="ModelVersion">Its pinned version — without it the run cannot be re-derived.</param>
+    /// <param name="PromptId">The prompt used; its full text is published beside the record.</param>
+    /// <param name="Prompt">The prompt's text, registered once under its id on first use.</param>
+    /// <param name="Reasoning">
+    /// ★★ WHY. A verdict a reader cannot argue with is not open judging — 01 promises "a reader who disagrees
+    /// with a verdict must be able to find it, read the reasoning, and say so".
+    /// </param>
+    public sealed record CascadeVote(
+        string? Judge, string? Verdict,
+        string? Model = null, string? ModelVersion = null,
+        string? PromptId = null, string? Prompt = null, string? Reasoning = null);
 
     /// <summary>
     /// The votes to resolve. Round two is absent until round one has actually split — sending both at
     /// once would mean the second pair had been convened before there was anything to convene them for.
     /// </summary>
+    /// <param name="Period">
+    /// ★★ Supplying this AND <paramref name="FindingId"/> makes the call a RECORDED judgement rather than a
+    /// calculation. Without them the endpoint stays a pure resolver, which is what the cascade's own unit
+    /// tests use — but a real judging run must record, or the standard's open-judging promise has nothing
+    /// behind it.
+    /// </param>
+    /// <param name="FindingId">Which finding was judged — the join a reader follows to argue with a verdict.</param>
     public sealed record CascadeRequest(
-        IReadOnlyList<CascadeVote>? Round1, IReadOnlyList<CascadeVote>? Round2);
+        IReadOnlyList<CascadeVote>? Round1, IReadOnlyList<CascadeVote>? Round2,
+        string? Period = null, string? FindingId = null);
 
     /// <summary>The receipt as it publishes — what was checked, and what it found.</summary>
     private static object Render(SubmissionReceipt r) => new

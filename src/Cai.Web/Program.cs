@@ -109,6 +109,10 @@ builder.Services.AddCors(options => options.AddPolicy(CaiCors.PolicyName, policy
 // ── The registry (ADR-0010): store + trusted signing keys + health, all bound from the Registry config section. ──
 builder.Services.Configure<RegistryOptions>(builder.Configuration.GetSection(RegistryOptions.Section));
 builder.Services.AddSingleton<IRegistryStore, SqliteRegistryStore>();
+// ★★ The submission register and the verdict record. Both were in-memory: a restart forgot that a vendor had
+// submitted (the hole the no-withdrawal rule exists to close) and no judging was recorded at all, so 01's
+// "open judging" promise had nothing behind it. Same database file as the registry — one thing to back up.
+builder.Services.AddSingleton<INoiseStore, SqliteNoiseStore>();
 builder.Services.AddSingleton<TrustedKeyProvider>();
 builder.Services.AddHealthChecks().AddCheck<RegistryHealthCheck>("registry");
 

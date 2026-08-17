@@ -69,29 +69,20 @@ public static class NoiseSubmissions
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Receipts, keyed by id, plus the (tool, period) pairs already submitted.
+    /// ★★ THE REGISTER MOVED TO THE DATABASE — see <see cref="SqliteNoiseStore"/>.
     /// </summary>
     /// <remarks>
-    /// ★ IN-MEMORY, AND THAT IS A GAP. The no-withdrawal rule is only as durable as this store: a restart
-    /// currently forgets that a vendor already submitted, which is precisely the hole the rule exists to
-    /// close. It must move to the SQLite store the registry already uses before the standard invites a
-    /// second participant.
+    /// It used to be two <c>ConcurrentDictionary</c> instances, and the comment sitting here said exactly what
+    /// was wrong with that: "a restart currently forgets that a vendor already submitted, which is precisely
+    /// the hole the no-withdrawal rule exists to close". That rule is the standard's answer to the worst
+    /// failure available to it — a vendor runs, dislikes the result, and the published set quietly becomes
+    /// "the results people were happy with" — and it was defeated by a process restart. It is now a partial
+    /// UNIQUE index in SQLite, so the claim survives a restart AND cannot be lost to a race between two
+    /// concurrent submissions.
+    /// <para>What is left here is the VALIDATION, which is pure and belongs nowhere near a connection: does
+    /// the run cover the published holdout, at the published shas, with a recency declaration and known claim
+    /// classes, and did it start after the draw.</para>
     /// </remarks>
-    private static readonly ConcurrentDictionary<string, SubmissionReceipt> Receipts = new(StringComparer.Ordinal);
-
-    private static readonly ConcurrentDictionary<string, string> Submitted = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>Whether this tool has already submitted for this period.</summary>
-    public static bool AlreadySubmitted(string tool, string period) =>
-        Submitted.ContainsKey(Key(tool, period));
-
-    /// <summary>Look a receipt up by id.</summary>
-    public static SubmissionReceipt? Find(string submissionId) =>
-        Receipts.TryGetValue(submissionId, out var r) ? r : null;
-
-    /// <summary>
-    /// Check a submission against the holdout it names, record the receipt, and return it.
-    /// </summary>
     public static SubmissionReceipt Accept(
         NoiseSubmission submission, IReadOnlyList<HoldoutCandidate> holdout, DateTimeOffset now,
         DateTimeOffset? drawPublishedAt = null)
@@ -204,15 +195,8 @@ public static class NoiseSubmissions
             CoveredRepositories: covered.Count,
             Uncovered: uncovered);
 
-        Receipts[receipt.SubmissionId] = receipt;
-
-        // ★ Only an ACCEPTED submission claims the (tool, period) slot. A rejected one is a run that
-        // never counted, and refusing the retry would lock a vendor out over a malformed payload.
-        if (receipt.Accepted)
-        {
-            Submitted[Key(submission.Tool, submission.Period)] = receipt.SubmissionId;
-        }
-
+        // ★ Persistence is the CALLER's, via INoiseStore. This method decides only whether the run
+        // answers the holdout it names; storing it is where the no-withdrawal claim is enforced.
         return receipt;
     }
 
