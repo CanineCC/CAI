@@ -93,7 +93,9 @@ pre { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 
 table.lenses { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: 0.94rem; }
 table.lenses th, table.lenses td { text-align: left; padding: 0.7rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
 table.lenses th { color: var(--ink-soft); font-weight: 600; }
-.pill { display: inline-block; font-size: 0.78rem; padding: 0.1rem 0.55rem; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+/* ★ nowrap: "CAI-measured" broke across two lines inside a narrow table column, which reads as two words and
+   makes a pill look like a paragraph. A pill is a label; a label that wraps is not one. */
+.pill { display: inline-block; font-size: 0.78rem; padding: 0.1rem 0.55rem; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; white-space: nowrap; }
 
 /* Bands */
 .bands { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }

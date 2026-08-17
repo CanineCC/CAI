@@ -14,7 +14,8 @@
       "period": "2026-09",
       "seed": "cai-2026-09-9f2b41c7e0a85d36",
       "drawnAt": "2026-08-15T00:00:00+00:00",
-      "publishesAt": "2026-10-01T00:00:00+00:00"
+      "publishesAt": "2026-10-01T00:00:00+00:00",
+      "submissionsCloseAt": "2026-09-30T00:00:00+00:00"
     }
   ],
   "candidates": [

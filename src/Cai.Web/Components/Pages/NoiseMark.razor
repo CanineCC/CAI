@@ -1,0 +1,174 @@
+@* The CAI-measured mark for one period — who earned it, and exactly why anybody did not.
+
+   ★★ THE PAGE IS THE ACCOUNTABILITY. A mark that can be pulled is power over a competitor's marketing, and
+   pulling one is far more newsworthy than granting one. So the four conditions, the fact each one READS, and the
+   named condition that failed are all here: a withheld mark that only said "not qualified" would be an
+   unreviewable veto wearing a public face.
+
+   ★★ AND IT IS NOT A QUALITY BADGE. Three of the four conditions are about process — a tool with a poor rate
+   that ran the published draw, submitted in time and published in full earns it. Said on the page, because a
+   reader who assumes otherwise reads a withheld mark as a verdict on the tool.
+
+   ★ Reads the store directly: this IS CAI, so an HTTP call to its own API would be a second path to the same
+   rows and one more thing that can disagree. *@
+@page "/noise/mark"
+@page "/noise/mark/{Period}"
+@using System.Globalization
+@using Cai.Web.Noise
+@inject INoiseStore Store
+
+<PageTitle>CAI — @ComplianceMark.Label @Period</PageTitle>
+
+@if (Period is not { Length: > 0 })
+{
+    @* ★ An index, so the mark is reachable without knowing a period — the same reason /noise/record has one. *@
+    var periods = Store.PublishedPeriods().Concat(Store.JudgedPeriods())
+        .Distinct(StringComparer.Ordinal)
+        .OrderByDescending(p => p, StringComparer.Ordinal)
+        .ToList();
+
+    <div class="hero"><div class="wrap">
+        <p class="eyebrow">@ComplianceMark.Label</p>
+        <h1>The mark, by period</h1>
+        <p class="lede">
+            Who ran each period under the published method, and — where the mark is withheld — which condition
+            did not hold.
+        </p>
+    </div></div>
+
+    <section data-region="mark-index"><div class="wrap">
+        @if (periods.Count == 0)
+        {
+            <p class="muted"><strong>No period has been measured yet.</strong> That is an absence, not a mark.</p>
+        }
+        else
+        {
+            <ul>
+                @foreach (var p in periods)
+                {
+                    <li><a href="@($"/noise/mark/{p}")">@p</a></li>
+                }
+            </ul>
+        }
+    </div></section>
+
+    return;
+}
+
+@{
+    var deadline = NoiseCorpus.Draws.TryGetValue(Period!, out var draw) ? draw.SubmissionsCloseAt : null;
+    var published = Store.LatestPublication(Period!) is not null;
+
+    var marks = Store.ListSubmissions(Period!)
+        .GroupBy(r => r.Tool, StringComparer.OrdinalIgnoreCase)
+        .OrderBy(g => g.Key, StringComparer.Ordinal)
+        .Select(g =>
+        {
+            var best = g.OrderByDescending(r => r.Accepted).ThenBy(r => r.ReceivedAt).First();
+
+            return ComplianceMark.Evaluate(g.Key, Period!, new MarkInputs(
+                RanAgainstTheHoldout: best.Accepted && best.CoveredRepositories > 0,
+                SubmittedBeforeTheDeadline: deadline is not { } closes || best.ReceivedAt <= closes,
+                RunReproduces: best.Accepted,
+                NumbersPublishedInFull: published));
+        })
+        .ToList();
+}
+
+<div class="hero"><div class="wrap">
+    <p class="eyebrow">@ComplianceMark.Label</p>
+    <h1>@Period</h1>
+    <p class="lede">
+        Who ran this period under the published method, and — where the mark is withheld — exactly which
+        condition did not hold and what fact decided it.
+    </p>
+</div></div>
+
+<section data-region="marks"><div class="wrap">
+    <h2>Participants</h2>
+
+    @if (marks.Count == 0)
+    {
+        <p class="muted">
+            <strong>No tool has submitted for this period.</strong> That is an absence — there is no mark to
+            state either way.
+        </p>
+    }
+    else
+    {
+        <table class="lenses">
+            <thead><tr><th>Tool</th><th>Mark</th><th>Why</th></tr></thead>
+            <tbody>
+                @foreach (var m in marks)
+                {
+                    <tr>
+                        <td class="mono">@m.Tool</td>
+                        <td>
+                            <span class="pill @(m.Granted ? "upheld" : "open")">
+                                @(m.Granted ? ComplianceMark.Label : "Withheld")
+                            </span>
+                        </td>
+                        <td class="muted">
+                            @if (m.Granted)
+                            {
+                                <text>
+                                    Ran the published draw, submitted in time, passed every verification check,
+                                    and published in full.
+                                </text>
+                            }
+                            else
+                            {
+                                @* ★★ THE CONDITION AND ITS REASON, never a summary. This is the message a
+                                   competitor reads about itself in public, and "did not qualify" is one nobody
+                                   can act on or contest. *@
+                                foreach (var f in m.Failing)
+                                {
+                                    <div><strong class="mono">@f.Condition</strong> — @f.Why</div>
+                                }
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div></section>
+
+<section data-region="conditions"><div class="wrap">
+    <h2>The four conditions, and what each one reads</h2>
+    <table class="lenses">
+        <thead><tr><th>Condition</th><th>Decided by</th></tr></thead>
+        <tbody>
+            @foreach (var c in ComplianceMark.Conditions)
+            {
+                <tr><td class="mono">@c.Name</td><td class="muted">@c.Reads</td></tr>
+            }
+        </tbody>
+    </table>
+
+    @if (deadline is { } closes2)
+    {
+        <p class="muted">
+            Submissions for this period closed
+            @closes2.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture). The deadline is signed with
+            the draw: one that could move afterwards would not be a deadline.
+        </p>
+    }
+
+    <div class="callout">
+        <strong>It is free, and it is not a quality badge.</strong>
+        @ComplianceMark.ChangeRule
+        <br /><br />
+        Three of the four conditions are about process: a tool with a poor noise rate that ran the published
+        draw, submitted in time and published in full earns the mark. It states that the measurement happened
+        properly — the published rate states how it went.
+        <br /><br />
+        <span class="muted">@ComplianceMark.AppealRoute</span>
+    </div>
+</div></section>
+
+@code {
+    /// <summary>The period, <c>yyyy-MM</c>.</summary>
+    [Parameter]
+    public string? Period { get; set; }
+}

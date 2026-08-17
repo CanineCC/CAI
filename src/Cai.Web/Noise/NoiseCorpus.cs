@@ -51,7 +51,13 @@ public static class NoiseCorpus
     /// see <see cref="Embargo"/>. Signed with the draw, because an embargo whose date can be edited is a promise
     /// to lift it when convenient. NULL means embargoed indefinitely, which is the fail-closed reading.
     /// </param>
-    public sealed record PublishedDraw(string Seed, DateTimeOffset DrawnAt, DateTimeOffset? PublishesAt = null);
+    /// <param name="SubmissionsCloseAt">
+    /// ★★ The deadline. It is what stops a result being assembled after seeing everybody else's, so it is signed
+    /// with the draw — a deadline that could move after the fact is not one.
+    /// </param>
+    public sealed record PublishedDraw(
+        string Seed, DateTimeOffset DrawnAt, DateTimeOffset? PublishesAt = null,
+        DateTimeOffset? SubmissionsCloseAt = null);
 
     /// <summary>
     /// How many reserved repositories the decay curve needs to have an endpoint at all.

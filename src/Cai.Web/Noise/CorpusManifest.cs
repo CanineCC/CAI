@@ -197,6 +197,9 @@ public static class CorpusManifest
                     d.GetProperty("drawnAt").GetDateTimeOffset(),
                     d.TryGetProperty("publishesAt", out var publishes)
                         ? publishes.GetDateTimeOffset()
+                        : null,
+                    d.TryGetProperty("submissionsCloseAt", out var closes)
+                        ? closes.GetDateTimeOffset()
                         : null),
                 StringComparer.OrdinalIgnoreCase);
 
