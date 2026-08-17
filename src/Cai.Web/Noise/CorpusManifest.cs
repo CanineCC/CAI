@@ -169,7 +169,10 @@ public static class CorpusManifest
                 d => d.GetProperty("period").GetString()!,
                 d => new NoiseCorpus.PublishedDraw(
                     d.GetProperty("seed").GetString()!,
-                    d.GetProperty("drawnAt").GetDateTimeOffset()),
+                    d.GetProperty("drawnAt").GetDateTimeOffset(),
+                    d.TryGetProperty("publishesAt", out var publishes)
+                        ? publishes.GetDateTimeOffset()
+                        : null),
                 StringComparer.OrdinalIgnoreCase);
 
         return new CorpusManifestDocument(

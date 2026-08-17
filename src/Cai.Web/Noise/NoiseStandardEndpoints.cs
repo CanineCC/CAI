@@ -443,8 +443,22 @@ public static class NoiseStandardEndpoints
         //
         // ★ Anonymous, like the method and the holdout. A judging record only readable by the people who
         // produced it is not published.
-        endpoints.MapGet("/api/noise/record/{period}", (string period, INoiseStore store) =>
+        endpoints.MapGet("/api/noise/record/{period}", (string period, INoiseStore store, HttpContext http) =>
         {
+            // ★★ THE EMBARGO (#15). 03 commits to it as one of the four things that make the standard's conflict
+            // of interest survivable, and this endpoint served everything to everyone immediately — early sight of
+            // a rival's result being the single most valuable thing Watchdog's position could be worth. The lift
+            // date is in the SIGNED manifest, and there is no caller name with a different answer.
+            // ★★ THE EMBARGO APPLIES TO A DRAWN PERIOD. A period with no draw is not one the standard measures —
+            // a submission against it is refused outright ("no holdout has been published for that period"), so no
+            // participant's material can exist there to protect. The fail-closed rule is about a DRAWN period
+            // whose entry has no date: that is the leak case, and it is embargoed.
+            var drawn = NoiseCorpus.Draws.TryGetValue(period, out var periodDraw);
+            var publishesAt = drawn ? periodDraw.PublishesAt : null;
+            var caller = http.User.Identity?.IsAuthenticated == true ? http.User.Identity.Name : null;
+
+            var embargoed = drawn && Embargo.IsInForce(publishesAt, DateTimeOffset.UtcNow);
+
             var verdicts = store.ListVerdicts(period);
             var resolutions = store.ListResolutions(period);
             var prompts = store.ListPrompts(period);
@@ -508,10 +522,31 @@ public static class NoiseStandardEndpoints
                     recordedAt = v.RecordedAt,
                 }),
 
+                // ★★ THE EMBARGO APPLIES HERE, and only here (#15). The register is the one part of this record
+                // that is attributable to a PARTICIPANT: it names each tool, when it submitted and whether the
+                // run was accepted. The judging beside it — verdicts, resolutions, disputes — is CAI's own
+                // material about findings and carries no tool at all, so it cannot be read as anybody's result.
+                // Before the lift a caller sees only its own entries, Watchdog included; there is no caller name
+                // with a different answer.
+                embargo = new
+                {
+                    inForce = embargoed,
+                    publishesAt,
+                    readingAs = caller,
+                    note = embargoed
+                        ? Embargo.Note(publishesAt)
+                        : "This period has published: the register is open to everyone.",
+                },
+
                 // ★ The register belongs here too: who submitted, when, and whether it was accepted —
                 // including the runs that were refused. A register of only the accepted ones is a register
                 // that has been edited.
-                submissions = submissions.Select(r => new
+                submissions = submissions
+                    // ★★ FILTERED UNDER EMBARGO — see the `embargo` block above. Withheld rather than
+                    // anonymised: a register showing "three tools submitted, two accepted" with the names
+                    // removed still tells a rival what the field did before their own result published.
+                    .Where(r => !embargoed || Embargo.MayRead(caller, r.Tool, publishesAt, DateTimeOffset.UtcNow))
+                    .Select(r => new
                 {
                     submissionId = r.SubmissionId,
                     tool = r.Tool,
@@ -732,9 +767,22 @@ public static class NoiseStandardEndpoints
         endpoints.MapGet("/api/noise/submissions/{submissionId}", (string submissionId, INoiseStore store) =>
         {
             var receipt = store.FindSubmission(submissionId);
-            return receipt is null
-                ? Results.NotFound(new { submissionId, error = "no such submission" })
-                : Results.Ok(Render(receipt));
+            if (receipt is null)
+            {
+                return Results.NotFound(new { submissionId, error = "no such submission" });
+            }
+
+            // ★★ THE CONFIGURATION BELONGS ON THE RECEIPT, found by the embargo (#15). It was published only
+            // through the period record's register — which is embargoed until the period publishes — so a
+            // participant could not read back its OWN declaration at all until then. The receipt is fetched by an
+            // id only the submitter holds, which makes it the right place for it.
+            var node = JsonSerializer.SerializeToNode(
+                Render(receipt), new JsonSerializerOptions(JsonSerializerDefaults.Web))!.AsObject();
+            node["configuration"] = store.ConfigurationJson(receipt.SubmissionId) is { Length: > 0 } json
+                ? JsonNode.Parse(json)
+                : null;
+
+            return Results.Json(node);
         })
         .AllowAnonymous()
         .WithName("NoiseSubmission");

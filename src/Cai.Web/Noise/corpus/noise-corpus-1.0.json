@@ -13,7 +13,8 @@
     {
       "period": "2026-09",
       "seed": "cai-2026-09-9f2b41c7e0a85d36",
-      "drawnAt": "2026-08-15T00:00:00+00:00"
+      "drawnAt": "2026-08-15T00:00:00+00:00",
+      "publishesAt": "2026-10-01T00:00:00+00:00"
     }
   ],
   "candidates": [
@@ -138,5 +139,6 @@
       "reserved": false
     }
   ],
-  "reservedSliceNote": "Repositories marked `reserved` are PERMANENTLY PRISTINE: no participant develops against them, ever. They are in every draw, and a submission declaring one as trained is refused. Without such an endpoint the recency decay curve has nothing to measure against — the never-trained bucket would empty as the standard matures, and the overfitting gap would become uncomputable exactly when tools have had time to overfit. One per language, chosen as the smallest so the reservation costs the least coverage."
+  "reservedSliceNote": "Repositories marked `reserved` are PERMANENTLY PRISTINE: no participant develops against them, ever. They are in every draw, and a submission declaring one as trained is refused. Without such an endpoint the recency decay curve has nothing to measure against — the never-trained bucket would empty as the standard matures, and the overfitting gap would become uncomputable exactly when tools have had time to overfit. One per language, chosen as the smallest so the reservation costs the least coverage.",
+  "embargoNote": "`publishesAt` is when a period's record opens to everyone. Before it, a participant sees only its own submissions and everything else is withheld — from every caller including Watchdog, which owns this standard and competes in it. The date is signed with the draw precisely so it cannot be moved when it suits."
 }

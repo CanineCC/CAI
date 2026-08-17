@@ -170,14 +170,21 @@ public sealed class NoiseStoreDurabilityTests : IDisposable
             "/api/noise/submissions", await SubmissionAsync(client, "second-chance"));
         Assert.Equal(HttpStatusCode.OK, good.StatusCode);
 
-        // And BOTH are on the register, including the refusal.
+        // ★★ BOTH ARE ON THE REGISTER, including the refusal — but the register is EMBARGOED until the period
+        // publishes (#15), so an anonymous reader sees neither. That is the embargo working, not the register
+        // being edited: the receipts are still fetchable by their ids, which only the submitter holds.
         var record = await JsonAsync(await client.GetAsync($"/api/noise/record/{Period}"));
-        var register = record.GetProperty("submissions").EnumerateArray()
-            .Where(x => x.GetProperty("tool").GetString() == "second-chance")
-            .ToList();
-        Assert.Equal(2, register.Count);
-        Assert.Contains(register, x => !x.GetProperty("accepted").GetBoolean());
-        Assert.Contains(register, x => x.GetProperty("accepted").GetBoolean());
+        Assert.True(record.GetProperty("embargo").GetProperty("inForce").GetBoolean());
+        Assert.Empty(record.GetProperty("submissions").EnumerateArray());
+
+        var refused = await JsonAsync(
+            await client.GetAsync($"/api/noise/submissions/{bad.GetProperty("submissionId").GetString()}"));
+        var accepted = await JsonAsync(
+            await client.GetAsync(
+                $"/api/noise/submissions/{(await JsonAsync(good)).GetProperty("submissionId").GetString()}"));
+
+        Assert.False(refused.GetProperty("accepted").GetBoolean());
+        Assert.True(accepted.GetProperty("accepted").GetBoolean());
     }
 
     [Fact]

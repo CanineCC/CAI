@@ -46,7 +46,12 @@ public static class NoiseCorpus
     /// ★ When the draw was fixed. Published so "before any scanner ran" is checkable rather than
     /// asserted — a holdout published after the runs is worthless however it was made.
     /// </param>
-    public sealed record PublishedDraw(string Seed, DateTimeOffset DrawnAt);
+    /// <param name="PublishesAt">
+    /// ★★ When the period's record opens to everyone. Before it a participant sees only its own submissions —
+    /// see <see cref="Embargo"/>. Signed with the draw, because an embargo whose date can be edited is a promise
+    /// to lift it when convenient. NULL means embargoed indefinitely, which is the fail-closed reading.
+    /// </param>
+    public sealed record PublishedDraw(string Seed, DateTimeOffset DrawnAt, DateTimeOffset? PublishesAt = null);
 
     /// <summary>
     /// How many reserved repositories the decay curve needs to have an endpoint at all.

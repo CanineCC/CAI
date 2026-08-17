@@ -181,7 +181,7 @@ public sealed class SubmissionConfigurationApiTests(RegistryUnconfiguredFixture 
     {
         // ★★ A declaration nobody can read is not a disclosure. It publishes beside the number, with the
         // divergence spelled out, so the claim is one a competitor can point at.
-        await SubmitAsync("published-config", new
+        var receipt = await SubmitAsync("published-config", new
         {
             rulesetId = "custom-profile",
             isProductDefault = false,
@@ -197,8 +197,16 @@ public sealed class SubmissionConfigurationApiTests(RegistryUnconfiguredFixture 
         var record = JsonDocument.Parse(
             await client.GetStringAsync($"/api/noise/record/{Period}", Ct)).RootElement;
 
-        var mine = record.GetProperty("submissions").EnumerateArray()
-            .First(s => s.GetProperty("tool").GetString() == "published-config");
+        // ★★ THE EMBARGO (#15) NOW COVERS THE REGISTER, and 2026-09 does not publish until 2026-10-01 — so an
+        // ANONYMOUS reader sees no entries at all, which is the rule working. The declaration still publishes;
+        // what changed is WHEN, and to whom before then. The receipt is fetched by its id, which only the
+        // submitter holds.
+        Assert.True(record.GetProperty("embargo").GetProperty("inForce").GetBoolean());
+        Assert.Empty(record.GetProperty("submissions").EnumerateArray());
+
+        var mine = JsonDocument.Parse(
+            await client.GetStringAsync(
+                $"/api/noise/submissions/{receipt.GetProperty("submissionId").GetString()}", Ct)).RootElement;
         var config = mine.GetProperty("configuration");
 
         Assert.Equal("custom-profile", config.GetProperty("rulesetId").GetString());
