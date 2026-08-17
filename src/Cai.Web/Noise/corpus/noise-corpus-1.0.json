@@ -22,105 +22,121 @@
       "language": "csharp",
       "productionLoc": 210000,
       "licence": "MIT",
-      "pinnedSha": "c1d83d0e9f2b4a6710d5e8c3b2a1f09876543210"
+      "pinnedSha": "c1d83d0e9f2b4a6710d5e8c3b2a1f09876543210",
+      "reserved": false
     },
     {
       "repoId": "dotnet/aspnetcore",
       "language": "csharp",
       "productionLoc": 380000,
       "licence": "MIT",
-      "pinnedSha": "a41b7c9d2e8f0361b5d4c7a9e2f8106b3d5c7e91"
+      "pinnedSha": "a41b7c9d2e8f0361b5d4c7a9e2f8106b3d5c7e91",
+      "reserved": false
     },
     {
       "repoId": "AutoMapper/AutoMapper",
       "language": "csharp",
       "productionLoc": 42000,
       "licence": "MIT",
-      "pinnedSha": "b72e4f8a1c9d0356e8b2f4a7c1d9e360587a2b4c"
+      "pinnedSha": "b72e4f8a1c9d0356e8b2f4a7c1d9e360587a2b4c",
+      "reserved": false
     },
     {
       "repoId": "serilog/serilog",
       "language": "csharp",
       "productionLoc": 38000,
       "licence": "Apache-2.0",
-      "pinnedSha": "d93f1a5b7c2e8046f1a3b9d5c7e20418a6b3d9f2"
+      "pinnedSha": "d93f1a5b7c2e8046f1a3b9d5c7e20418a6b3d9f2",
+      "reserved": true
     },
     {
       "repoId": "grpc/grpc-go",
       "language": "go",
       "productionLoc": 190000,
       "licence": "Apache-2.0",
-      "pinnedSha": "e15a9c3d7f2b8460a9c1e5d3b7f92048c6a1d3e5"
+      "pinnedSha": "e15a9c3d7f2b8460a9c1e5d3b7f92048c6a1d3e5",
+      "reserved": false
     },
     {
       "repoId": "spf13/cobra",
       "language": "go",
       "productionLoc": 24000,
       "licence": "Apache-2.0",
-      "pinnedSha": "f27b1d5e9a3c8460b2d4f6a8c0e13579b4d6f8a2"
+      "pinnedSha": "f27b1d5e9a3c8460b2d4f6a8c0e13579b4d6f8a2",
+      "reserved": true
     },
     {
       "repoId": "gin-gonic/gin",
       "language": "go",
       "productionLoc": 31000,
       "licence": "MIT",
-      "pinnedSha": "0a3c5e7b9d1f2468a0c2e4b6d8f0135792a4c6e8"
+      "pinnedSha": "0a3c5e7b9d1f2468a0c2e4b6d8f0135792a4c6e8",
+      "reserved": false
     },
     {
       "repoId": "prometheus/client_golang",
       "language": "go",
       "productionLoc": 45000,
       "licence": "Apache-2.0",
-      "pinnedSha": "1b4d6f8a0c2e357913579bdf02468ace13579bdf"
+      "pinnedSha": "1b4d6f8a0c2e357913579bdf02468ace13579bdf",
+      "reserved": false
     },
     {
       "repoId": "serde-rs/serde",
       "language": "rust",
       "productionLoc": 52000,
       "licence": "Apache-2.0",
-      "pinnedSha": "2c5e7a9b1d3f468a02468ace13579bdf02468ace"
+      "pinnedSha": "2c5e7a9b1d3f468a02468ace13579bdf02468ace",
+      "reserved": false
     },
     {
       "repoId": "tokio-rs/tokio",
       "language": "rust",
       "productionLoc": 120000,
       "licence": "MIT",
-      "pinnedSha": "3d6f8b0c2e4a579b13579bdf02468ace13579bdf"
+      "pinnedSha": "3d6f8b0c2e4a579b13579bdf02468ace13579bdf",
+      "reserved": false
     },
     {
       "repoId": "clap-rs/clap",
       "language": "rust",
       "productionLoc": 47000,
       "licence": "MIT",
-      "pinnedSha": "4e709c1d3f5b68ac02468ace13579bdf02468ace"
+      "pinnedSha": "4e709c1d3f5b68ac02468ace13579bdf02468ace",
+      "reserved": true
     },
     {
       "repoId": "psf/requests",
       "language": "python",
       "productionLoc": 28000,
       "licence": "Apache-2.0",
-      "pinnedSha": "5f81ad2e406c79bd13579bdf02468ace13579bdf"
+      "pinnedSha": "5f81ad2e406c79bd13579bdf02468ace13579bdf",
+      "reserved": false
     },
     {
       "repoId": "pallets/flask",
       "language": "python",
       "productionLoc": 22000,
       "licence": "BSD-3-Clause",
-      "pinnedSha": "6092be3f517d8ace02468ace13579bdf02468ace"
+      "pinnedSha": "6092be3f517d8ace02468ace13579bdf02468ace",
+      "reserved": true
     },
     {
       "repoId": "encode/httpx",
       "language": "python",
       "productionLoc": 26000,
       "licence": "BSD-3-Clause",
-      "pinnedSha": "71a3cf40628e9bdf13579bdf02468ace13579bdf"
+      "pinnedSha": "71a3cf40628e9bdf13579bdf02468ace13579bdf",
+      "reserved": false
     },
     {
       "repoId": "tiangolo/fastapi",
       "language": "python",
       "productionLoc": 34000,
       "licence": "MIT",
-      "pinnedSha": "82b4d051739face002468ace13579bdf02468ace"
+      "pinnedSha": "82b4d051739face002468ace13579bdf02468ace",
+      "reserved": false
     }
-  ]
+  ],
+  "reservedSliceNote": "Repositories marked `reserved` are PERMANENTLY PRISTINE: no participant develops against them, ever. They are in every draw, and a submission declaring one as trained is refused. Without such an endpoint the recency decay curve has nothing to measure against — the never-trained bucket would empty as the standard matures, and the overfitting gap would become uncomputable exactly when tools have had time to overfit. One per language, chosen as the smallest so the reservation costs the least coverage."
 }

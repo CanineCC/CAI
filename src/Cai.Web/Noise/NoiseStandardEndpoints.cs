@@ -314,6 +314,9 @@ public static class NoiseStandardEndpoints
               + "leave-one-out range. Excluding an outlying repository is NOT permitted — dropping a "
               + "repo for having a high or low rate is selecting on the outcome.",
 
+            // ★★ THE PERMANENTLY PRISTINE SLICE. 02 §1: without an endpoint the decay curve measures nothing.
+            reservedSlice = ReservedSliceRule(),
+
             // ★★ THE CONTESTATION ROUTE, published — a right nobody can find is not one. 01 §5 promises it and
             // nothing said where to go.
             contestation = new
@@ -542,7 +545,14 @@ public static class NoiseStandardEndpoints
                     pinnedSha = r.PinnedSha,
                     productionLoc = r.ProductionLoc,
                     licence = r.Licence,
+
+                    // ★★ A vendor cannot honour a reservation it cannot see. Published with the draw, and
+                    // declaring one of these as trained is refused at submission.
+                    reserved = r.Reserved,
                 }),
+
+                // ★ The reservation as a rule, beside the repositories it applies to.
+                reservedSlice = ReservedSliceRule(),
             });
         })
         .AllowAnonymous()
@@ -579,7 +589,9 @@ public static class NoiseStandardEndpoints
                     productionLoc = c.ProductionLoc,
                     licence = c.Licence,
                     pinnedSha = c.PinnedSha,
+                    reserved = c.Reserved,
                 }),
+            reservedSlice = ReservedSliceRule(),
         });
         })
         .AllowAnonymous()
@@ -1558,6 +1570,14 @@ public static class NoiseStandardEndpoints
                     }),
                     overfittingGapPoints = Noise.RecencyStrata.OverfittingGap(recency),
                     gapIsNotable = Noise.RecencyStrata.GapIsNotable(Noise.RecencyStrata.OverfittingGap(recency)),
+                    // ★★ HOW BIG THE PRISTINE SLICE IS. The overfitting gap is computed against the
+                    // never-trained stratum, which IS this slice — so its size is what tells a reader whether the
+                    // gap rests on three repositories or thirty.
+                    reservedRepositories = CorpusManifest.Load().Candidates.Count(c => c.Reserved),
+                    reservedNote = "The reserved repositories are never used for development by any participant, "
+                                 + "and are in every draw. Declaring one as trained is refused — without a "
+                                 + "never-trained endpoint the decay curve measures nothing.",
+
                     // ★ A missing gap and a gap of zero are OPPOSITE claims and look identical when one of
                     // them is a blank, so the absence is stated rather than left as null.
                     note = recency.Count == 0
@@ -2078,6 +2098,23 @@ public static class NoiseStandardEndpoints
 
         return Results.Json(node);
     }
+
+    /// <summary>The reservation, as a published rule — one object, used by the method, the corpus and each draw.</summary>
+    private static object ReservedSliceRule() => new
+    {
+        repositories = CorpusManifest.Load().Candidates.Count(c => c.Reserved),
+        alwaysDrawn = true,
+        why = "The recency strata compare 'never trained' against 'trained N cycles ago'. If every repository is "
+            + "eventually developed against, the never-trained bucket empties as the standard matures — the "
+            + "decay curve loses its endpoint, and the overfitting gap becomes uncomputable exactly when tools "
+            + "have had time to overfit.",
+        declaringItTrained = "refused. A submission that declares a reserved repository as anything but "
+                           + "never-trained is rejected: that declaration IS the reservation being broken, and "
+                           + "it is the only moment anybody outside the vendor can see it happen. A repository "
+                           + "that has been developed against must LEAVE the reserved slice, which is a change "
+                           + "to the signed corpus.",
+        listedIn = "/api/noise/corpus and every /api/noise/holdout/{period}, per repository.",
+    };
 
     /// <summary>The two answers a dispute can have.</summary>
     private static class DisputeOutcomes

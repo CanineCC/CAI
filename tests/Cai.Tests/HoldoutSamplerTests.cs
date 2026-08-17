@@ -157,18 +157,25 @@ public sealed class HoldoutSamplerTests
 
     /// <summary>
     /// ★★ NOTHING ABOUT ANY SCANNER'S OUTPUT MAY REACH THE DRAW, asserted structurally so a future field
-    /// cannot slip in. A candidate carries objective attributes only — language, size, licence, sha.
+    /// cannot slip in. A candidate carries objective attributes only — language, size, licence, sha — plus
+    /// <c>Reserved</c>, which is a PRE-REGISTERED POLICY FACT about the repository and not a measurement of
+    /// anything: it says "no participant develops against this", which is decided in the signed corpus before any
+    /// scanner runs. This guard caught it being added, which is the guard working; the list is widened
+    /// deliberately and the word check below is untouched.
     /// </summary>
     [Fact]
     public void STAR_a_candidate_carries_no_outcome_of_any_kind()
     {
         var names = typeof(HoldoutCandidate).GetProperties().Select(p => p.Name).ToList();
 
-        Assert.Equal(["RepoId", "Language", "ProductionLoc", "Licence", "PinnedSha"], names);
+        Assert.Equal(["RepoId", "Language", "ProductionLoc", "Licence", "PinnedSha", "Reserved"], names);
 
         foreach (var w in new[] { "Noise", "Finding", "Verdict", "Score", "Judged", "Rate" })
         {
             Assert.DoesNotContain(names, n => n.Contains(w, StringComparison.Ordinal));
         }
+
+        // ★ And Reserved is a flag, not a number that could smuggle a measurement in under a policy name.
+        Assert.Equal(typeof(bool), typeof(HoldoutCandidate).GetProperty("Reserved")!.PropertyType);
     }
 }

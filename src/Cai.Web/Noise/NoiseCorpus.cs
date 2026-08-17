@@ -48,6 +48,15 @@ public static class NoiseCorpus
     /// </param>
     public sealed record PublishedDraw(string Seed, DateTimeOffset DrawnAt);
 
+    /// <summary>
+    /// How many reserved repositories the decay curve needs to have an endpoint at all.
+    /// </summary>
+    /// <remarks>
+    /// ★ One per language in the pool today. Stated as a floor so a corpus edit that dropped the reservation
+    /// fails a test rather than quietly emptying the never-trained bucket.
+    /// </remarks>
+    public const int MinimumReservedRepositories = 4;
+
     /// <summary>The candidate pool, from the signed manifest.</summary>
     public static IReadOnlyList<HoldoutCandidate> Candidates => CorpusManifest.Load().Candidates;
 }

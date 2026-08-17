@@ -225,6 +225,38 @@ public static class NoiseSubmissions
             }
         }
 
+        // ── The permanently pristine slice ────────────────────────────────────────────────────────
+        //
+        // ★★ THE ONE MOMENT THE RESERVATION CAN BE SEEN TO BREAK. Nothing here stops a vendor developing against a
+        // repository — but the recency declaration is where they have to say so, and refusing it makes breaking
+        // the reservation an ACT rather than an omission. Accepted quietly, the never-trained bucket fills with
+        // repositories that are no longer never-trained, and the overfitting gap reads as zero for the best
+        // possible reason and the worst possible cause.
+        var reserved = holdout
+            .Where(h => h.Reserved)
+            .Select(h => h.RepoId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var declaration in submission.Recency ?? [])
+        {
+            if (!reserved.Contains(declaration.RepoId))
+            {
+                continue;
+            }
+
+            if (RecencyStrata.ParseOrNull(declaration.Stratum) is { } stratum
+                && stratum != RecencyStratum.NeverTrained)
+            {
+                problems.Add(
+                    $"'{declaration.RepoId}' is a RESERVED repository — permanently pristine, in every draw — and "
+                    + $"this submission declares it as '{declaration.Stratum}'. That declaration is the "
+                    + "reservation being broken: without a never-trained endpoint the decay curve measures "
+                    + "nothing, and 'one cycle of cooling off is enough' stays an assertion. If the tool has been "
+                    + "developed against it, say so to the standard rather than in a submission — the repository "
+                    + "has to leave the reserved slice, and that is a change to the signed corpus.");
+            }
+        }
+
         // ── How the tool was configured ───────────────────────────────────────────────────────────
         //
         // ★★ THE ONE THING NO OTHER CHECK CONSTRAINS. See RunConfiguration: the right version against the

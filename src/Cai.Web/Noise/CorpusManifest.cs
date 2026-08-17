@@ -157,7 +157,11 @@ public static class CorpusManifest
                 Language: c.GetProperty("language").GetString()!,
                 ProductionLoc: c.GetProperty("productionLoc").GetInt32(),
                 Licence: c.GetProperty("licence").GetString()!,
-                PinnedSha: c.GetProperty("pinnedSha").GetString()!))
+                PinnedSha: c.GetProperty("pinnedSha").GetString()!,
+
+                // ★★ Part of what the SIGNATURE covers. A reservation recorded only in code could be quietly
+                // un-reserved in the commit that needed it un-reserved.
+                Reserved: c.TryGetProperty("reserved", out var reserved) && reserved.GetBoolean()))
             .ToList();
 
         var draws = root.GetProperty("draws").EnumerateArray()
