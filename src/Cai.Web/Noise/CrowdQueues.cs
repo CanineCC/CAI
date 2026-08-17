@@ -8,8 +8,39 @@ namespace Cai.Web.Noise;
 /// rather than assumed: an answer with nothing to compare against cannot be a contradiction, and counting
 /// it as agreement would let a participant hide every disagreement by omitting one field.
 /// </param>
+/// <param name="WouldFix">
+/// ★★ "Would you fix this?" — 02 §4. The taxonomy question asks a rater to apply a vocabulary they did not write;
+/// this one asks what they would DO, which is a question a working engineer answers from experience in a second.
+/// NULL means NOT ASKED, never "no": folding a missing answer into "no" would manufacture evidence that
+/// practitioners would not act on findings nobody asked them about.
+/// </param>
+/// <param name="WantInReport">"Would you want this in a report?" — the other decision the tool exists to inform.</param>
 public sealed record CrowdAnswer(
-    string FindingId, string RaterId, NoiseVerdict Verdict, NoiseVerdict? MachineVerdict);
+    string FindingId, string RaterId, NoiseVerdict Verdict, NoiseVerdict? MachineVerdict,
+    bool? WouldFix = null, bool? WantInReport = null);
+
+/// <summary>The two behavioural questions, in the words every client must use.</summary>
+/// <remarks>
+/// ★★ VERBATIM, PUBLISHED. Two clients asking "would you fix this?" and "is this worth fixing?" are asking
+/// different questions, and the answers would not be comparable between them — nor could a reader weighing the
+/// figures know what was actually asked.
+/// </remarks>
+public static class BehaviouralQuestions
+{
+    public const string WouldFix = "Would you fix this?";
+    public const string WantInReport = "Would you want this in a report?";
+
+    public const string Why =
+        "02 §4: the spec is validated against what practitioners would do, rather than against their opinion of "
+      + "the spec's own vocabulary. It is also the honest answer to a 9-second median review — a rater spending "
+      + "nine seconds is reacting, not performing a taxonomy classification, so asking the question they are "
+      + "actually answering makes the nine seconds evidence rather than a problem to explain away.";
+
+    public const string RelationToTheRate =
+        "Reported separately and NOT folded into the noise rate. They are evidence ABOUT the taxonomy, not a "
+      + "second taxonomy: counting 'would not fix' as noise would silently redefine the published rate into a "
+      + "mixture of the two questions that asking both exists to keep apart.";
+}
 
 /// <summary>A period's queue, who has been handed what, and what came back.</summary>
 public sealed class CrowdRound

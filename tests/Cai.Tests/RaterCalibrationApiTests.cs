@@ -99,17 +99,37 @@ public sealed class RaterCalibrationApiTests(RegistryUnconfiguredFixture fx) : I
     /// ★★ Planting a honeypot changes NOTHING a rater can see. A calibration item you can recognise
     /// measures how carefully someone answers when watched, which is not the quantity anyone wants.
     /// </summary>
+    /// <remarks>
+    /// ★★ ASSERTED AS THE PROPERTY, NOT AS A FIXED STRING. This compared the raw body to
+    /// <c>{"findingId":"c000"}</c>, which caught #13 adding the two behavioural QUESTIONS to the item — a uniform
+    /// addition that cannot distinguish anything, since every item carries the same two constants. The exact-string
+    /// form would have to be edited for any such change, and editing it is indistinguishable from weakening it.
+    /// So the test now says what it means: a honeypot's item and an ordinary item differ ONLY in the finding id.
+    /// </remarks>
     [Fact]
     public async Task STAR_a_planted_honeypot_is_indistinguishable_on_the_wire()
     {
-        var period = Period();
-        await RegisterQueueAsync(period, 1, 0, 0);
-        await PlantAsync(period, "c000");
+        // ★ TWO PERIODS with identical queues, one of them PLANTED. Comparing two raters inside one period does
+        // not work: when both are due a honeypot the queue hands both the same planted item, and the test then
+        // compares a body with itself.
+        var planted = Period() + "-planted";
+        var clean = Period() + "-clean";
+        await RegisterQueueAsync(planted, 1, 0, 0);
+        await RegisterQueueAsync(clean, 1, 0, 0);
+        await PlantAsync(planted, "c000");
 
         using var client = fx.Client();
-        var raw = await client.GetStringAsync($"/api/noise/crowd/next?period={period}&raterId=rater-1", Ct);
+        var honeypot = await client.GetStringAsync($"/api/noise/crowd/next?period={planted}&raterId=rater-1", Ct);
+        var ordinary = await client.GetStringAsync($"/api/noise/crowd/next?period={clean}&raterId=rater-1", Ct);
 
-        Assert.Equal("{\"findingId\":\"c000\"}", raw);
+        // ★ The same finding id in both queues, one planted and one not — so any difference at all is the
+        // planting showing through.
+        Assert.Equal(honeypot, ordinary);
+
+        // ★ And nothing beyond the id and the published questions travels at all.
+        var properties = JsonDocument.Parse(honeypot).RootElement.EnumerateObject()
+            .Select(p => p.Name).Order(StringComparer.Ordinal).ToList();
+        Assert.Equal(["findingId", "questions"], properties);
     }
 
     /// <summary>

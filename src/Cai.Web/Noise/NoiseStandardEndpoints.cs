@@ -314,6 +314,19 @@ public static class NoiseStandardEndpoints
               + "leave-one-out range. Excluding an outlying repository is NOT permitted — dropping a "
               + "repo for having a high or low rate is selecting on the outcome.",
 
+            // ★★ THE TWO BEHAVIOURAL QUESTIONS (#13), verbatim. Two clients asking "would you fix this?" and
+            // "is this worth fixing?" are asking different questions, and the answers stop being comparable.
+            behaviouralQuestions = new
+            {
+                wouldFix = BehaviouralQuestions.WouldFix,
+                wantInReport = BehaviouralQuestions.WantInReport,
+                why = BehaviouralQuestions.Why,
+                relationToTheRate = BehaviouralQuestions.RelationToTheRate,
+                unansweredIsNotNo = "a missing behavioural answer is counted as NOT ASKED. Folding it into 'no' "
+                                  + "would manufacture evidence that practitioners would not act on findings "
+                                  + "nobody asked them about.",
+            },
+
             // ★★ THE PANEL'S SHAPE (#10). The cascade recorded whatever it was handed, so "four judges agreed"
             // could have been one model counted four times — and 02 §2 is explicit that a single-family ensemble
             // cannot see a single-family blind spot.
@@ -919,7 +932,20 @@ public static class NoiseStandardEndpoints
             // reads "probably fine" and rubber-stamps — and the spot-check exists precisely to catch the
             // case where all four were wrong together. A reason on the wire would destroy the only
             // evidence it was built to gather, and nothing downstream would ever show that it had.
-            return Results.Ok(new { findingId = item.FindingId });
+            return Results.Ok(new
+            {
+                findingId = item.FindingId,
+
+                // ★★ THE QUESTIONS TRAVEL WITH THE ITEM (#13). Without them every client invents its own wording,
+                // and "would you fix this?" against "is this worth fixing?" are different questions whose answers
+                // are not comparable. Still nothing about what the judges said — that disguise is what the
+                // spot-check depends on.
+                questions = new
+                {
+                    wouldFix = BehaviouralQuestions.WouldFix,
+                    wantInReport = BehaviouralQuestions.WantInReport,
+                },
+            });
         })
         .AllowAnonymous()
         .WithName("NoiseCrowdNext");
@@ -954,7 +980,10 @@ public static class NoiseStandardEndpoints
             }
 
             round.Answers.Add(new CrowdAnswer(
-                request.FindingId!, request.RaterId!, verdict, NoiseVerdicts.ParseOrNull(request.MachineVerdict)));
+                request.FindingId!, request.RaterId!, verdict, NoiseVerdicts.ParseOrNull(request.MachineVerdict),
+
+                // ★ Carried through as nullable: not asked and "no" are different answers (#13).
+                request.WouldFix, request.WantInReport));
 
             return Results.Ok(new { recorded = true, findingId = request.FindingId });
         })
@@ -2039,11 +2068,56 @@ public static class NoiseStandardEndpoints
                     answered = round.Answers.Count(a => round.Honeypots.ContainsKey(a.FindingId)),
                 },
 
+                // ★★ WHAT THE RATERS WOULD DO, beside what they LABELLED it (#13). 02 §4 validates the spec
+                // against practitioner behaviour rather than against opinions of the spec's vocabulary — and
+                // where the two disagree is the most informative thing this layer produces.
+                behaviour = Behaviour(),
+
                 // ★★ Published beside the figures, never as a footnote elsewhere. A reader who cannot see
                 // that four fifths of the answers came from one language, or from the vendor, is reading
                 // an agreement rate as if it measured truth.
                 composition = Composition(),
             });
+
+            object Behaviour()
+            {
+                var asked = measured.Where(a => a.WouldFix is not null || a.WantInReport is not null).ToList();
+                var fix = measured.Where(a => a.WouldFix is not null).ToList();
+                var report = measured.Where(a => a.WantInReport is not null).ToList();
+
+                return new
+                {
+                    answered = asked.Count,
+
+                    // ★★ NOT ASKED is its own count, never folded into "no". A missing answer counted as "would
+                    // not fix" would manufacture evidence that practitioners ignore findings nobody asked them
+                    // about — and the more raters skipped it, the stronger that false signal would get.
+                    notAsked = measured.Count - asked.Count,
+
+                    wouldFix = fix.Count(a => a.WouldFix == true),
+                    wantInReport = report.Count(a => a.WantInReport == true),
+                    wouldFixRate = fix.Count > 0 ? (double?)fix.Count(a => a.WouldFix == true) / fix.Count : null,
+                    wantInReportRate = report.Count > 0
+                        ? (double?)report.Count(a => a.WantInReport == true) / report.Count
+                        : null,
+
+                    // ★★ WHERE THE LABEL AND THE BEHAVIOUR PART COMPANY. A finding called VALID that nobody would
+                    // fix is one the spec counts as a success and the practitioner would ignore; noise somebody
+                    // would fix anyway says the taxonomy is cutting in the wrong place. Merging the two figures
+                    // would destroy exactly this.
+                    validButWouldNotFix = measured.Count(a => !a.Verdict.IsNoise() && a.WouldFix == false),
+                    noiseButWouldFix = measured.Count(a => a.Verdict.IsNoise() && a.WouldFix == true),
+
+                    questions = new
+                    {
+                        wouldFix = BehaviouralQuestions.WouldFix,
+                        wantInReport = BehaviouralQuestions.WantInReport,
+                    },
+                    note = "Where a verdict and the behaviour disagree, the spec and the practitioner have parted "
+                         + "company — that gap is what this layer is for. "
+                         + BehaviouralQuestions.RelationToTheRate,
+                };
+            }
 
             object Composition()
             {
@@ -2555,8 +2629,13 @@ public static class NoiseStandardEndpoints
     public sealed record HoneypotRequest(string? Period, IReadOnlyList<HoneypotEntry>? Honeypots);
 
     /// <summary>One person's answer to one finding.</summary>
+    /// <param name="WouldFix">
+    /// ★★ Nullable, and a missing one is NOT ASKED rather than "no" — folding it into "no" would manufacture
+    /// evidence that practitioners would not act on findings nobody asked them about.
+    /// </param>
     public sealed record CrowdAnswerRequest(
-        string? Period, string? RaterId, string? FindingId, string? Verdict, string? MachineVerdict);
+        string? Period, string? RaterId, string? FindingId, string? Verdict, string? MachineVerdict,
+        bool? WouldFix = null, bool? WantInReport = null);
 
     /// <summary>One judge's vote as it arrives on the wire.</summary>
     /// <param name="Judge">The judge slot, e.g. <c>judge-a</c>.</param>
