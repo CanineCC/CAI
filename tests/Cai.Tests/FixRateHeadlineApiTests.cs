@@ -30,6 +30,9 @@ public sealed class FixRateHeadlineApiTests(RegistryUnconfiguredFixture fx) : IC
 
     private static Dictionary<string, object?> Run() => new()
     {
+        // ★ The period the number measures — required since #23-2, so the rate can be tied to the
+        // method version that governed it.
+        ["period"] = "2026-09",
         ["reported"] = 2100,
         ["adjudicated"] = 1800,
         ["excluded"] = 60,

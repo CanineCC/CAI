@@ -33,6 +33,9 @@ public sealed class PublicationApiTests(RegistryUnconfiguredFixture fx) : IClass
         int validAndActionable = 30, int validNotActionable = 20, int noise = 30, int clusters = 12) =>
         new
         {
+            // ★ Required since #23-2: a rate that does not name its period cannot be checked against the
+            // method version that governed it.
+            period = "2026-09",
             reported, adjudicated, excluded, unrated, validAndActionable, validNotActionable, noise, clusters,
             configuration = new { rulesetId = "watchdog-default-2026.08", isProductDefault = true },
             fixRateUnavailable = "fixture — this test is about the census and the threshold",
@@ -85,6 +88,7 @@ public sealed class PublicationApiTests(RegistryUnconfiguredFixture fx) : IClass
     {
         var (_, body) = await PublishAsync(new
         {
+            period = "2026-09",
             reported = 2000, adjudicated = 2000, excluded = 0, unrated = 0,
             validAndActionable = 900, validNotActionable = 660, noise = 440,
             clusters = 12,

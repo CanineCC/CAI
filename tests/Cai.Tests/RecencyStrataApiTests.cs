@@ -34,6 +34,9 @@ public sealed class RecencyStrataApiTests(RegistryUnconfiguredFixture fx)
 
     private static Dictionary<string, object?> Complete() => new()
     {
+        // ★ The period the number measures — required since #23-2, so the rate can be tied to the
+        // method version that governed it.
+        ["period"] = "2026-09",
         ["reported"] = 2000,
         ["adjudicated"] = 1900,
         ["excluded"] = 60,

@@ -102,10 +102,32 @@ public static class PublicationContract
         bool? gitMiningVerified,
         int adjudicated, int excluded,
         bool hasFixRateObservations, string? fixRateUnavailable, int? fixRateWindowDays,
-        RunConfiguration? configuration)
+        RunConfiguration? configuration,
+        string? period)
     {
         ArgumentNullException.ThrowIfNull(claims);
         var breaches = new List<ContractBreach>();
+
+        // ── The period ────────────────────────────────────────────────────────────────────────────
+        //
+        // ★★ A RATE WITHOUT ITS PERIOD CANNOT BE CHECKED against the method that governed it, and #23-4 is
+        // explicit that the number never appears without its interval and its period. The endpoint accepted
+        // one with neither, so a published figure could not be tied to the version it was judged under —
+        // which is the whole point of the change-control rule.
+        if (string.IsNullOrWhiteSpace(period))
+        {
+            breaches.Add(new ContractBreach("period",
+                "the publication must name the period it measures (yyyy-MM). Without it the rate cannot be "
+              + "checked against the method version that governed it, and a later method change becomes "
+              + "indistinguishable from a reinterpretation of an old number."));
+        }
+        else if (MethodVersions.InForceFor(period) is null)
+        {
+            breaches.Add(new ContractBreach("period",
+                $"no method version was in force for {period}. The first version takes effect from "
+              + $"{MethodVersions.History[0].EffectiveFromPeriod}; a period before that was not measured "
+              + "under this method and cannot publish as though it were."));
+        }
 
         // ── The absolutes ────────────────────────────────────────────────────────────────────────
         if (loc is not > 0)

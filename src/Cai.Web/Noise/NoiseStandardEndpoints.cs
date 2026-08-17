@@ -73,9 +73,51 @@ public static class NoiseStandardEndpoints
         .AllowAnonymous()
         .WithName("NoiseVerdicts");
 
-        endpoints.MapGet("/api/noise/method", () => Results.Ok(new
+        endpoints.MapGet("/api/noise/method", (string? period) =>
+        {
+            // ★★ Asked about a PERIOD, answer with the version that governed it — not the newest. A reader
+            // re-deriving an old number has to be able to find the rules it was judged under, or "versioned"
+            // means no more than "we will tell you what the rules are now".
+            if (period is { Length: > 0 })
+            {
+                var inForce = MethodVersions.InForceFor(period);
+                return Results.Ok(new
+                {
+                    period,
+                    version = inForce?.Version,
+                    announcedAt = inForce?.AnnouncedAt,
+                    effectiveFromPeriod = inForce?.EffectiveFromPeriod,
+                    rationale = inForce?.Rationale,
+                    changeControlRule = MethodVersions.Rule,
+
+                    // ★ Null, never the earliest version: claiming a version governed a period that predates
+                    // it is the same retroactive application the rule forbids, pointing the other way.
+                    note = inForce is null
+                        ? $"no method version was in force for {period} — the first version takes effect from "
+                          + MethodVersions.History[0].EffectiveFromPeriod + "."
+                        : null,
+                });
+            }
+
+            return Results.Ok(new
         {
             version = MethodVersion,
+
+            // ★★ THE WHOLE HISTORY, not just the current version. A reader judging whether a change was
+            // self-serving needs when it was announced, which period it first applied to, and why — for every
+            // version, because the interesting one is always the one before a number somebody disliked.
+            versions = MethodVersions.History.Select(v => new
+            {
+                version = v.Version,
+                announcedAt = v.AnnouncedAt,
+                effectiveFromPeriod = v.EffectiveFromPeriod,
+                rationale = v.Rationale,
+            }),
+
+            // ★★ The answer to "who can change this, and when". With no governance body in phase 1 the honest
+            // answer was "Watchdog, unilaterally, at any time"; this is the constraint that replaces a meeting.
+            versionTakesEffectFromNextHoldout = true,
+            changeControlRule = MethodVersions.Rule,
 
             // ★★ The single most important sentence in the standard.
             noiseRateIsAQualityScore = false,
@@ -169,7 +211,8 @@ public static class NoiseStandardEndpoints
                 "Publish both the pooled (micro) and cluster-weighted (macro) average, and the "
               + "leave-one-out range. Excluding an outlying repository is NOT permitted — dropping a "
               + "repo for having a high or low rate is selecting on the outcome.",
-        }))
+            });
+        })
         .AllowAnonymous()
         .WithName("NoiseMethod");
 
@@ -851,7 +894,8 @@ public static class NoiseStandardEndpoints
                 hasFixRateObservations: request.FixRateObservations is { Count: > 0 },
                 fixRateUnavailable: request.FixRateUnavailable,
                 fixRateWindowDays: request.FixRateWindowDays,
-                configuration: request.Configuration);
+                configuration: request.Configuration,
+                period: request.Period);
 
             if (breaches.Count > 0)
             {
@@ -899,7 +943,13 @@ public static class NoiseStandardEndpoints
 
             return Results.Ok(new
             {
-                methodVersion = MethodVersion,
+                period = request.Period,
+
+                // ★★ THE VERSION IN FORCE FOR THIS PERIOD, not the newest. A period judged under 1.0 publishes
+                // as judged under 1.0 for ever, which is exactly what stops a later change reaching back and
+                // reinterpreting a number somebody disliked.
+                methodVersion = MethodVersions.InForceFor(request.Period)?.Version ?? MethodVersion,
+                methodVersionRationale = MethodVersions.InForceFor(request.Period)?.Rationale,
 
                 census = new
                 {
@@ -1361,6 +1411,8 @@ public static class NoiseStandardEndpoints
     /// </param>
     public sealed record PublicationRequest(
         int Reported, int Adjudicated, int Excluded, int Unrated,
+        // ★★ The period the number measures. Required — see PublicationContract.
+        string? Period,
         int ValidAndActionable, int ValidNotActionable, int Noise,
         int Clusters, double? PreviousRate,
         int? FixRateWindowDays,
