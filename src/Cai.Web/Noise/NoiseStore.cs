@@ -93,6 +93,17 @@ public interface INoiseStore
     /// <summary>Periods that have a published result, newest first — what a reader can ask for.</summary>
     IReadOnlyList<string> PublishedPeriods();
 
+    /// <summary>
+    /// Every published period's judged and noise counts, oldest first, for the rolling figure.
+    /// </summary>
+    /// <remarks>
+    /// ★★ READ FROM THE STORED PAYLOADS, so the rolling figure is pooled from what was actually PUBLISHED rather
+    /// than from a running total kept beside it. A counter would drift from the publications the moment a
+    /// correction landed, and this is the one figure whose whole value is that it aggregates the record.
+    /// <para>★ A corrected period appears twice, later row last — <see cref="RollingFigure"/> takes the latest.</para>
+    /// </remarks>
+    IReadOnlyList<PeriodTally> PublishedTallies();
+
     /// <summary>Record the independent second pass over a period's re-judge sample.</summary>
     /// <remarks>
     /// ★ Replaces any earlier pass for the same (period, findingId): a second pass IS the re-judge, and keeping
@@ -543,6 +554,44 @@ public sealed class SqliteNoiseStore : INoiseStore
         cmd.Parameters.AddWithValue("$id", submissionId ?? "");
         var value = cmd.ExecuteScalar();
         return value is null or DBNull ? null : (string)value;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<PeriodTally> PublishedTallies()
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT period, payload_json FROM noise_publications ORDER BY published_at, publication_id";
+        using var reader = cmd.ExecuteReader();
+
+        var list = new List<PeriodTally>();
+        while (reader.Read())
+        {
+            var period = reader.GetString(0);
+            try
+            {
+                var root = System.Text.Json.JsonDocument.Parse(reader.GetString(1)).RootElement;
+                var noise = Read(root, "noise");
+                var judged = noise
+                           + Read(root, "validAndActionable")
+                           + Read(root, "validNotActionable");
+                list.Add(new PeriodTally(period, judged, noise));
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // ★ A payload that will not parse is skipped rather than throwing: one unreadable row must not
+                // take the rolling figure — and every other endpoint — down with it. It is a stored artefact,
+                // not live input, so there is nothing to reject back to a caller.
+            }
+        }
+
+        return list;
+
+        static int Read(System.Text.Json.JsonElement root, string name) =>
+            root.TryGetProperty(name, out var v)
+            && v.ValueKind == System.Text.Json.JsonValueKind.Number
+            && v.TryGetInt32(out var n) ? n : 0;
     }
 
     /// <inheritdoc />

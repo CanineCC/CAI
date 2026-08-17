@@ -314,6 +314,24 @@ public static class NoiseStandardEndpoints
               + "leave-one-out range. Excluding an outlying repository is NOT permitted — dropping a "
               + "repo for having a high or low rate is selecting on the outcome.",
 
+            // ★★ THE ROLLING FIGURE, published as a rule rather than as a habit. 02 §5 lists it as required
+            // with every rate and nothing computed one.
+            twelveMonth = new
+            {
+                windowMonths = RollingFigure.WindowMonths,
+                pooledFrom = "the published results for the window ending at the period, from the append-only "
+                           + "publication record, plus the period being published. A corrected period counts "
+                           + "ONCE, at its latest value.",
+                why = "A single period's interval is wide enough to hide most movements, and the minimum "
+                    + "detectable difference computed over repositories is wider still — so month-to-month "
+                    + "comparison is mostly noise about noise. The rolling figure is the only rate here whose "
+                    + "interval can support a claim about a trend.",
+                shortWindowRule = "A window covering fewer than the full twelve periods is published as such: "
+                                + "it is a real pooled rate and it is not yet a twelve-month figure. The two "
+                                + "look identical, so `spansTheFullWindow` is what separates them.",
+                interval = "wilson-95",
+            },
+
             // ★★ AND NOW THE RULE HAS AN IMPLEMENTATION BEHIND IT. reportingRule above required both averages
             // while the publication carried only a COUNT of clusters, which cannot produce a cluster-weighted
             // anything — a rule published and unimplementable at the same time.
@@ -1173,6 +1191,19 @@ public static class NoiseStandardEndpoints
                 .ToList();
             var clusterAverages = ClusterAverages.Compute(clusterTallies);
 
+            // ★★ THE ROLLING TWELVE-MONTH FIGURE, pooled from the append-only publication store — plus THIS
+            // period, which is not stored yet. Leaving the current one out would publish a "rolling figure
+            // beside a rate" that excludes that very rate: visibly wrong on the first period and subtly wrong
+            // for ever after. 02 §5 lists it as required with every rate, and it existed nowhere.
+            var judgedNow = request.ValidAndActionable + request.ValidNotActionable + request.Noise;
+            var rolling = RollingFigure.Compute(
+                [
+                    .. store.PublishedTallies().Where(t =>
+                        !string.Equals(t.Period, request.Period, StringComparison.Ordinal)),
+                    new PeriodTally(request.Period ?? "", judgedNow, request.Noise),
+                ],
+                throughPeriod: request.Period ?? "");
+
             // ★★ READ FROM THE STORE, never from the request. See PublicationRequest.RejudgeUnavailable.
             var rejudgeSample = Rejudge.SelectSample(
                 RejudgeSeed(request.Period ?? ""), request.Period ?? "",
@@ -1408,6 +1439,33 @@ public static class NoiseStandardEndpoints
                         withinTolerance = false,
                         fold = Rejudge.Fold,
                     },
+
+                // ★★ THE ROLLING FIGURE, with its interval and its SPAN. A single period's interval is wide
+                // enough to hide most movements, so this is the only rate here that can support a claim about a
+                // trend — and a three-period pool quoted as the annual number is the natural failure, because
+                // the two look identical and only `spansTheFullWindow` separates them.
+                twelveMonth = new
+                {
+                    windowMonths = RollingFigure.WindowMonths,
+                    periods = rolling.Periods,
+                    spansTheFullWindow = rolling.SpansTheFullWindow,
+                    firstPeriod = rolling.FirstPeriod,
+                    lastPeriod = rolling.LastPeriod,
+                    judged = rolling.Judged,
+                    noise = rolling.Noise,
+                    rate = rolling.Rate,
+                    intervalLow = rolling.IntervalLow,
+                    intervalHigh = rolling.IntervalHigh,
+                    intervalMethod = "wilson-95",
+                    note = rolling.Note,
+                },
+
+                // ★★ THE SPOT-CHECK, and the contested tail BESIDE it rather than merged. The contested items
+                // are hard by construction; the spot-check sample is the pipeline's own claim about itself, and
+                // it is the only evidence that the judges agreeing made them right. A combined figure would hide
+                // the disagreement rate on auto-accepted findings — and it is the one that would get quoted.
+                spotCheck = CrowdSlice(request.Period, CrowdReason.SpotCheck),
+                contestedTail = CrowdSlice(request.Period, CrowdReason.Contested),
 
                 // ★ The recall counterpart, beside the precision figure rather than in a side endpoint.
                 recall = new
@@ -1860,6 +1918,58 @@ public static class NoiseStandardEndpoints
             store.PublishedPeriods().Select(p => (JsonNode?)JsonValue.Create(p)).ToArray());
 
         return Results.Json(node);
+    }
+
+    /// <summary>
+    /// One crowd slice for a period, as the publication carries it.
+    /// </summary>
+    /// <remarks>
+    /// ★★ THE SAME ARITHMETIC AS <c>/api/noise/crowd/results/{period}</c>, and deliberately the same shape: a
+    /// spot-check figure that disagreed with the crowd endpoint's would leave a reader unable to tell which was
+    /// the standard's answer. Honeypots leave the count here too — their answer was known before it was asked.
+    /// </remarks>
+    private static object CrowdSlice(string? period, CrowdReason reason)
+    {
+        if (period is not { Length: > 0 } || CrowdQueues.Find(period) is not { } round)
+        {
+            // ★ An absence, never a blank. "No spot-check was run" and "the spot-check found no
+            // contradictions" are opposite claims and look identical when one of them is a missing field.
+            return new
+            {
+                run = false,
+                queued = (int?)null,
+                answered = (int?)null,
+                contradicted = (int?)null,
+                notComparable = (int?)null,
+                note = "no crowd round is registered for this period, so this check was not run. That is an "
+                     + "absence and not a clean result.",
+            };
+        }
+
+        var byFinding = round.Queue.ToDictionary(
+            i => i.FindingId, i => i.Reason, StringComparer.OrdinalIgnoreCase);
+        var measured = RaterCalibration.ExcludeHoneypots([.. round.Answers], [.. round.Honeypots.Values]);
+        var answers = measured
+            .Where(a => byFinding.TryGetValue(a.FindingId, out var r) && r == reason)
+            .ToList();
+
+        return new
+        {
+            run = true,
+            queued = (int?)round.Queue.Count(i =>
+                i.Reason == reason && !round.Honeypots.ContainsKey(i.FindingId)),
+            answered = (int?)answers.Count,
+
+            // ★ A contradiction is the whole point of the spot-check: the judges agreed, and a person outside
+            // the model family says otherwise.
+            contradicted = (int?)answers.Count(a =>
+                a.MachineVerdict is { } m && a.Verdict.IsNoise() != m.IsNoise()),
+
+            // ★ Answers with nothing to compare against are counted HERE and never as agreement, or omitting
+            // one field would hide every disagreement.
+            notComparable = (int?)answers.Count(a => a.MachineVerdict is null),
+            note = (string?)null,
+        };
     }
 
     /// <summary>A period's re-judge as it publishes: the sample, the outcome and the raw second pass.</summary>
