@@ -850,7 +850,8 @@ public static class NoiseStandardEndpoints
                 request.Adjudicated, request.Excluded,
                 hasFixRateObservations: request.FixRateObservations is { Count: > 0 },
                 fixRateUnavailable: request.FixRateUnavailable,
-                fixRateWindowDays: request.FixRateWindowDays);
+                fixRateWindowDays: request.FixRateWindowDays,
+                configuration: request.Configuration);
 
             if (breaches.Count > 0)
             {
@@ -989,6 +990,20 @@ public static class NoiseStandardEndpoints
                 // ★ 04 fix #1: the gap backlog IS a recall signal, and it costs a query. Published as a
                 // standing figure so a falling noise rate beside a rising gap count is visible as what it is.
                 gapsFoundSinceLastPeriod = request.GapsFoundSinceLastPeriod,
+
+                // ★★ The configuration travels WITH the number. #23-1: deviations publish alongside it, and
+                // the publication is the number a reader quotes.
+                configuration = request.Configuration is { } cfg ? new
+                {
+                    rulesetId = cfg.RulesetId,
+                    isProductDefault = cfg.IsProductDefault,
+                    divergenceExplanation = cfg.DivergenceExplanation,
+                    rulesDisabled = cfg.RulesDisabled ?? [],
+                    thresholdsAltered = (cfg.ThresholdsAltered ?? []).Select(t => new
+                    {
+                        ruleId = t.RuleId, shipped = t.Shipped, used = t.Used,
+                    }),
+                } : null,
 
                 provenance = new
                 {
@@ -1359,6 +1374,7 @@ public static class NoiseStandardEndpoints
         string? RecallNote = null,
         IReadOnlyList<ClaimClassEntry>? ClaimClasses = null,
         IReadOnlyList<RecencyEntry>? RecencyStrata = null,
+        RunConfiguration? Configuration = null,
         string? ToolVersion = null,
         string? HoldoutSeed = null,
         string? ModelSet = null,

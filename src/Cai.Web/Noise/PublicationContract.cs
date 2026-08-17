@@ -101,7 +101,8 @@ public static class PublicationContract
         string? toolVersion, string? holdoutSeed, string? modelSet,
         bool? gitMiningVerified,
         int adjudicated, int excluded,
-        bool hasFixRateObservations, string? fixRateUnavailable, int? fixRateWindowDays)
+        bool hasFixRateObservations, string? fixRateUnavailable, int? fixRateWindowDays,
+        RunConfiguration? configuration)
     {
         ArgumentNullException.ThrowIfNull(claims);
         var breaches = new List<ContractBreach>();
@@ -210,6 +211,47 @@ public static class PublicationContract
             breaches.Add(new ContractBreach("fixRateWindowDays",
                 "fixRateObservations need a fixRateWindowDays — a fix rate without a period is "
               + "unfalsifiable, because over a long enough window nearly all code changes."));
+        }
+
+        // ── How the tool was configured ──────────────────────────────────────────────────────────
+        //
+        // ★★ REQUIRED ON THE PUBLICATION TOO, not only on the submission. #23-1 says deviations publish
+        // "alongside the number", and the publication IS the number — a declaration that reaches only the
+        // register leaves the figure a reader quotes with nothing attached to it. Found by submitting from
+        // Watchdog and seeing the declaration derived, sent, and silently ignored.
+        if (configuration is null)
+        {
+            breaches.Add(new ContractBreach("configuration",
+                "the published number must carry the configuration it was measured under: the ruleset, "
+              + "anything disabled or altered from the shipping default, and whether that configuration is "
+              + "what customers get. Every other requirement here constrains the run; this one constrains "
+              + "the tool, and without it the rate describes a setup nobody can identify."));
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(configuration.RulesetId))
+            {
+                breaches.Add(new ContractBreach("configuration.rulesetId",
+                    "the configuration must name its ruleset or profile."));
+            }
+
+            var disabled = configuration.RulesDisabled ?? [];
+            var altered = configuration.ThresholdsAltered ?? [];
+
+            if (configuration.IsProductDefault && (disabled.Count > 0 || altered.Count > 0))
+            {
+                breaches.Add(new ContractBreach("configuration.isProductDefault",
+                    "this cannot be the product default while also listing changes to it. Either it is what "
+                  + "customers get, or it diverges and says how."));
+            }
+
+            if (!configuration.IsProductDefault
+                && string.IsNullOrWhiteSpace(configuration.DivergenceExplanation))
+            {
+                breaches.Add(new ContractBreach("configuration.divergenceExplanation",
+                    "a configuration declared as NOT the product default must say how it differs. The "
+                  + "explanation publishes with the number."));
+            }
         }
 
         // ── The ceiling that voids the run ──────────────────────────────────────────────────────

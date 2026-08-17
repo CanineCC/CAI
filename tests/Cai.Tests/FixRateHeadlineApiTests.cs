@@ -56,6 +56,9 @@ public sealed class FixRateHeadlineApiTests(RegistryUnconfiguredFixture fx) : IC
         ["holdoutSeed"] = "cai-2026-08-a1b2c3",
         ["modelSet"] = "judge-a@2026-07, judge-b@2026-07, blind-c@2026-06, blind-d@2026-06",
         ["gitMiningVerified"] = true,
+        // ★ The configuration the number was measured under — required on the PUBLICATION, not only on the
+        // submission: #23-1 says deviations publish alongside the number, and this is the number.
+        ["configuration"] = new { rulesetId = "watchdog-default-2026.08", isProductDefault = true },
     };
 
     private static object[] Observations() =>

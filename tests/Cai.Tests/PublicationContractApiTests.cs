@@ -57,6 +57,11 @@ public sealed class PublicationContractApiTests(RegistryUnconfiguredFixture fx)
         ["holdoutSeed"] = "cai-2026-08-a1b2c3",
         ["modelSet"] = "judge-a@2026-07, judge-b@2026-07, blind-c@2026-06, blind-d@2026-06",
         ["gitMiningVerified"] = true,
+        ["configuration"] = new
+        {
+            rulesetId = "watchdog-default-2026.08",
+            isProductDefault = true,
+        },
         ["fixRateUnavailable"] = "fixture — the anchor has its own tests",
     };
 
@@ -365,5 +370,60 @@ public sealed class PublicationContractApiTests(RegistryUnconfiguredFixture fx)
         {
             System.Globalization.CultureInfo.CurrentCulture = previous;
         }
+    }
+
+    [Fact]
+    public async Task STAR_The_Published_NUMBER_Must_Carry_Its_Configuration()
+    {
+        // ★★ Found by submitting from Watchdog: the declaration was derived from the runs, sent, and silently
+        // ignored, because only /submissions checked it. #23-1 says deviations publish "alongside the number",
+        // and the publication IS the number a reader quotes — a declaration that reaches only the register
+        // leaves the figure with nothing attached to it.
+        var run = Complete();
+        run.Remove("configuration");
+
+        var (status, body) = await PublishAsync(run);
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains("configuration", Fields(body));
+    }
+
+    [Fact]
+    public async Task STAR_The_Configuration_Publishes_With_The_Rate()
+    {
+        var run = Complete();
+        run["configuration"] = new
+        {
+            rulesetId = "tuned-for-corpus",
+            isProductDefault = false,
+            divergenceExplanation = "the two Electron lenses are off: the corpus has no Electron application",
+            rulesDisabled = new[] { "D29-electron-preload" },
+        };
+
+        var (status, body) = await PublishAsync(run);
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        var cfg = body.GetProperty("configuration");
+        Assert.Equal("tuned-for-corpus", cfg.GetProperty("rulesetId").GetString());
+        Assert.False(cfg.GetProperty("isProductDefault").GetBoolean());
+        Assert.Contains("no Electron application",
+            cfg.GetProperty("divergenceExplanation").GetString()!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_Publication_Claiming_The_Default_While_Listing_Changes_Is_Refused()
+    {
+        var run = Complete();
+        run["configuration"] = new
+        {
+            rulesetId = "watchdog-default-2026.08",
+            isProductDefault = true,
+            rulesDisabled = new[] { "D15-hotspot" },
+        };
+
+        var (status, body) = await PublishAsync(run);
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains("configuration.isProductDefault", Fields(body));
     }
 }

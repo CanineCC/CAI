@@ -34,6 +34,7 @@ public sealed class PublicationApiTests(RegistryUnconfiguredFixture fx) : IClass
         new
         {
             reported, adjudicated, excluded, unrated, validAndActionable, validNotActionable, noise, clusters,
+            configuration = new { rulesetId = "watchdog-default-2026.08", isProductDefault = true },
             fixRateUnavailable = "fixture — this test is about the census and the threshold",
 
             // ★★ The rest of the contract /api/noise/method publishes. Omitting it does not make a shorter
@@ -88,6 +89,7 @@ public sealed class PublicationApiTests(RegistryUnconfiguredFixture fx) : IClass
             validAndActionable = 900, validNotActionable = 660, noise = 440,
             clusters = 12,
             previousRate = 0.20,
+            configuration = new { rulesetId = "watchdog-default-2026.08", isProductDefault = true },
             fixRateUnavailable = "fixture — this test is about the detectable difference",
 
             // The contract, as every publication must carry it.

@@ -50,6 +50,7 @@ public sealed class RecencyStrataApiTests(RegistryUnconfiguredFixture fx)
         ["holdoutSeed"] = "cai-2026-08-a1b2c3",
         ["modelSet"] = "judge-a@2026-07",
         ["gitMiningVerified"] = true,
+        ["configuration"] = new { rulesetId = "watchdog-default-2026.08", isProductDefault = true },
         ["fixRateUnavailable"] = "fixture",
     };
 
