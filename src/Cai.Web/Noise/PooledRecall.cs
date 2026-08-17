@@ -31,10 +31,17 @@ public sealed record PooledFinding(
 /// Why there is no recall figure, when there is none. ★ Stated rather than left as a blank: a missing number and
 /// a low one are opposite claims.
 /// </param>
+/// <param name="WithoutCoordinate">
+/// ★★ How many of this tool's findings could not enter the union because they carry no usable coordinate (#21).
+/// PER TOOL, not only as a total: a tool whose output is mostly repo-level is being measured on a fraction of
+/// what it reported, and its recall figure means much less than the same figure from a tool whose findings all
+/// carry a line. A single total hides exactly that difference — which is the difference this axis exists to show.
+/// </param>
 public sealed record PooledToolResult(
     string Tool, int Reported, int Valid, int MatchedUnion, int UniqueContribution,
     double? Precision, double? PooledRecall,
-    int LeaveOneOutReferenceSize = 0, string? PooledRecallUnavailable = null);
+    int LeaveOneOutReferenceSize = 0, string? PooledRecallUnavailable = null,
+    int WithoutCoordinate = 0);
 
 /// <summary>The pooled reference and every participant's standing against it.</summary>
 /// <param name="PooledRecallAvailable">
@@ -50,11 +57,19 @@ public sealed record PooledToolResult(
 /// How many findings left the pool because a real fix pair establishes them. ★ Counted, so the scope is a
 /// published number rather than an assumption.
 /// </param>
+/// <param name="UnmatchableWithoutCoordinate">
+/// ★★ Rows that never entered the union because they carry no usable coordinate (#21) — no file, or a file with
+/// no line. Measured at 26 % of a real corpus, weighted towards exactly the repo-level dimensions this axis
+/// exists to cover. Published rather than dropped: a union that quietly loses a quarter of the data reports a
+/// recall figure about the code-level findings every tool already agrees on.
+/// </param>
+/// <param name="CoordinateGapNote">Why they could not be matched — see <see cref="PooledRecall.CoordinateGap"/>.</param>
 public sealed record PooledRecallSummary(
     int ParticipatingTools, int UnionSize, int LineWindow,
     IReadOnlyList<PooledToolResult> Tools, string Caveat,
     bool PooledRecallAvailable = false, bool PseudoOracle = true,
-    string Scope = "", int ExcludedWithFixPairOracle = 0);
+    string Scope = "", int ExcludedWithFixPairOracle = 0,
+    int UnmatchableWithoutCoordinate = 0, string CoordinateGapNote = "");
 
 /// <summary>
 /// Recall, as far as it can honestly be measured without ground truth.
@@ -91,6 +106,30 @@ public static class PooledRecall
     /// </remarks>
     public const int MinimumTools = 3;
 
+    /// <summary>
+    /// Whether a finding can be matched across vendors at all.
+    /// </summary>
+    /// <remarks>
+    /// ★★ A COORDINATE IS THE ONLY THING TWO VENDORS SHARE. Rule ids are each vendor's own vocabulary and the
+    /// standard publishes no mapping between them, so without a file and a line there is nothing to match on.
+    /// A file with NO LINE is the same case: "something in this manifest" from two tools cannot be shown to mean
+    /// one defect, and the line window would match it to every other line-less row in the same file.
+    /// </remarks>
+    public static bool HasUsableCoordinate(PooledFinding finding)
+    {
+        ArgumentNullException.ThrowIfNull(finding);
+        return !string.IsNullOrWhiteSpace(finding.FilePath) && finding.Line > 0;
+    }
+
+    /// <summary>Why coordinate-less rows are excluded, published beside the count.</summary>
+    public const string CoordinateGap =
+        "these rows carry no usable coordinate — no file, or a file with no line — so nothing can match them "
+      + "across tools: a rule id is each vendor's own vocabulary and this standard publishes no mapping between "
+      + "them. They are EXCLUDED and counted rather than merged: with no file and no line they all fall inside "
+      + "the line window of each other, so one repository's repo-level findings would collapse into a single "
+      + "pooled defect that every tool appears to have found — inflating every participant's recall on exactly "
+      + "the dimensions the pool is least able to judge.";
+
     /// <summary>What the figure covers, and what it deliberately leaves to a better oracle.</summary>
     public const string PooledScope =
         "Findings whose reality rests on agreement. Anything a real before/after FIX PAIR establishes is "
@@ -125,9 +164,14 @@ public static class PooledRecall
         var fixPairBacked = findings.Count(f => f.HasFixPairOracle);
         var poolable = findings.Where(f => !f.HasFixPairOracle).ToList();
 
+        // ★★ THE COORDINATE GAP (#21). Rows with nothing to match on leave the union before it is built, and
+        // they are counted per tool — see CoordinateGap for why merging them would be worse than dropping them.
+        var unmatchable = poolable.Where(f => !HasUsableCoordinate(f)).ToList();
+        var matchable = poolable.Where(HasUsableCoordinate).ToList();
+
         // ★ Only what a human adjudicated VALID becomes a defect. Noise in the reference would reward a
         // tool for reproducing another tool's mistakes.
-        var union = BuildUnion([.. poolable.Where(f => f.Valid)], lineWindow);
+        var union = BuildUnion([.. matchable.Where(f => f.Valid)], lineWindow);
 
         var tools = poolable.Select(f => f.Tool)
             .Concat(silentTools ?? [])
@@ -176,6 +220,8 @@ public static class PooledRecall
                     : null,
 
                 LeaveOneOutReferenceSize: reference.Count,
+                WithoutCoordinate: unmatchable.Count(f =>
+                    string.Equals(f.Tool, tool, StringComparison.OrdinalIgnoreCase)),
                 PooledRecallUnavailable: enoughTools
                     ? reference.Count == 0
                         ? "no other participating tool reported a valid finding, so there is no reference "
@@ -189,7 +235,9 @@ public static class PooledRecall
             PooledRecallAvailable: enoughTools,
             PseudoOracle: true,
             Scope: PooledScope,
-            ExcludedWithFixPairOracle: fixPairBacked);
+            ExcludedWithFixPairOracle: fixPairBacked,
+            UnmatchableWithoutCoordinate: unmatchable.Count,
+            CoordinateGapNote: CoordinateGap);
     }
 
     private sealed record Defect(string RepoId, string FilePath, int Line, HashSet<string> Tools);

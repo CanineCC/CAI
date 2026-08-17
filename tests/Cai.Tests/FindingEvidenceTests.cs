@@ -62,6 +62,47 @@ public sealed class FindingEvidenceTests
     }
 
     [Fact]
+    public void STAR_Two_Coordinateless_Findings_Of_The_Same_RULE_Are_Not_ONE_Finding()
+    {
+        // ★★ THE COORDINATE GAP COLLAPSES DISTINCT FINDINGS INTO ONE ID (#21), and this was a real defect in
+        // the id I derived for #23. Measured over 34 local fingerprint sets: 1,905 of 7,144 rows carry no usable
+        // coordinate, and 1,689 of those would collide — one session had 160 D3 rows that all keyed to the same
+        // id. The crowd would have been shown one item where there were a hundred and sixty, and the union would
+        // have matched a hundred and fifty-nine rows onto one.
+        //
+        // ★ So when there is NO coordinate, the finding's own statement is its identity: a repo-level claim IS
+        // its sentence, and two different sentences are two different claims.
+        var one = FindingKey.For("acme/app", "abc1234", null, null, "D3", "Widget is a god class");
+        var two = FindingKey.For("acme/app", "abc1234", null, null, "D3", "Gadget is a god class");
+
+        Assert.NotEqual(one, two);
+    }
+
+    [Fact]
+    public void STAR_A_Finding_WITH_A_Coordinate_Does_Not_Change_Id_When_Its_MESSAGE_Is_Reworded()
+    {
+        // ★★ THE OTHER HALF OF THE SAME RULE. The title is part of the identity ONLY where there is no
+        // coordinate — otherwise improving a remediation message would renumber most of the corpus, breaking
+        // every open dispute and every crowd queue built on the old ids. The coordinate is the identity when
+        // there is one.
+        var before = FindingKey.For("acme/app", "abc1234", "src/Widget.cs", 42, "D4", "duplicated block");
+        var after = FindingKey.For("acme/app", "abc1234", "src/Widget.cs", 42, "D4", "this block is duplicated");
+
+        Assert.Equal(before, after);
+    }
+
+    [Fact]
+    public void A_Coordinateless_Finding_With_No_Title_Still_Gets_An_Id()
+    {
+        // ★ It cannot be distinguished from another of the same rule, which is a fact about the submission
+        // rather than an error here — and the union's unmatched report is where that shows up.
+        var id = FindingKey.For("acme/app", "abc1234", null, null, "D36", null);
+
+        Assert.False(string.IsNullOrWhiteSpace(id));
+        Assert.Equal(id, FindingKey.For("acme/app", "abc1234", null, null, "D36", ""));
+    }
+
+    [Fact]
     public void STAR_The_Evidence_Link_Points_At_The_PINNED_Revision()
     {
         // ★★ Not at the branch. A link to HEAD shows the rater code that may have changed since the run, and they

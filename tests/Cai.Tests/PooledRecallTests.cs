@@ -183,6 +183,81 @@ public sealed class PooledRecallTests
         Assert.Equal(0, pooled.Tools.Single(t => t.Tool == "b").UniqueContribution);
     }
 
+    // ── The coordinate gap (#21) ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ★★ A FINDING WITH NO USABLE COORDINATE CANNOT BE MATCHED, and must not be matched anyway.
+    /// </summary>
+    /// <remarks>
+    /// <para>Measured 2026-08-16 over 56 corpus scans and again over 34 local fingerprint sets: 26 % of rows
+    /// carry no file, or a file with no line. They are weighted towards exactly the repo-level dimensions this
+    /// axis exists to cover — D38, D15, D16, D34, D35, D36, R4, R9 — so dropping them silently would remove a
+    /// quarter of the data and bias what is left towards the code-level findings every tool already agrees on.
+    /// </para>
+    /// <para>★★ AND MERGING THEM IS WORSE THAN DROPPING THEM. With FilePath "" and Line 0 they all fall inside
+    /// the line window of each other, so one repository's fifty repo-level findings would collapse into ONE
+    /// pooled defect that every tool "found" — inflating every participant's recall on the very dimensions the
+    /// pool is least able to judge.</para>
+    /// </remarks>
+    [Fact]
+    public void STAR_Rows_With_No_Usable_Coordinate_Are_EXCLUDED_And_COUNTED()
+    {
+        var pooled = PooledRecall.Compute(
+        [
+            F("a", "acme/x", "real.cs", 10), F("b", "acme/x", "real.cs", 11),
+            F("a", "acme/x", "", 0), F("a", "acme/x", "", 0),
+            F("b", "acme/x", "manifest.json", 0),
+        ]);
+
+        // One pooled defect from the two coordinate-carrying rows; the three others are out and counted.
+        Assert.Equal(1, pooled.UnionSize);
+        Assert.Equal(3, pooled.UnmatchableWithoutCoordinate);
+        Assert.Contains("coordinate", pooled.CoordinateGapNote, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void STAR_A_File_With_NO_LINE_Is_The_Same_Case_As_No_File_At_All()
+    {
+        // ★ Two tools reporting "something in this manifest" cannot be shown to mean the same defect, and the
+        // line window would match them to each other and to every other line-less row in the file.
+        var pooled = PooledRecall.Compute(
+        [
+            F("a", "acme/x", "package-lock.json", 0),
+            F("b", "acme/x", "package-lock.json", 0),
+        ]);
+
+        Assert.Equal(0, pooled.UnionSize);
+        Assert.Equal(2, pooled.UnmatchableWithoutCoordinate);
+    }
+
+    [Fact]
+    public void STAR_The_Excluded_Share_Is_Reported_PER_TOOL_Not_Only_As_A_Total()
+    {
+        // ★★ A tool whose output is mostly repo-level is being measured on a fraction of what it reported, and
+        // its recall figure means much less than the same figure from a tool whose findings all carry a line.
+        // A single total hides exactly that difference — and it is the difference the axis exists to expose.
+        var pooled = PooledRecall.Compute(
+        [
+            F("a", "acme/x", "real.cs", 10), F("a", "acme/x", "", 0), F("a", "acme/x", "", 0),
+            F("b", "acme/x", "real.cs", 10),
+            F("c", "acme/x", "other.cs", 5),
+        ]);
+
+        Assert.Equal(2, pooled.Tools.Single(t => t.Tool == "a").WithoutCoordinate);
+        Assert.Equal(0, pooled.Tools.Single(t => t.Tool == "b").WithoutCoordinate);
+    }
+
+    [Fact]
+    public void STAR_The_Note_Says_WHY_They_Could_Not_Be_Matched()
+    {
+        // ★ "3 rows unmatched" is a number nobody can act on. The reason is that cross-vendor matching has only
+        // the coordinate to work with — rule ids are each vendor's own vocabulary and the standard publishes no
+        // mapping between them — so a reader knows it is not a bug in the matcher.
+        var pooled = PooledRecall.Compute([F("a", "acme/x", "", 0), F("b", "acme/x", "real.cs", 3)]);
+
+        Assert.Contains("rule id", pooled.CoordinateGapNote, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// ★★ The label travels with the number. "Recall" would be a claim about defects that exist;
     /// this is a claim about defects somebody found, and the two differ by exactly the blind spot every

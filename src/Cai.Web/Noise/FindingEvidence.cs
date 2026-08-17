@@ -20,25 +20,39 @@ namespace Cai.Web.Noise;
 /// </remarks>
 public static class FindingKey
 {
-    /// <summary>The id for one finding's coordinates.</summary>
-    public static string For(string repoId, string pinnedSha, string? filePath, int? line, string ruleId)
+    /// <summary>
+    /// The id for one finding, derived from what identifies it.
+    /// </summary>
+    /// <remarks>
+    /// <para>★★ DERIVED, NOT ASSIGNED. A submitter-chosen id cannot be matched across tools — which is what the
+    /// pooled union needs — and an id CAI invented per submission would change every time the same defect was
+    /// reported. Two tools reporting one defect must produce one id.</para>
+    ///
+    /// <para>★★ AND THE TITLE COUNTS ONLY WHERE THERE IS NO COORDINATE (#21). Measured over 34 fingerprint sets:
+    /// 1,905 of 7,144 rows carry no usable coordinate, and 1,689 of those collided — one session had 160 D3 rows
+    /// keying to a single id. A repo-level claim IS its sentence, so its sentence identifies it. Where a
+    /// coordinate exists the title is deliberately EXCLUDED: otherwise improving a remediation message would
+    /// renumber most of the corpus and break every dispute and crowd queue keyed on the old ids.</para>
+    /// </remarks>
+    /// <param name="title">
+    /// The finding's own statement. Read only when <paramref name="filePath"/> and <paramref name="line"/> are
+    /// both absent — see the remarks.
+    /// </param>
+    public static string For(
+        string repoId, string pinnedSha, string? filePath, int? line, string ruleId, string? title = null)
     {
-        var material = string.Create(
-            CultureInfo.InvariantCulture,
-            $"{repoId}\n{pinnedSha}\n{filePath ?? ""}\n{line?.ToString(CultureInfo.InvariantCulture) ?? ""}\n{ruleId}");
+        // ★ "No usable coordinate" is the union's own definition: no file at all, or a file with no line. A file
+        // without a line cannot be matched against another vendor's finding in the same file either, so it is
+        // the same case and gets the same treatment.
+        var hasCoordinate = !string.IsNullOrWhiteSpace(filePath) && line is > 0;
+        var discriminator = hasCoordinate ? "" : (title ?? "").Trim();
 
-        // ★ 24 hex characters: long enough that a collision is not a practical concern over any corpus this
-        // standard will hold, short enough to appear in a URL a rater is looking at.
+        var material = string.Create(CultureInfo.InvariantCulture,
+            $"{repoId}\n{pinnedSha}\n{filePath ?? ""}\n{line?.ToString(CultureInfo.InvariantCulture) ?? ""}\n{ruleId}\n{discriminator}");
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(material)))[..24];
     }
 }
 
-/// <summary>One finding as a rater is shown it.</summary>
-/// <remarks>
-/// ★★ THERE IS DELIBERATELY NO TOOL ON THIS RECORD'S PUBLIC SHAPE. A rater told which vendor produced a finding is
-/// being asked a different question — and on a standard its owner competes in, "this one is Watchdog's" is the most
-/// corrupting thing the page could leak. The tool is stored (the register needs it) and never served here.
-/// </remarks>
 public sealed record FindingRecord(
     string FindingId, string Period, string Tool,
     string RepoId, string PinnedSha, string? FilePath, int? Line, string RuleId, string? Title,

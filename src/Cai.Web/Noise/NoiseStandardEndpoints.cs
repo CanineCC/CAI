@@ -189,6 +189,11 @@ public static class NoiseStandardEndpoints
                 scope = PooledRecall.PooledScope,
                 lineWindow = PooledRecall.DefaultLineWindow,
                 caveat = PooledRecall.PooledCaveat,
+
+                // ★★ WHAT THE UNION CANNOT MATCH, in the published method rather than only in a response (#21).
+                // A participant needs to know before it runs that its repo-level findings will not enter the
+                // union — and that the figure it gets back therefore covers only part of what it reported.
+                coordinateGap = PooledRecall.CoordinateGap,
                 endpoint = "/api/noise/pooled",
             },
 
@@ -768,7 +773,12 @@ public static class NoiseStandardEndpoints
             // outside the model family was unanswerable by design. Keyed by the DERIVED id, so a second tool
             // reporting the same defect writes the same row and cross-vendor matching has something to match on.
             var findingIds = (submission.Findings ?? [])
-                .Select(f => (Id: FindingKey.For(f.RepoId, f.PinnedSha, f.FilePath, f.Line, f.RuleId), Finding: f))
+                // ★★ THE TITLE IS PART OF THE KEY ONLY WHERE THERE IS NO COORDINATE (#21) — otherwise 160
+                // repo-level findings of one rule in one repository key to a single id, which is what the
+                // measurement found. See FindingKey.For.
+                .Select(f => (
+                    Id: FindingKey.For(f.RepoId, f.PinnedSha, f.FilePath, f.Line, f.RuleId, f.Title),
+                    Finding: f))
                 .ToList();
 
             store.RecordFindings(
@@ -2175,6 +2185,11 @@ public static class NoiseStandardEndpoints
                     // for everybody, and the figure could not be checked by the reader it is published for.
                     leaveOneOutReferenceSize = t.LeaveOneOutReferenceSize,
                     pooledRecallUnavailable = t.PooledRecallUnavailable,
+
+                    // ★★ PER TOOL (#21). A tool whose output is mostly repo-level is being measured on a
+                    // fraction of what it reported, and its recall means much less than the same figure from a
+                    // tool whose findings all carry a line. A single total hides that difference.
+                    withoutCoordinate = t.WithoutCoordinate,
                 }),
 
                 // ★★ Whether the pool is large enough for the figure to mean what its name says, and the floor
@@ -2188,6 +2203,13 @@ public static class NoiseStandardEndpoints
                 pseudoOracle = summary.PseudoOracle,
                 scope = summary.Scope,
                 excludedWithFixPairOracle = summary.ExcludedWithFixPairOracle,
+
+                // ★★ THE COORDINATE GAP, PUBLISHED (#21). 26 % of a real corpus carries no file, or a file with
+                // no line — weighted towards exactly the repo-level dimensions this axis exists to cover. A union
+                // that quietly lost them would report a recall figure about the code-level findings every tool
+                // already agrees on, and nothing in the response would say so.
+                unmatchableWithoutCoordinate = summary.UnmatchableWithoutCoordinate,
+                coordinateGap = summary.CoordinateGapNote,
 
                 // ★★ In the response, not in a document nobody reads.
                 caveat = summary.Caveat,
