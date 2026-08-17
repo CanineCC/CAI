@@ -173,6 +173,25 @@ public static class NoiseStandardEndpoints
             // estimate must name one — and "none" is a legitimate answer that publishes with its reason.
             recallMethods = PublicationContract.RecallMethods,
 
+            // ★★ HOW POOLED RECALL IS COMPUTED, published because it is the most attackable line the method
+            // could contain. Scoring a tool against a union INCLUDING its own findings gives the tool that
+            // alone found everything a perfect 100 % against a reference it wrote — and with one participant
+            // that reference is ours, so "depth" would have meant "agrees with Watchdog".
+            pooledRecall = new
+            {
+                reference = "leave-one-out: the union of what every OTHER participating tool reported and a "
+                          + "human adjudicated as valid. A tool is never scored against its own findings.",
+                minimumTools = PooledRecall.MinimumTools,
+                belowMinimum = "refused, not computed. At two tools the leave-one-out reference is one other "
+                             + "tool's findings, so the figure is pairwise agreement and a tool scores well by "
+                             + "being SIMILAR rather than deep.",
+                pseudoOracle = true,
+                scope = PooledRecall.PooledScope,
+                lineWindow = PooledRecall.DefaultLineWindow,
+                caveat = PooledRecall.PooledCaveat,
+                endpoint = "/api/noise/pooled",
+            },
+
             // ★★ Where the judging is published. 01 promises every prompt, model version and raw verdict with
             // its reasoning; this is the endpoint that keeps that promise, and naming it here is what makes it
             // findable by somebody who wants to disagree with a verdict.
@@ -1461,7 +1480,8 @@ public static class NoiseStandardEndpoints
 
             var findings = request.Findings
                 .Select(f => new PooledFinding(
-                    f.Tool ?? "", f.RepoId ?? "", f.FilePath ?? "", f.Line ?? 0, f.Valid ?? false))
+                    f.Tool ?? "", f.RepoId ?? "", f.FilePath ?? "", f.Line ?? 0, f.Valid ?? false,
+                    f.HasFixPairOracle ?? false))
                 .ToList();
 
             var summary = PooledRecall.Compute(
@@ -1488,7 +1508,25 @@ public static class NoiseStandardEndpoints
                     uniqueContribution = t.UniqueContribution,
                     precision = t.Precision,
                     pooledRecall = t.PooledRecall,
+
+                    // ★★ THIS TOOL'S OWN DENOMINATOR. Every tool is scored against a different reference —
+                    // its own findings removed — so a single shared union size would be the wrong denominator
+                    // for everybody, and the figure could not be checked by the reader it is published for.
+                    leaveOneOutReferenceSize = t.LeaveOneOutReferenceSize,
+                    pooledRecallUnavailable = t.PooledRecallUnavailable,
                 }),
+
+                // ★★ Whether the pool is large enough for the figure to mean what its name says, and the floor
+                // itself. Below three tools each leave-one-out reference is essentially one other tool's
+                // findings, so "recall" is pairwise agreement — published as refused rather than as a number.
+                pooledRecallAvailable = summary.PooledRecallAvailable,
+                minimumTools = PooledRecall.MinimumTools,
+
+                // ★★ Said out loud: this is a PSEUDO-oracle. The difference between "our recall is 62 %" and
+                // "62 % of what this pool found" is the whole reading.
+                pseudoOracle = summary.PseudoOracle,
+                scope = summary.Scope,
+                excludedWithFixPairOracle = summary.ExcludedWithFixPairOracle,
 
                 // ★★ In the response, not in a document nobody reads.
                 caveat = summary.Caveat,
@@ -1901,8 +1939,13 @@ public static class NoiseStandardEndpoints
         loc is > 0 ? count * 100_000d / loc.Value : null;
 
     /// <summary>One tool's finding and its adjudication, as it arrives on the wire.</summary>
+    /// <param name="HasFixPairOracle">
+    /// ★ Whether a real before/after fix pair establishes this defect. Those findings leave the pool: a commit
+    /// is evidence where a pool is consensus, and blending them publishes the blend under the stronger name.
+    /// </param>
     public sealed record PooledFindingEntry(
-        string? Tool, string? RepoId, string? FilePath, int? Line, bool? Valid);
+        string? Tool, string? RepoId, string? FilePath, int? Line, bool? Valid,
+        bool? HasFixPairOracle = null);
 
     /// <summary>
     /// The pooled reference to build.

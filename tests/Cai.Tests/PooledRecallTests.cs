@@ -39,15 +39,20 @@ public sealed class PooledRecallTests
     }
 
     [Fact]
-    public void Two_tools_make_a_pool()
+    public void STAR_Two_Tools_Do_NOT_Make_A_Pool()
     {
+        // ★★ REVERSED BY #2, deliberately. This test used to assert that two tools compute a recall figure —
+        // 0.5 and 1.0 — and those numbers were pairwise agreement wearing recall's name: at N=2 each tool's
+        // leave-one-out reference IS the other tool's findings, so a tool scores well by being SIMILAR. The
+        // union is still built and published; only the figure that would be misread is withheld.
         var pooled = PooledRecall.Compute(
             [F("a", "acme/x", "a.cs", 10), F("b", "acme/x", "a.cs", 10), F("b", "acme/x", "b.cs", 20)]);
 
         Assert.Equal(2, pooled.ParticipatingTools);
         Assert.Equal(2, pooled.UnionSize);
-        Assert.Equal(0.5, pooled.Tools.Single(t => t.Tool == "a").PooledRecall!.Value, 3);
-        Assert.Equal(1.0, pooled.Tools.Single(t => t.Tool == "b").PooledRecall!.Value, 3);
+        Assert.False(pooled.PooledRecallAvailable);
+        Assert.All(pooled.Tools, t => Assert.Null(t.PooledRecall));
+        Assert.All(pooled.Tools, t => Assert.NotNull(t.PooledRecallUnavailable));
     }
 
     // ── What is in the union ──────────────────────────────────────────────────────────────────────
@@ -59,11 +64,14 @@ public sealed class PooledRecallTests
     [Fact]
     public void STAR_noise_does_not_enter_the_union()
     {
+        // ★ Three tools since #2 — the recall assertion needs a pool that qualifies. What is under test is
+        // unchanged: the junk finding must not become a defect anybody can be scored against.
         var pooled = PooledRecall.Compute(
             [
                 F("a", "acme/x", "a.cs", 10, valid: true),
                 F("a", "acme/x", "junk.cs", 99, valid: false),
                 F("b", "acme/x", "a.cs", 10, valid: true),
+                F("c", "acme/x", "a.cs", 10, valid: true),
             ]);
 
         Assert.Equal(1, pooled.UnionSize);
@@ -112,12 +120,16 @@ public sealed class PooledRecallTests
     [Fact]
     public void STAR_the_quiet_tool_has_perfect_precision_and_poor_recall()
     {
+        // ★ A THIRD tool since #2, mirroring `loud`, so the pool qualifies and the leave-one-out references
+        // are still the ten defects. Without it this asserted a two-tool figure that no longer publishes.
         List<PooledFinding> findings =
         [
             F("quiet", "acme/x", "a.cs", 10, valid: true),
             .. Enumerable.Range(0, 9).Select(i => F("loud", "acme/x", $"f{i}.cs", 10, valid: true)),
             F("loud", "acme/x", "a.cs", 10, valid: true),
             .. Enumerable.Range(0, 5).Select(i => F("loud", "acme/x", $"n{i}.cs", 10, valid: false)),
+            .. Enumerable.Range(0, 9).Select(i => F("echo", "acme/x", $"f{i}.cs", 10, valid: true)),
+            F("echo", "acme/x", "a.cs", 10, valid: true),
         ];
 
         var pooled = PooledRecall.Compute(findings);
@@ -125,6 +137,10 @@ public sealed class PooledRecallTests
         var loud = pooled.Tools.Single(t => t.Tool == "loud");
 
         Assert.Equal(1.0, quiet.Precision!.Value, 3);
+
+        // ★★ Ten defects, all of them found by somebody other than `quiet`, and `quiet` found one: 0.1. The
+        // leave-one-out reference happens to be the whole union here because nothing is quiet's alone.
+        Assert.Equal(10, quiet.LeaveOneOutReferenceSize);
         Assert.Equal(0.1, quiet.PooledRecall!.Value, 3);
 
         Assert.Equal(10.0 / 15, loud.Precision!.Value, 3);

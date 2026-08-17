@@ -1,7 +1,13 @@
 namespace Cai.Web.Noise;
 
 /// <summary>One tool's finding, with the adjudication that decided whether it was real.</summary>
-public sealed record PooledFinding(string Tool, string RepoId, string FilePath, int Line, bool Valid);
+/// <param name="HasFixPairOracle">
+/// ★★ Whether a real before/after fix pair establishes this defect independently of anybody's agreement. Those
+/// findings LEAVE the pool: a commit is evidence where a pool is only consensus, and blending the two would
+/// publish the blend under the stronger name. Excluded and counted, so the scope of the pseudo-oracle is visible.
+/// </param>
+public sealed record PooledFinding(
+    string Tool, string RepoId, string FilePath, int Line, bool Valid, bool HasFixPairOracle = false);
 
 /// <summary>What one tool did against the pooled reference.</summary>
 /// <param name="Precision">
@@ -16,14 +22,39 @@ public sealed record PooledFinding(string Tool, string RepoId, string FilePath, 
 /// ★ How much of the union only this tool found — the figure showing the pool is not one tool's opinion
 /// echoed back, and the reason a tool with middling recall can still be worth having.
 /// </param>
+/// <param name="LeaveOneOutReferenceSize">
+/// ★★ THIS TOOL'S OWN DENOMINATOR: the number of pooled defects at least one OTHER tool found. Every tool is
+/// measured against a different reference, so a single shared union size would be the wrong denominator for
+/// everybody — and the figure could not be checked by the reader it is published for.
+/// </param>
+/// <param name="PooledRecallUnavailable">
+/// Why there is no recall figure, when there is none. ★ Stated rather than left as a blank: a missing number and
+/// a low one are opposite claims.
+/// </param>
 public sealed record PooledToolResult(
     string Tool, int Reported, int Valid, int MatchedUnion, int UniqueContribution,
-    double? Precision, double? PooledRecall);
+    double? Precision, double? PooledRecall,
+    int LeaveOneOutReferenceSize = 0, string? PooledRecallUnavailable = null);
 
 /// <summary>The pooled reference and every participant's standing against it.</summary>
+/// <param name="PooledRecallAvailable">
+/// Whether the pool is large enough for the figure to mean what its name says. ★ False below
+/// <see cref="PooledRecall.MinimumTools"/>.
+/// </param>
+/// <param name="PseudoOracle">
+/// Always true, and said out loud. ★ The difference between "our recall is 62 %" and "62 % of what this pool
+/// found" is the whole reading, and a reader who takes the first has been misled by the name alone.
+/// </param>
+/// <param name="Scope">What the figure covers, and what it deliberately does not.</param>
+/// <param name="ExcludedWithFixPairOracle">
+/// How many findings left the pool because a real fix pair establishes them. ★ Counted, so the scope is a
+/// published number rather than an assumption.
+/// </param>
 public sealed record PooledRecallSummary(
     int ParticipatingTools, int UnionSize, int LineWindow,
-    IReadOnlyList<PooledToolResult> Tools, string Caveat);
+    IReadOnlyList<PooledToolResult> Tools, string Caveat,
+    bool PooledRecallAvailable = false, bool PseudoOracle = true,
+    string Scope = "", int ExcludedWithFixPairOracle = 0);
 
 /// <summary>
 /// Recall, as far as it can honestly be measured without ground truth.
@@ -49,11 +80,30 @@ public static class PooledRecall
     /// </remarks>
     public const int DefaultLineWindow = 3;
 
+    /// <summary>
+    /// The smallest pool in which this figure means what its name says.
+    /// </summary>
+    /// <remarks>
+    /// ★★ THREE, and the reason is arithmetic rather than caution. At two tools the leave-one-out reference IS
+    /// the other tool's findings, so "pooled recall" is pairwise agreement and a tool scores well by being
+    /// SIMILAR to its one comparator. It computed at two before this was fixed, which made the number available
+    /// exactly when it meant something else.
+    /// </remarks>
+    public const int MinimumTools = 3;
+
+    /// <summary>What the figure covers, and what it deliberately leaves to a better oracle.</summary>
+    public const string PooledScope =
+        "Findings whose reality rests on agreement. Anything a real before/after FIX PAIR establishes is "
+      + "excluded and counted separately: a commit is evidence where a pool is consensus, and blending them "
+      + "would publish the blend under the stronger name.";
+
     public const string PooledCaveat =
-        "POOLED recall, not recall. The reference is the union of what participating tools reported and a "
-        + "human adjudicated as valid, so a defect no participant found is invisible to it and every "
-        + "figure here OVERSTATES. It is comparable between the tools in this pool and not comparable to "
-        + "any recall measured against a seeded or hand-built defect set.";
+        "POOLED recall, not recall — a PSEUDO-ORACLE. Each tool is scored against the union of what every OTHER "
+        + "participating tool reported and a human adjudicated as valid, never against a union including its "
+        + "own findings: that would score a tool 100 % against a reference it wrote, which with one "
+        + "participant means scoring ourselves 100 % by construction. A defect no participant found is still "
+        + "invisible, so every figure here OVERSTATES. Comparable between the tools in this pool and not "
+        + "comparable to any recall measured against a seeded or hand-built defect set.";
 
     /// <summary>
     /// Build the pooled reference and score each tool against it.
@@ -70,21 +120,44 @@ public static class PooledRecall
         ArgumentNullException.ThrowIfNull(findings);
         ArgumentOutOfRangeException.ThrowIfNegative(lineWindow);
 
+        // ★★ Findings with a real fix pair leave the pool before the union is built — see PooledScope. Counted,
+        // so the scope is a number a reader can see rather than a sentence they have to trust.
+        var fixPairBacked = findings.Count(f => f.HasFixPairOracle);
+        var poolable = findings.Where(f => !f.HasFixPairOracle).ToList();
+
         // ★ Only what a human adjudicated VALID becomes a defect. Noise in the reference would reward a
         // tool for reproducing another tool's mistakes.
-        var union = BuildUnion([.. findings.Where(f => f.Valid)], lineWindow);
+        var union = BuildUnion([.. poolable.Where(f => f.Valid)], lineWindow);
 
-        var tools = findings.Select(f => f.Tool)
+        var tools = poolable.Select(f => f.Tool)
             .Concat(silentTools ?? [])
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Order(StringComparer.Ordinal)
             .ToList();
 
+        // ★★ THE FLOOR, decided once for the whole pool. See MinimumTools.
+        var enoughTools = tools.Count >= MinimumTools;
+        var unavailable = enoughTools
+            ? null
+            : $"pooled recall needs at least {MinimumTools} participating tools and this pool has "
+            + $"{tools.Count}. Below three, each tool's leave-one-out reference is essentially one other "
+            + "tool's findings, so the figure is pairwise agreement — a tool scores well by being SIMILAR "
+            + "rather than by being deep.";
+
         List<PooledToolResult> results = [];
         foreach (var tool in tools)
         {
-            var mine = findings.Where(f => string.Equals(f.Tool, tool, StringComparison.OrdinalIgnoreCase)).ToList();
+            var mine = poolable.Where(f => string.Equals(f.Tool, tool, StringComparison.OrdinalIgnoreCase)).ToList();
             var matched = union.Where(d => d.Tools.Contains(tool, StringComparer.OrdinalIgnoreCase)).ToList();
+
+            // ★★ LEAVE-ONE-OUT. The reference is the defects at least one OTHER tool found — this tool's own
+            // are removed, so a tool cannot be credited for agreeing with itself. Against a union including
+            // itself, the tool that alone found everything scores a perfect 100 % against a reference it wrote,
+            // and with one participant that reference is ours: "depth" would have meant "agrees with Watchdog".
+            var reference = union
+                .Where(d => d.Tools.Any(t => !string.Equals(t, tool, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+            var found = reference.Count(d => d.Tools.Contains(tool, StringComparer.OrdinalIgnoreCase));
 
             results.Add(new PooledToolResult(
                 Tool: tool,
@@ -96,12 +169,27 @@ public static class PooledRecall
                 // ★★ Null, never 1.0, when nothing was reported.
                 Precision: mine.Count > 0 ? (double)mine.Count(f => f.Valid) / mine.Count : null,
 
-                // ★★ Null when there is no pool: one tool's recall against a union it alone defines is
-                // 100% by construction — a number that says nothing and reads as everything.
-                PooledRecall: tools.Count >= 2 && union.Count > 0 ? (double)matched.Count / union.Count : null));
+                // ★ Null when the pool is too small, or when the others found nothing at all — 0 of 0 is not
+                // a recall of zero, it is the absence of a reference to have recall against.
+                PooledRecall: enoughTools && reference.Count > 0
+                    ? (double)found / reference.Count
+                    : null,
+
+                LeaveOneOutReferenceSize: reference.Count,
+                PooledRecallUnavailable: enoughTools
+                    ? reference.Count == 0
+                        ? "no other participating tool reported a valid finding, so there is no reference "
+                        + "for this tool to be measured against."
+                        : null
+                    : unavailable));
         }
 
-        return new PooledRecallSummary(tools.Count, union.Count, lineWindow, results, PooledCaveat);
+        return new PooledRecallSummary(
+            tools.Count, union.Count, lineWindow, results, PooledCaveat,
+            PooledRecallAvailable: enoughTools,
+            PseudoOracle: true,
+            Scope: PooledScope,
+            ExcludedWithFixPairOracle: fixPairBacked);
     }
 
     private sealed record Defect(string RepoId, string FilePath, int Line, HashSet<string> Tools);

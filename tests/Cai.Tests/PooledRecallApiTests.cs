@@ -32,12 +32,16 @@ public sealed class PooledRecallApiTests(RegistryUnconfiguredFixture fx) : IClas
     {
         var (status, body) = await PooledAsync(new
         {
+            // ★ A THIRD tool since #2: the figure is refused below three, because at two the leave-one-out
+            // reference is one other tool's findings and "recall" is pairwise agreement.
             findings = new[]
             {
                 Finding("quiet", "a.cs", 10),
                 Finding("loud", "a.cs", 10),
                 Finding("loud", "b.cs", 20),
                 Finding("loud", "junk.cs", 30, valid: false),
+                Finding("third", "a.cs", 10),
+                Finding("third", "b.cs", 20),
             },
         });
 
@@ -45,7 +49,11 @@ public sealed class PooledRecallApiTests(RegistryUnconfiguredFixture fx) : IClas
         var quiet = body.GetProperty("tools").EnumerateArray().Single(t => t.GetProperty("tool").GetString() == "quiet");
 
         Assert.Equal(1.0, quiet.GetProperty("precision").GetDouble(), 3);
+
+        // ★★ Two defects in quiet's leave-one-out reference (loud and third found both between them); quiet
+        // found one of them.
         Assert.Equal(0.5, quiet.GetProperty("pooledRecall").GetDouble(), 3);
+        Assert.Equal(2, quiet.GetProperty("leaveOneOutReferenceSize").GetInt32());
     }
 
     /// <summary>
