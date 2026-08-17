@@ -41,6 +41,8 @@ public sealed class FixRateHeadlineApiTests(RegistryUnconfiguredFixture fx) : IC
         ["validNotActionable"] = 460,
         ["noise"] = 440,
         ["clusters"] = 12,
+        // ★ The re-judge gate, required since #7b. Declared ABSENT rather than faked.
+        ["rejudgeUnavailable"] = "fixture: no second pass in this test — the re-judge has its own tests",
         // ★★ THE REST OF THE CONTRACT. These fields were listed at /api/noise/method as required with
         // every rate long before anything enforced them, and this fixture is what "a complete result"
         // looks like. A fixture that omits them is not a shorter test — it is a test of a publication

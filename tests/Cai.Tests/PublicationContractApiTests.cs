@@ -66,6 +66,7 @@ public sealed class PublicationContractApiTests(RegistryUnconfiguredFixture fx)
             isProductDefault = true,
         },
         ["fixRateUnavailable"] = "fixture — the anchor has its own tests",
+        ["rejudgeUnavailable"] = "fixture: no second pass in this test — the re-judge has its own tests",
     };
 
     private static string[] Fields(JsonElement body) =>

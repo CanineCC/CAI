@@ -189,6 +189,23 @@ public static class NoiseStandardEndpoints
             // of them. Required, and it publishes.
             requiresConfigurationDeclaration = true,
 
+            // ★★ THE RE-JUDGE, published with its numbers rather than described as "a sample". The sample size,
+            // the ceiling, WHY the ceiling is there, and what agreement is measured on — a reader would
+            // otherwise assume class-level agreement, which would manufacture instability out of vocabulary.
+            rejudge = new
+            {
+                sampleSize = Rejudge.DefaultSampleSize,
+                tolerance = Rejudge.Tolerance,
+                toleranceRationale = Rejudge.ToleranceRationale,
+                fold = Rejudge.Fold,
+                sampleRule =
+                    "The sample is drawn from the period's published holdout seed, so a third party can "
+                  + "re-derive it from values published before any result existed. A second pass may only "
+                  + "answer findings in that sample, and every sampled finding it leaves unanswered blocks the "
+                  + "tolerance — otherwise re-judging until the sample agrees is a rate over the agreeing part.",
+                endpoint = "/api/noise/rejudge/{period}",
+            },
+
             // ★★ WHAT VERIFICATION ACTUALLY CHECKS, enumerated. "Verified" is the only thing CAI does and the
             // whole neutrality argument, and a reader had no way to find out what it covered — so a submission
             // that passed the easy checks and skipped the hard ones read exactly like one that passed them all.
@@ -234,6 +251,14 @@ public static class NoiseStandardEndpoints
                          + "produced? Dropping findings between the run and the submission is the simplest "
                          + "route to a flattering rate, and coverage cannot show it — a repository with one "
                          + "surviving finding is covered.",
+                },
+                new
+                {
+                    // ★★ Added by #7b, and the only check here that points at the standard rather than at a
+                    // vendor: a rate produced by a process that disagrees with itself is not a measurement.
+                    check = "rejudge",
+                    asks = "does an independent second pass over a seed-drawn sample of the period's judged "
+                         + "findings reach the same noise/not-noise answers, within the published tolerance?",
                 },
                 new
                 {
@@ -307,6 +332,11 @@ public static class NoiseStandardEndpoints
                 // ★★ The prompts, in full and once each. The same prompt answers thousands of findings; a
                 // record that repeats it per verdict is a record nobody downloads.
                 prompts = prompts.Select(p => new { promptId = p.PromptId, text = p.Text, firstSeenAt = p.FirstSeenAt }),
+
+                // ★★ THE SECOND PASS, RAW, beside the first. A reproducibility claim is worth exactly what its
+                // evidence is: a reader who doubts "the judging reproduces" must be able to read both answers
+                // and the reasoning behind each, and decide for themselves which one was wrong.
+                rejudge = RenderRejudge(store, period),
 
                 resolutions = resolutions.Select(r => new
                 {
@@ -878,6 +908,159 @@ public static class NoiseStandardEndpoints
 
         // ★★ What has to travel with a rate for the rate to mean anything: the funnel it was computed
         // over, the actionability split, and the difference this sample could actually detect.
+        // ★★ THE CHECK THAT POINTS AT US. Every other verification asks whether a vendor's run answered the
+        // holdout it claims; this one asks whether the standard's own judging REPRODUCES. A rate produced by a
+        // process that disagrees with itself is not a measurement however carefully the corpus was drawn, and
+        // CAI owns the judging — so it is the check a critic asks for first, and it was absent.
+        endpoints.MapGet("/api/noise/rejudge/{period}", (string period, INoiseStore store) =>
+        {
+            var judged = JudgedFindings(store, period);
+            var seed = RejudgeSeed(period);
+            var sample = Rejudge.SelectSample(seed, period, judged);
+            var second = store.ListRejudge(period);
+
+            if (sample.Count == 0)
+            {
+                return Results.Ok(new
+                {
+                    period,
+                    sample = Array.Empty<string>(),
+                    sampleSeed = seed,
+                    sampleSize = Rejudge.DefaultSampleSize,
+                    tolerance = Rejudge.Tolerance,
+                    rejudged = false,
+                    note = "nothing has been judged for this period, so there is no sample to re-judge.",
+                });
+            }
+
+            var outcome = second.Count == 0
+                ? null
+                : Rejudge.Compare(
+                    sample,
+                    Settled(store, period),
+                    second.ToDictionary(r => r.FindingId, r => r.Verdict, StringComparer.OrdinalIgnoreCase));
+
+            return Results.Ok(new
+            {
+                period,
+
+                // ★★ PUBLISHED BEFORE ANYBODY RE-JUDGES IT, and with the seed beside it: a third party
+                // re-derives the same sample from the full judged set, so it cannot have been steered toward
+                // the findings that happen to agree.
+                sample,
+                sampleSeed = seed,
+                sampleSize = Rejudge.DefaultSampleSize,
+                judgedInPeriod = judged.Count,
+
+                tolerance = Rejudge.Tolerance,
+                toleranceRationale = Rejudge.ToleranceRationale,
+
+                rejudged = outcome is not null,
+                compared = outcome?.Compared,
+                disagreements = outcome?.Disagreements,
+                disagreementRate = outcome?.DisagreementRate,
+                withinTolerance = outcome?.WithinTolerance ?? false,
+                unjudged = outcome?.Unjudged ?? [],
+                excluded = outcome?.Excluded ?? [],
+                unusable = outcome?.Unusable ?? [],
+                note = outcome is null
+                    ? "no second pass has been recorded for this period, so the judging has not been shown to "
+                    + "reproduce. A rate published on it is unverified in the only sense CAI can verify."
+                    : null,
+            });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseRejudgeStatus");
+
+        endpoints.MapPost("/api/noise/rejudge/{period}", (string period, RejudgeRequest request, INoiseStore store) =>
+        {
+            if (request?.Verdicts is not { Count: > 0 })
+            {
+                return Results.BadRequest(new { error = "at least one re-judged verdict is required" });
+            }
+
+            var seed = RejudgeSeed(period);
+            var sample = Rejudge.SelectSample(seed, period, JudgedFindings(store, period));
+            if (sample.Count == 0)
+            {
+                return Results.BadRequest(new
+                {
+                    period,
+                    error = "nothing has been judged for this period, so there is no sample to re-judge.",
+                });
+            }
+
+            // ★★ ONLY THE SAMPLE. Without this the second pass re-judges whatever it likes and reports
+            // agreement over its own choice — the steerable sample the seed exists to prevent, arriving
+            // through the back door.
+            var sampled = sample.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var strays = request.Verdicts
+                .Select(v => v.FindingId ?? "")
+                .Where(id => !sampled.Contains(id))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (strays.Count > 0)
+            {
+                return Results.BadRequest(new
+                {
+                    period,
+                    error = "these findings are not in this period's re-judge sample: "
+                          + string.Join(", ", strays)
+                          + ". The sample is drawn from the period's seed; re-judging a set of your own "
+                          + "choosing and reporting agreement over it measures the chooser.",
+                    sample,
+                });
+            }
+
+            // ★ The same provenance a first-pass verdict needs. A verdict a reader cannot argue with is not
+            // open judging, and here it is also the unauditable half of a reproducibility claim.
+            var unrecordable = request.Verdicts
+                .Where(v => string.IsNullOrWhiteSpace(v.Verdict)
+                         || string.IsNullOrWhiteSpace(v.Model)
+                         || string.IsNullOrWhiteSpace(v.ModelVersion)
+                         || string.IsNullOrWhiteSpace(v.PromptId)
+                         || string.IsNullOrWhiteSpace(v.Reasoning))
+                .Select(v => $"{v.FindingId ?? "(no id)"}: a re-judged verdict needs a verdict, model, "
+                           + "modelVersion, promptId and reasoning.")
+                .ToList();
+            if (unrecordable.Count > 0)
+            {
+                return Results.BadRequest(new { period, unrecordable });
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            foreach (var v in request.Verdicts.Where(v => !string.IsNullOrWhiteSpace(v.Prompt)))
+            {
+                store.RegisterPrompt(v.PromptId!, v.Prompt!, now);
+            }
+
+            store.RecordRejudge([.. request.Verdicts.Select(v => new RejudgeRecord(
+                period, v.FindingId!, v.Verdict!, v.Model!, v.ModelVersion!, v.PromptId!, v.Reasoning!, now))]);
+
+            var outcome = Rejudge.Compare(
+                sample,
+                Settled(store, period),
+                store.ListRejudge(period)
+                    .ToDictionary(r => r.FindingId, r => r.Verdict, StringComparer.OrdinalIgnoreCase));
+
+            return Results.Ok(new
+            {
+                period,
+                sampleSize = outcome.SampleSize,
+                compared = outcome.Compared,
+                disagreements = outcome.Disagreements,
+                disagreementRate = outcome.DisagreementRate,
+                tolerance = Rejudge.Tolerance,
+                withinTolerance = outcome.WithinTolerance,
+                unjudged = outcome.Unjudged,
+                excluded = outcome.Excluded,
+                unusable = outcome.Unusable,
+                fold = Rejudge.Fold,
+            });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseRejudgeRecord");
+
         endpoints.MapPost("/api/noise/publication", (PublicationRequest request, INoiseStore store) =>
         {
             if (request is null)
@@ -942,6 +1125,19 @@ public static class NoiseStandardEndpoints
                 recency.Add(new RecencyTally(parsed, entry.Judged, entry.Noise));
             }
 
+            // ★★ READ FROM THE STORE, never from the request. See PublicationRequest.RejudgeUnavailable.
+            var rejudgeSample = Rejudge.SelectSample(
+                RejudgeSeed(request.Period ?? ""), request.Period ?? "",
+                JudgedFindings(store, request.Period ?? ""));
+            var recordedRejudge = store.ListRejudge(request.Period ?? "");
+            var rejudgeOutcome = rejudgeSample.Count == 0 || recordedRejudge.Count == 0
+                ? null
+                : Rejudge.Compare(
+                    rejudgeSample,
+                    Settled(store, request.Period ?? ""),
+                    recordedRejudge.ToDictionary(
+                        r => r.FindingId, r => r.Verdict, StringComparer.OrdinalIgnoreCase));
+
             var breaches = PublicationContract.Check(
                 request.LocCovered,
                 request.RecallEstimate, request.RecallMethod, request.RecallNote,
@@ -953,7 +1149,9 @@ public static class NoiseStandardEndpoints
                 fixRateUnavailable: request.FixRateUnavailable,
                 fixRateWindowDays: request.FixRateWindowDays,
                 configuration: request.Configuration,
-                period: request.Period);
+                period: request.Period,
+                rejudge: rejudgeOutcome,
+                rejudgeUnavailable: request.RejudgeUnavailable);
 
             if (breaches.Count > 0)
             {
@@ -1098,6 +1296,35 @@ public static class NoiseStandardEndpoints
                             + "Without a never-trained endpoint the decay curve measures nothing, and "
                             + "'one cycle of cooling off is enough' stays an assertion.",
                 },
+
+                // ★★ WHETHER THE JUDGING BEHIND THIS NUMBER REPRODUCES, published with the number. It is the
+                // only figure here that says anything about the instrument rather than about the tool, and a
+                // reader weighing a two-point move needs it more than they need any of the rest.
+                rejudge = rejudgeOutcome is { } ro
+                    ? new
+                    {
+                        declared = true,
+                        unavailableReason = (string?)null,
+                        sampleSize = (int?)ro.SampleSize,
+                        compared = (int?)ro.Compared,
+                        disagreements = (int?)ro.Disagreements,
+                        disagreementRate = ro.DisagreementRate,
+                        tolerance = (double?)Rejudge.Tolerance,
+                        withinTolerance = ro.WithinTolerance,
+                        fold = Rejudge.Fold,
+                    }
+                    : new
+                    {
+                        declared = false,
+                        unavailableReason = request.RejudgeUnavailable,
+                        sampleSize = (int?)null,
+                        compared = (int?)null,
+                        disagreements = (int?)null,
+                        disagreementRate = (double?)null,
+                        tolerance = (double?)Rejudge.Tolerance,
+                        withinTolerance = false,
+                        fold = Rejudge.Fold,
+                    },
 
                 // ★ The recall counterpart, beside the precision figure rather than in a side endpoint.
                 recall = new
@@ -1508,6 +1735,86 @@ public static class NoiseStandardEndpoints
         return Results.Json(node);
     }
 
+    /// <summary>A period's re-judge as it publishes: the sample, the outcome and the raw second pass.</summary>
+    private static object RenderRejudge(INoiseStore store, string period)
+    {
+        var judged = JudgedFindings(store, period);
+        var seed = RejudgeSeed(period);
+        var sample = Rejudge.SelectSample(seed, period, judged);
+        var second = store.ListRejudge(period);
+
+        var outcome = second.Count == 0 || sample.Count == 0
+            ? null
+            : Rejudge.Compare(
+                sample,
+                Settled(store, period),
+                second.ToDictionary(r => r.FindingId, r => r.Verdict, StringComparer.OrdinalIgnoreCase));
+
+        return new
+        {
+            sample,
+            sampleSeed = seed,
+            tolerance = Rejudge.Tolerance,
+            fold = Rejudge.Fold,
+            compared = outcome?.Compared,
+            disagreements = outcome?.Disagreements,
+            disagreementRate = outcome?.DisagreementRate,
+            withinTolerance = outcome?.WithinTolerance ?? false,
+            unjudged = outcome?.Unjudged ?? [],
+            excluded = outcome?.Excluded ?? [],
+            unusable = outcome?.Unusable ?? [],
+
+            // ★ Raw, with provenance. Named `verdicts` to mirror the first pass's shape.
+            verdicts = second.Select(r => new
+            {
+                findingId = r.FindingId,
+                verdict = r.Verdict,
+                model = r.Model,
+                modelVersion = r.ModelVersion,
+                promptId = r.PromptId,
+                reasoning = r.Reasoning,
+                recordedAt = r.RecordedAt,
+            }),
+
+            note = second.Count == 0
+                ? "no second pass has been recorded, so the judging has not been shown to reproduce."
+                : null,
+        };
+    }
+
+    /// <summary>The findings a period has a settled verdict for — the population the sample is drawn from.</summary>
+    /// <remarks>
+    /// ★ Only SETTLED ones. A finding still in the cascade has no first-pass answer to disagree with, so
+    /// sampling it would produce an unjudged entry that blocks the tolerance through no fault of the re-judge.
+    /// </remarks>
+    private static IReadOnlyList<string> JudgedFindings(INoiseStore store, string period) =>
+        [.. store.ListResolutions(period)
+            .Where(r => !string.IsNullOrWhiteSpace(r.Verdict))
+            .Select(r => r.FindingId)
+            .Distinct(StringComparer.Ordinal)];
+
+    /// <summary>Each finding's settled verdict, for comparison against a second pass.</summary>
+    private static IReadOnlyDictionary<string, string> Settled(INoiseStore store, string period) =>
+        store.ListResolutions(period)
+            .Where(r => !string.IsNullOrWhiteSpace(r.Verdict))
+            .GroupBy(r => r.FindingId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(r => r.RecordedAt).First().Verdict!,
+                StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The seed the re-judge sample is drawn from.
+    /// </summary>
+    /// <remarks>
+    /// ★★ THE PERIOD'S OWN PUBLISHED HOLDOUT SEED, so the sample is reproducible from a value that was
+    /// published before any result existed. A period with no published draw falls back to its own identifier —
+    /// which in production cannot happen, because judging without a draw is judging findings from nowhere; it
+    /// is the honest answer for a dev or test period rather than a throw that would hide the case.
+    /// </remarks>
+    private static string RejudgeSeed(string period) =>
+        NoiseCorpus.Draws.TryGetValue(period ?? "", out var draw) ? draw.Seed : period ?? "";
+
     private static bool Same(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
@@ -1575,7 +1882,13 @@ public static class NoiseStandardEndpoints
         string? HoldoutSeed = null,
         string? ModelSet = null,
         bool? GitMiningVerified = null,
-        int? GapsFoundSinceLastPeriod = null);
+        int? GapsFoundSinceLastPeriod = null,
+
+        // ★★ A stated reason no second pass was run. NOTE there is deliberately NO field for its OUTCOME: CAI
+        // holds that, and a body able to declare its own reproducibility would be publishing the self-measured
+        // number the standard exists to replace. Optional and LAST, because inserting a required parameter in
+        // the middle of a positional record silently reorders every caller that passes them by position.
+        string? RejudgeUnavailable = null);
 
     /// <summary>One claim class's share of the run, as it arrives on the wire.</summary>
     public sealed record ClaimClassEntry(string? ClaimClass, int Judged, int Noise);
@@ -1618,6 +1931,15 @@ public static class NoiseStandardEndpoints
     /// <summary>A period's crowd queue, as a participant registers it.</summary>
     public sealed record CrowdQueueRequest(
         string? Period, string? Seed, int SpotCheck, IReadOnlyList<CrowdCandidateRequest>? Candidates);
+
+    /// <summary>One verdict from the independent second pass.</summary>
+    public sealed record RejudgeVote(
+        string? FindingId, string? Verdict,
+        string? Model = null, string? ModelVersion = null,
+        string? PromptId = null, string? Prompt = null, string? Reasoning = null);
+
+    /// <summary>A second pass over a period's re-judge sample.</summary>
+    public sealed record RejudgeRequest(IReadOnlyList<RejudgeVote>? Verdicts);
 
     /// <summary>A honeypot as it arrives on the wire.</summary>
     public sealed record HoneypotEntry(string? FindingId, string? Truth, string? Source, string? Evidence);

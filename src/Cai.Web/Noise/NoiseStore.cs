@@ -25,6 +25,15 @@ public sealed record ResolutionRecord(
     string Period, string FindingId, string State, string? Verdict, int? SettledAtRound,
     bool ActionabilityContested, bool? Actionable, string Reason, DateTimeOffset RecordedAt);
 
+/// <summary>One verdict from the independent second pass over a period's re-judge sample.</summary>
+/// <remarks>
+/// ★ Carries the same provenance a first-pass verdict does. A reproducibility claim whose second pass cannot be
+/// read is worth what the first pass's would be without its reasoning: nothing a reader can argue with.
+/// </remarks>
+public sealed record RejudgeRecord(
+    string Period, string FindingId, string Verdict,
+    string Model, string ModelVersion, string PromptId, string Reasoning, DateTimeOffset RecordedAt);
+
 /// <summary>A judge prompt, stored once and published in full.</summary>
 public sealed record PromptRecord(string PromptId, string Text, DateTimeOffset FirstSeenAt);
 
@@ -83,6 +92,16 @@ public interface INoiseStore
 
     /// <summary>Periods that have a published result, newest first — what a reader can ask for.</summary>
     IReadOnlyList<string> PublishedPeriods();
+
+    /// <summary>Record the independent second pass over a period's re-judge sample.</summary>
+    /// <remarks>
+    /// ★ Replaces any earlier pass for the same (period, findingId): a second pass IS the re-judge, and keeping
+    /// several would let whoever ran them choose which counted — the steerable sample again, one level up.
+    /// </remarks>
+    void RecordRejudge(IReadOnlyList<RejudgeRecord> verdicts);
+
+    /// <summary>Every re-judge verdict recorded for a period.</summary>
+    IReadOnlyList<RejudgeRecord> ListRejudge(string period);
 }
 
 /// <summary>
@@ -201,6 +220,18 @@ public sealed class SqliteNoiseStore : INoiseStore
                 published_at   TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS ix_noise_publications_period ON noise_publications(period, published_at);
+
+            CREATE TABLE IF NOT EXISTS noise_rejudge (
+                period        TEXT NOT NULL,
+                finding_id    TEXT NOT NULL,
+                verdict       TEXT NOT NULL,
+                model         TEXT NOT NULL,
+                model_version TEXT NOT NULL,
+                prompt_id     TEXT NOT NULL,
+                reasoning     TEXT NOT NULL,
+                recorded_at   TEXT NOT NULL,
+                PRIMARY KEY (period, finding_id)
+            );
 
             CREATE TABLE IF NOT EXISTS noise_resolutions (
                 period                  TEXT NOT NULL,
@@ -512,6 +543,71 @@ public sealed class SqliteNoiseStore : INoiseStore
         cmd.Parameters.AddWithValue("$id", submissionId ?? "");
         var value = cmd.ExecuteScalar();
         return value is null or DBNull ? null : (string)value;
+    }
+
+    /// <inheritdoc />
+    public void RecordRejudge(IReadOnlyList<RejudgeRecord> verdicts)
+    {
+        ArgumentNullException.ThrowIfNull(verdicts);
+        if (verdicts.Count == 0)
+        {
+            return;
+        }
+
+        using var conn = Open();
+        using var tx = conn.BeginTransaction();
+
+        foreach (var v in verdicts)
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText =
+                """
+                INSERT INTO noise_rejudge
+                    (period, finding_id, verdict, model, model_version, prompt_id, reasoning, recorded_at)
+                VALUES ($period, $finding, $verdict, $model, $version, $prompt, $reasoning, $at)
+                ON CONFLICT (period, finding_id) DO UPDATE SET
+                    verdict = excluded.verdict, model = excluded.model,
+                    model_version = excluded.model_version, prompt_id = excluded.prompt_id,
+                    reasoning = excluded.reasoning, recorded_at = excluded.recorded_at
+                """;
+            cmd.Parameters.AddWithValue("$period", v.Period);
+            cmd.Parameters.AddWithValue("$finding", v.FindingId);
+            cmd.Parameters.AddWithValue("$verdict", v.Verdict);
+            cmd.Parameters.AddWithValue("$model", v.Model);
+            cmd.Parameters.AddWithValue("$version", v.ModelVersion);
+            cmd.Parameters.AddWithValue("$prompt", v.PromptId);
+            cmd.Parameters.AddWithValue("$reasoning", v.Reasoning);
+            cmd.Parameters.AddWithValue("$at", v.RecordedAt.ToString("O"));
+            cmd.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<RejudgeRecord> ListRejudge(string period)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT period, finding_id, verdict, model, model_version, prompt_id, reasoning, recorded_at
+            FROM noise_rejudge WHERE period = $period ORDER BY finding_id
+            """;
+        cmd.Parameters.AddWithValue("$period", period ?? "");
+        using var reader = cmd.ExecuteReader();
+
+        var list = new List<RejudgeRecord>();
+        while (reader.Read())
+        {
+            list.Add(new RejudgeRecord(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2),
+                reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetString(6),
+                DateTimeOffset.Parse(reader.GetString(7), System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
+        return list;
     }
 
     /// <inheritdoc />

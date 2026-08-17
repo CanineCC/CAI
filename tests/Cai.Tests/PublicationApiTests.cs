@@ -39,6 +39,7 @@ public sealed class PublicationApiTests(RegistryUnconfiguredFixture fx) : IClass
             reported, adjudicated, excluded, unrated, validAndActionable, validNotActionable, noise, clusters,
             configuration = new { rulesetId = "watchdog-default-2026.08", isProductDefault = true },
             fixRateUnavailable = "fixture — this test is about the census and the threshold",
+            rejudgeUnavailable = "fixture: no second pass in this test — the re-judge has its own tests",
 
             // ★★ The rest of the contract /api/noise/method publishes. Omitting it does not make a shorter
             // test; it makes a test of a publication the standard refuses. See PublicationContract.
@@ -95,6 +96,7 @@ public sealed class PublicationApiTests(RegistryUnconfiguredFixture fx) : IClass
             previousRate = 0.20,
             configuration = new { rulesetId = "watchdog-default-2026.08", isProductDefault = true },
             fixRateUnavailable = "fixture — this test is about the detectable difference",
+            rejudgeUnavailable = "fixture: no second pass in this test — the re-judge has its own tests",
 
             // The contract, as every publication must carry it.
             locCovered = 4_200_000L,

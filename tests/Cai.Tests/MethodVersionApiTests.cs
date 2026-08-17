@@ -174,6 +174,9 @@ public sealed class MethodVersionApiTests(RegistryUnconfiguredFixture fx)
         ["gitMiningVerified"] = true,
         ["configuration"] = new { rulesetId = "watchdog-default-2026.08", isProductDefault = true },
         ["fixRateUnavailable"] = "fixture",
+        // ★ The re-judge gate, required since #7b. Declared ABSENT rather than faked: a fixture that
+        // asserted its own reproducibility would be the self-measured number the gate exists to stop.
+        ["rejudgeUnavailable"] = "fixture: no second pass in this test — the re-judge has its own tests",
     };
 
     [Fact]

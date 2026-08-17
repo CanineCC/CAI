@@ -103,7 +103,8 @@ public static class PublicationContract
         int adjudicated, int excluded,
         bool hasFixRateObservations, string? fixRateUnavailable, int? fixRateWindowDays,
         RunConfiguration? configuration,
-        string? period)
+        string? period,
+        RejudgeOutcome? rejudge = null, string? rejudgeUnavailable = null)
     {
         ArgumentNullException.ThrowIfNull(claims);
         var breaches = new List<ContractBreach>();
@@ -233,6 +234,49 @@ public static class PublicationContract
             breaches.Add(new ContractBreach("fixRateWindowDays",
                 "fixRateObservations need a fixRateWindowDays — a fix rate without a period is "
               + "unfalsifiable, because over a long enough window nearly all code changes."));
+        }
+
+        // ── Does the judging reproduce? ──────────────────────────────────────────────────────────
+        //
+        // ★★ THE ONLY CHECK HERE THAT POINTS AT THE STANDARD RATHER THAN AT THE MEASURED PARTY, and the reason
+        // it belongs on the publication and not only on an endpoint: a re-judge nobody has to run is a gate
+        // that fires and tells nobody — the failure this codebase already documents about the rubric publish
+        // gate, which checks presence and not contents.
+        //
+        // ★★ THE OUTCOME IS PASSED IN FROM THE STORE, never taken from the request. A body that could declare
+        // its own reproducibility would be publishing the self-measured number the standard exists to replace.
+        if (rejudge is { } outcome)
+        {
+            if (!outcome.WithinTolerance)
+            {
+                // ★★ AND A DECLARED REASON DOES NOT RESCUE IT. `rejudgeUnavailable` covers "we did not run
+                // one"; it must not cover "we ran one and it failed", or the honest path becomes the
+                // expensive one.
+                var detail = outcome.Compared == 0
+                    ? "nothing in the sample could be compared"
+                    : outcome.Unjudged.Count > 0
+                        ? $"{outcome.Unjudged.Count} of {outcome.SampleSize} sampled findings were never "
+                        + "answered by the second pass"
+                        : string.Create(
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            $"the two passes disagreed on {outcome.DisagreementRate:P1} of what they compared");
+
+                breaches.Add(new ContractBreach("rejudge",
+                    $"the re-judge for this period is outside the published tolerance of "
+                  + string.Create(
+                        System.Globalization.CultureInfo.InvariantCulture, $"{Rejudge.Tolerance:P0}") + ": "
+                  + detail + ". A rate read off a process that disagrees with itself by more than the moves "
+                  + "the rate is used to argue about is not a measurement. Fix the judging and re-run it — a "
+                  + "stated reason covers the absence of a second pass, not a failed one."));
+            }
+        }
+        else if (string.IsNullOrWhiteSpace(rejudgeUnavailable))
+        {
+            breaches.Add(new ContractBreach("rejudge",
+                "a publication rests on judging that has been shown to reproduce, or says why it has not "
+              + "been. Re-judge this period's seed-drawn sample at /api/noise/rejudge/{period}, or send "
+              + "rejudgeUnavailable with a reason — the reason publishes, so the absence is one a reader can "
+              + "weigh rather than one they cannot see."));
         }
 
         // ── How the tool was configured ──────────────────────────────────────────────────────────
