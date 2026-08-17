@@ -3,13 +3,19 @@
 :root {
   --ink: #11161d; --ink-soft: #44505e; --line: #e2e7ee; --bg: #ffffff; --bg-soft: #f6f8fb;
   --accent: #1f6feb; --accent-soft: #e7f0fe; --ok: #1a7f4b; --warn: #b9770a; --crit: #c0392b;
+  /* ★★ STATE TEXT TOKENS, separate from the state colours. --ok/--warn/--crit are chosen to read as fills and
+     borders; used as TEXT on their own 16 % wash they measure 4.17:1 and 3.85:1 against a 12.5 px pill — below
+     WCAG AA, and found by a computed contrast sweep rather than by looking. These are darkened for light and
+     LIGHTENED for dark, because a single value cannot clear AA on both a pale and a dark wash. */
+  --ok-text: #106039; --warn-text: #6d4700; --crit-text: #96271b;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --wrap: 60rem; --radius: 10px;
 }
 @media (prefers-color-scheme: dark) {
   :root { --ink: #e7edf5; --ink-soft: #a3b0c0; --line: #232c38; --bg: #0d1117; --bg-soft: #141b24;
-          --accent: #589bff; --accent-soft: #15233b; }
+          --accent: #589bff; --accent-soft: #15233b;
+          --ok-text: #79d69f; --warn-text: #e5bb6a; --crit-text: #f0938a; }
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -100,6 +106,22 @@ footer.site { padding: 2.5rem 0; color: var(--ink-soft); font-size: 0.9rem; }
 footer.site .wrap { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: space-between; }
 footer.site a { color: var(--ink-soft); }
 footer.site nav { display: flex; gap: 1rem; flex-wrap: wrap; }
+/* ── The noise record's counts and dispute states ──
+   ★★ .counts/.count and the dispute pills are used by /noise/record/{period}. An undefined class is an error
+   nowhere in the toolchain — the browser ignores it and the page renders as a run of unstyled text — which is
+   how four utilities shipped unstyled in the sibling repository across four pages.
+   ★ The state colours come from the EXISTING --ok/--warn/--crit tokens, which are redefined in the dark block,
+   so an open dispute is legible under both colour schemes. */
+.counts { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 0 0 1rem; }
+.count { display: flex; flex-direction: column; }
+.count .k { font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft);
+            font-weight: 700; }
+.count .v { font-size: 1.8rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.pill.open { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn-text); }
+.pill.upheld { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok-text); }
+.pill.overturned { background: color-mix(in srgb, var(--crit) 16%, transparent); color: var(--crit-text); }
+.muted { color: var(--ink-soft); }
+
 .callout { background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
 
 .lens-filter-note { margin: 0 0 1rem; padding: .6rem .9rem; border-radius: 8px; background: var(--bg-soft); color: var(--ink); border: 1px solid var(--line); font-size: .95rem; }

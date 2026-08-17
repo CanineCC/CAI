@@ -149,6 +149,13 @@ public interface INoiseStore
 
     /// <summary>Every dispute for a period, oldest first.</summary>
     IReadOnlyList<DisputeRecord> ListDisputes(string period);
+
+    /// <summary>Periods that have any judging recorded, newest first — what a record page can be asked for.</summary>
+    /// <remarks>
+    /// ★ Distinct from <see cref="PublishedPeriods"/>: a period can have judging without a published rate (the
+    /// judging happens first), and a reader looking for the record wants the former.
+    /// </remarks>
+    IReadOnlyList<string> JudgedPeriods();
 }
 
 /// <summary>
@@ -694,6 +701,23 @@ public sealed class SqliteNoiseStore : INoiseStore
         reader.IsDBNull(8)
             ? null
             : DateTimeOffset.Parse(reader.GetString(8), System.Globalization.CultureInfo.InvariantCulture));
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> JudgedPeriods()
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT DISTINCT period FROM noise_resolutions ORDER BY period DESC";
+        using var reader = cmd.ExecuteReader();
+
+        var periods = new List<string>();
+        while (reader.Read())
+        {
+            periods.Add(reader.GetString(0));
+        }
+
+        return periods;
+    }
 
     /// <inheritdoc />
     public IReadOnlyList<PeriodTally> PublishedTallies()

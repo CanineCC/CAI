@@ -1,0 +1,170 @@
+@* The noise record for one period — the verdicts, and every dispute raised against them.
+
+   ★★ "PUBLISHES" MEANS A PERSON CAN READ IT. Disputes existed only as JSON at /api/noise/record/{period}, which
+   makes the contest public to a vendor's engineer and to nobody else — and 01 §5 promises the contest is public,
+   against published reasoning. This is the page that keeps that promise.
+
+   ★★ AND THE UPHELD ONES ARE AS PROMINENT AS THE OVERTURNED. A contest that only appeared when the challenger
+   won would be a complaints box; the upheld disputes are the evidence that this is not one.
+
+   ★ Reads the store directly rather than fetching its own API: this IS CAI, so an HTTP call to itself would be a
+   second path to the same rows and one more thing that can disagree. *@
+@page "/noise/record"
+@page "/noise/record/{Period}"
+@using System.Globalization
+@using Cai.Web.Noise
+@inject INoiseStore Store
+
+<PageTitle>CAI — noise record @Period</PageTitle>
+
+<div class="hero"><div class="wrap">
+    <p class="eyebrow">Noise record</p>
+    <h1>@Period</h1>
+    <p class="lede">
+        Every verdict recorded for this period, and every dispute raised against them — upheld and overturned
+        alike.
+    </p>
+</div></div>
+
+@if (Period is not { Length: > 0 })
+{
+    @* ★★ AN INDEX, so the record is REACHABLE. A page that only answers /noise/record/{period} needs the reader
+       to already know a period — and the layout deliberately carries no second navigation of its own, so
+       without this the record is a URL you have to be told. *@
+    var judged = Store.JudgedPeriods();
+
+    <div class="hero"><div class="wrap">
+        <p class="eyebrow">Noise record</p>
+        <h1>The record, by period</h1>
+        <p class="lede">
+            Every period with judging recorded against it. Each one lists its verdicts and every dispute raised
+            against them — upheld and overturned alike.
+        </p>
+    </div></div>
+
+    <section data-region="record-index"><div class="wrap">
+        @if (judged.Count == 0)
+        {
+            <p class="muted">
+                <strong>No period has judging recorded yet.</strong> That is an absence, not a clean run.
+            </p>
+        }
+        else
+        {
+            <ul>
+                @foreach (var p in judged)
+                {
+                    <li><a href="@($"/noise/record/{p}")">@p</a></li>
+                }
+            </ul>
+        }
+    </div></section>
+
+    return;
+}
+
+@{
+    var resolutions = Store.ListResolutions(Period ?? "");
+    var verdicts = Store.ListVerdicts(Period ?? "");
+    var disputes = Store.ListDisputes(Period ?? "");
+}
+
+<section data-region="record-counts"><div class="wrap">
+    <div class="counts">
+        <span class="count">
+            <span class="k">Findings judged</span>
+            <span class="v">@resolutions.Count.ToString("N0", CultureInfo.InvariantCulture)</span>
+        </span>
+        <span class="count">
+            <span class="k">Raw verdicts</span>
+            <span class="v">@verdicts.Count.ToString("N0", CultureInfo.InvariantCulture)</span>
+        </span>
+        <span class="count">
+            <span class="k">Disputes raised</span>
+            <span class="v">@disputes.Count.ToString("N0", CultureInfo.InvariantCulture)</span>
+        </span>
+        <span class="count">
+            <span class="k">Still open</span>
+            <span class="v">@disputes.Count(d => d.Outcome is null).ToString("N0", CultureInfo.InvariantCulture)</span>
+        </span>
+    </div>
+
+    @if (resolutions.Count == 0)
+    {
+        @* ★ An empty period says so. "Nothing has been judged here" and "everything was judged and agreed" are
+           different facts, and a page of zeroes reads as the second. *@
+        <p class="muted">
+            <strong>No judging has been recorded for this period yet.</strong> That is an absence, not a clean
+            run.
+        </p>
+    }
+    else
+    {
+        <p class="muted">
+            The verdict register is append-only. An overturned verdict is still in this record, with the dispute
+            beside it — and an overturn does not change a published rate by itself: that takes a corrected
+            publication, which the publication record shows as a correction.
+        </p>
+    }
+</div></section>
+
+<section data-region="disputes"><div class="wrap">
+    <h2>Disputes</h2>
+
+    @if (disputes.Count == 0)
+    {
+        <p class="muted">
+            <strong>No verdict in this period has been contested.</strong> The route is
+            <code>POST /api/noise/verdicts/{findingId}/dispute</code>; a dispute needs a reason, and its answer
+            needs reasoning either way.
+        </p>
+    }
+    else
+    {
+        <table class="lenses">
+            <thead>
+                <tr><th>Finding</th><th>Raised by</th><th>Reason</th><th>Outcome</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var d in disputes)
+                {
+                    <tr>
+                        <td class="mono">@d.FindingId</td>
+                        <td>@d.RaisedBy</td>
+                        <td>@d.Reason</td>
+                        <td>
+                            @* ★★ THE STATE IS A LABEL, not an absence. An unanswered dispute is the one a reader
+                               most needs to see: it is where the standard has been challenged and has not
+                               replied. *@
+                            <span class="pill @(d.Outcome ?? "open")">@Label(d.Outcome)</span>
+                            <div class="muted">
+                                @(d.ResolutionReasoning is { Length: > 0 } why ? why : "Not yet answered.")
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="callout">
+        <strong>A dispute needs a reason, and an answer needs its reasoning — either way.</strong>
+        An outcome with no reasoning is "the standard says so", which is not an argument the Code Assurance Index
+        gets to make. The upheld disputes are published as prominently as the overturned ones; a contest that
+        only appeared when the challenger won would be a complaints box.
+    </div>
+</div></section>
+
+@code {
+    /// <summary>The period, <c>yyyy-MM</c>.</summary>
+    [Parameter]
+    public string? Period { get; set; }
+
+    /// <summary>The outcome as a word, "Open" while there is none.</summary>
+    private static string Label(string? outcome) => outcome switch
+    {
+        "upheld" => "Upheld",
+        "overturned" => "Overturned",
+        _ => "Open",
+    };
+}

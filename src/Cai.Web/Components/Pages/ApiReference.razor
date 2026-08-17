@@ -12,6 +12,17 @@
 </div></div>
 
 <section><div class="wrap">
+    @* ★★ THE RECORD HAS TO BE REACHABLE. The masthead deliberately carries no second navigation — this host is
+       the API and the chrome points out to the standard's site — so the human-readable judging record is linked
+       from here, where a reader who found the API is already looking. A page nobody can reach is the same class
+       of defect as a CSS class nobody defined. *@
+    <h2>The noise record, for people</h2>
+    <p>
+        Every period's verdicts and every dispute raised against them — upheld and overturned alike — are
+        readable at <a href="/noise/record">/noise/record</a>, without calling anything. The same record is served
+        as JSON at <code>/api/noise/record/{period}</code>.
+    </p>
+
     <h2>Rate limits</h2>
     <p>To keep the standard free and available, <strong>anonymous requests to <code>/api</code></strong> are
         rate-limited per client IP:</p>
