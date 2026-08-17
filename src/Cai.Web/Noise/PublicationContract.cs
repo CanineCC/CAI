@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Cai.Web.Noise;
 
 /// <summary>Why a publication was refused, in the words a reader of the refusal needs.</summary>
@@ -214,8 +216,14 @@ public static class PublicationContract
         if (VoidOnExclusions(adjudicated, excluded))
         {
             var rate = ExclusionRate(adjudicated, excluded)!.Value;
+
+            // ★★ INVARIANT, not the box culture. This host runs da-DK and rendered "16,7 %" into a refusal
+            // that a participant reads and quotes — a published figure with a comma decimal separator is a
+            // figure somebody will mis-parse, and the message is part of the standard's public surface.
+            var rateText = rate.ToString("P1", CultureInfo.InvariantCulture);
+            var ceilingText = MaxExclusionRate.ToString("P0", CultureInfo.InvariantCulture);
             breaches.Add(new ContractBreach("excluded",
-                $"VOID: {rate:P1} of judged findings were excluded, above the {MaxExclusionRate:P0} ceiling. "
+                $"VOID: {rateText} of judged findings were excluded, above the {ceilingText} ceiling. "
               + "This is not a verdict on the tool and not a pass with a caveat — it is an instrument unfit "
               + "to have been run. Exclusions are not randomly distributed: they concentrate where the "
               + "evidence is thin, which is where judging is worst, so the run is flattered by exactly the "

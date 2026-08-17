@@ -334,4 +334,36 @@ public sealed class PublicationContractApiTests(RegistryUnconfiguredFixture fx)
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(34, body.GetProperty("gapsFoundSinceLastPeriod").GetInt32());
     }
+
+    [Fact]
+    public async Task STAR_The_Refusal_Reads_The_Same_In_Every_CULTURE()
+    {
+        // ★★ Caught by running it, not by a test: on a da-DK host the ceiling breach rendered "16,7 %" — a
+        // comma decimal separator, in a message a participant reads and quotes. Every figure the standard
+        // states is part of its public surface, so it is formatted invariantly whatever the host's locale.
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("da-DK");
+
+            var run = Complete();
+            run["reported"] = 2000;
+            run["adjudicated"] = 1800;
+            run["excluded"] = 160;
+            run["unrated"] = 40;
+
+            var (status, body) = await PublishAsync(run);
+
+            Assert.Equal(HttpStatusCode.BadRequest, status);
+            var text = string.Join(" ", body.GetProperty("breaches").EnumerateArray()
+                .Select(b => b.GetProperty("error").GetString()));
+            Assert.Contains("8.2", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("8,2", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("5,0", text, StringComparison.Ordinal);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = previous;
+        }
+    }
 }
