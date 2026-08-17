@@ -763,6 +763,22 @@ public static class NoiseStandardEndpoints
                     submission.Configuration,
                     new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
 
+            // ★★ THE FINDINGS THEMSELVES ARE STORED (#23). Nothing kept them: the receipt held counts, and a
+            // rater was handed an id and asked whether it should have fired — the one check that comes from
+            // outside the model family was unanswerable by design. Keyed by the DERIVED id, so a second tool
+            // reporting the same defect writes the same row and cross-vendor matching has something to match on.
+            var findingIds = (submission.Findings ?? [])
+                .Select(f => (Id: FindingKey.For(f.RepoId, f.PinnedSha, f.FilePath, f.Line, f.RuleId), Finding: f))
+                .ToList();
+
+            store.RecordFindings(
+            [
+                .. findingIds.Select(x => new FindingRecord(
+                    x.Id, submission.Period, submission.Tool,
+                    x.Finding.RepoId, x.Finding.PinnedSha, x.Finding.FilePath, x.Finding.Line,
+                    x.Finding.RuleId, x.Finding.Title, x.Finding.ClaimClass)),
+            ]);
+
             if (!store.TryRecordSubmission(receipt, submission.RunStartedAt, configurationJson))
             {
                 return Results.Conflict(new
@@ -776,7 +792,14 @@ public static class NoiseStandardEndpoints
                 });
             }
 
-            return Results.Ok(Render(receipt));
+            // ★ The ids publish with the receipt: the submitter needs them to dispute a verdict on one of their
+            // own findings, and they are DERIVED so the submitter can compute them independently and check.
+            var body = JsonSerializer.SerializeToNode(
+                Render(receipt), new JsonSerializerOptions(JsonSerializerDefaults.Web))!.AsObject();
+            body["findingIds"] = new JsonArray(
+                [.. findingIds.Select(x => (JsonNode?)JsonValue.Create(x.Id))]);
+
+            return Results.Json(body);
         })
         .AllowAnonymous()
         .WithName("NoiseSubmit");
@@ -986,33 +1009,19 @@ public static class NoiseStandardEndpoints
 
         // ★ ONE ITEM. The nine-second median in the pilot came from a 500-item list to get through;
         // there is no slog to race when the ask is a single question.
-        endpoints.MapGet("/api/noise/crowd/next", (string period, string raterId) =>
+        endpoints.MapGet("/api/noise/crowd/next", (string period, string raterId, INoiseStore store) =>
         {
             if (CrowdQueues.Find(period) is not { } round)
             {
                 return Results.NotFound(new { error = $"no crowd queue is registered for period '{period}'" });
             }
 
-            var now = DateTimeOffset.UtcNow;
-            var answered = round.Answers.Where(a => Same(a.RaterId, raterId)).Select(a => a.FindingId).ToList();
-
-            // ★★ Dosed, or calibration is unreachable. The live round left both raters below the minimum
-            // sample because honeypots came up only by chance; among hundreds of findings a person
-            // answering one question a day would never be calibrated at all.
-            var honeypotsAnswered = answered.Count(round.Honeypots.ContainsKey);
-            var due = HoneypotDosing.IsDue(raterId, answered.Count, honeypotsAnswered);
-
-            // ★★ Load-aware, or the queue's head goes to everybody — which is what the live run did,
-            // handing eight raters the same finding while seven others, contested ones included, went
-            // unanswered.
-            if (CrowdQueue.Next(
-                    round.Queue, raterId, answered, round.Load(now),
-                    honeypots: [.. round.Honeypots.Keys], preferHoneypot: due) is not { } item)
+            // ★★ THE ONE PATH (see CrowdOffering). The dosing, the load-aware choice, the estate exclusion and
+            // the hand-out lease only work together, and the public page hands out items through this same call.
+            if (CrowdOffering.Next(round, raterId, store, DateTimeOffset.UtcNow) is not { } offer)
             {
                 return Results.NoContent();
             }
-
-            round.Offered[(raterId, item.FindingId)] = now;
 
             // ★★ THE FINDING AND NOTHING ELSE. Told four judges already agreed, a reasonable person
             // reads "probably fine" and rubber-stamps — and the spot-check exists precisely to catch the
@@ -1020,7 +1029,26 @@ public static class NoiseStandardEndpoints
             // evidence it was built to gather, and nothing downstream would ever show that it had.
             return Results.Ok(new
             {
-                findingId = item.FindingId,
+                findingId = offer.FindingId,
+
+                // ★★ THE EVIDENCE TRAVELS WITH THE ITEM (#23). Without it a rater is being asked whether a hex
+                // string should have fired. It carries no tool: a rater told which vendor produced a finding is
+                // being asked a different question, and on a standard its owner competes in that is the single
+                // most corrupting thing this payload could leak.
+                evidence = offer.Evidence is null ? null : new
+                {
+                    repoId = offer.Evidence.RepoId,
+                    pinnedSha = offer.Evidence.PinnedSha,
+                    filePath = offer.Evidence.FilePath,
+                    line = offer.Evidence.Line,
+                    ruleId = offer.Evidence.RuleId,
+                    title = offer.Evidence.Title,
+                    claimClass = offer.Evidence.ClaimClass,
+                    sourceUrl = FindingEvidence.SourceUrl(
+                        offer.Evidence.RepoId, offer.Evidence.PinnedSha,
+                        offer.Evidence.FilePath, offer.Evidence.Line),
+                },
+                evidenceProblem = offer.EvidenceProblem,
 
                 // ★★ THE QUESTIONS TRAVEL WITH THE ITEM (#13). Without them every client invents its own wording,
                 // and "would you fix this?" against "is this worth fixing?" are different questions whose answers
@@ -1052,24 +1080,15 @@ public static class NoiseStandardEndpoints
                 });
             }
 
-            // ★ An answer to a finding this rater was never handed is REFUSED. Without the check the
-            // queue is only a suggestion, and a participant could answer the whole accepted pool —
-            // including the items they were deliberately not shown, which is what the disguise exists
-            // to prevent.
-            if (!round.Offered.ContainsKey((request.RaterId ?? "", request.FindingId ?? "")))
+            // ★★ THE ONE PATH (see CrowdOffering.Record) — the hand-out check included, so the public page
+            // cannot record an answer this endpoint would have refused.
+            if (CrowdOffering.Record(
+                    round, request.RaterId, request.FindingId, verdict,
+                    request.WouldFix, request.WantInReport,
+                    NoiseVerdicts.ParseOrNull(request.MachineVerdict)) is { } refusal)
             {
-                return Results.Conflict(new
-                {
-                    error = "that finding was never handed to that rater",
-                    findingId = request.FindingId,
-                });
+                return Results.Conflict(new { error = refusal, findingId = request.FindingId });
             }
-
-            round.Answers.Add(new CrowdAnswer(
-                request.FindingId!, request.RaterId!, verdict, NoiseVerdicts.ParseOrNull(request.MachineVerdict),
-
-                // ★ Carried through as nullable: not asked and "no" are different answers (#13).
-                request.WouldFix, request.WantInReport));
 
             return Results.Ok(new { recorded = true, findingId = request.FindingId });
         })
@@ -1188,6 +1207,41 @@ public static class NoiseStandardEndpoints
 
         // ★★ What has to travel with a rate for the rate to mean anything: the funnel it was computed
         // over, the actionability split, and the difference this sample could actually detect.
+        // ★★ THE EVIDENCE A RATER IS SHOWN. Deliberately carries NO tool: a rater told which vendor produced a
+        // finding is being asked a different question, and on a standard its owner competes in, "this one is
+        // Watchdog's" is the most corrupting thing this endpoint could leak.
+        endpoints.MapGet("/api/noise/findings/{findingId}", (string findingId, INoiseStore store) =>
+        {
+            if (store.FindFinding(findingId) is not { } f)
+            {
+                return Results.NotFound(new
+                {
+                    findingId,
+                    error = "no finding with that id has been submitted. Ids are derived from the finding's "
+                          + "coordinates — see /api/noise/method — so a wrong one is usually a wrong coordinate "
+                          + "rather than a missing finding.",
+                });
+            }
+
+            return Results.Ok(new
+            {
+                findingId = f.FindingId,
+                repoId = f.RepoId,
+                pinnedSha = f.PinnedSha,
+                filePath = f.FilePath,
+                line = f.Line,
+                ruleId = f.RuleId,
+                title = f.Title,
+                claimClass = f.ClaimClass,
+
+                // ★★ A link to the PINNED revision, never a branch: HEAD would show a rater code that may have
+                // changed since the run, and they would judge the finding against a file that no longer matches.
+                sourceUrl = FindingEvidence.SourceUrl(f.RepoId, f.PinnedSha, f.FilePath, f.Line),
+            });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseFinding");
+
         // ── The compliance mark ───────────────────────────────────────────────────────────────────
         //
         // ★★ A MARK THAT CAN BE PULLED IS POWER OVER A COMPETITOR'S MARKETING, and pulling one is far more

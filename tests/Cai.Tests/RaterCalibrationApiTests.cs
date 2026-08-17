@@ -126,10 +126,16 @@ public sealed class RaterCalibrationApiTests(RegistryUnconfiguredFixture fx) : I
         // planting showing through.
         Assert.Equal(honeypot, ordinary);
 
-        // ★ And nothing beyond the id and the published questions travels at all.
+        // ★ And nothing beyond the id, its evidence and the published questions travels at all.
+        //
+        // ★★ WIDENED DELIBERATELY for #23's evidence, and only because the addition CANNOT distinguish: the
+        // evidence is a function of the finding's coordinates, so the same id carries the same evidence whether or
+        // not it was planted — which is exactly what the byte-identical comparison above proves. The guard that
+        // matters is that comparison; this list is the second lock, and a name added here without that reasoning
+        // is the leak this test exists to catch.
         var properties = JsonDocument.Parse(honeypot).RootElement.EnumerateObject()
             .Select(p => p.Name).Order(StringComparer.Ordinal).ToList();
-        Assert.Equal(["findingId", "questions"], properties);
+        Assert.Equal(["evidence", "evidenceProblem", "findingId", "questions"], properties);
     }
 
     /// <summary>

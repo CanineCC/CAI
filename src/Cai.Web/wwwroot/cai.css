@@ -133,3 +133,42 @@ footer.site nav { display: flex; gap: 1rem; flex-wrap: wrap; }
 .canine-by { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.6rem; color: var(--ink-soft); font-size: 0.85rem; }
 .canine-by:hover { color: var(--ink); text-decoration: none; }
 .canine-badge { display: inline-block; width: 16px; height: 18px; background: currentColor; -webkit-mask: url("/brand/canine-badge-flat.svg") no-repeat center / contain; mask: url("/brand/canine-badge-flat.svg") no-repeat center / contain; }
+
+/* ── The crowd's rating page (/noise/rate/{period}) ──
+   ★★ THE CHOICES ARE REAL BUTTONS. A rater has to be able to see, without instructions, that the six boxes are
+   the answer and that clicking one submits it — a list of styled divs with a separate "submit" underneath is how
+   a one-question page becomes a form to fill in.
+   ★ Two columns from 44rem up: six full-width rows push the last choices below the fold on a laptop, and a
+   choice a rater has to scroll for is one they pick less often. */
+/* ★★ --accent ON --bg-soft MEASURES 4.36:1 IN THE LIGHT SCHEME — under 4.5 for body-size text, measured with
+   alpha composited over the ancestor stack. --accent stays the brand blue for large text and fills; --accent-text
+   is the one to use for a sentence-sized link. Dark already passes (6.23), and keeping one token for both would
+   darken the dark scheme's links for nothing. */
+:root { --accent-text: #1257c3; }
+/* ★ AND THE PILL, which is 0.78rem: --accent on --accent-soft measures 4.04:1 in light, so every pill on every
+   page was under AA for its size. The fix belongs on .pill rather than on this page's one pill. */
+.pill { color: var(--accent-text); }
+@media (prefers-color-scheme: dark) { :root { --accent-text: var(--accent); } }
+
+.item { border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-soft);
+        padding: 1.25rem 1.5rem; margin: 0 0 1.5rem; }
+.item h3 { margin: .2rem 0 .6rem; font-size: 1.15rem; line-height: 1.35; }
+.where { font-family: var(--mono); font-size: .86rem; color: var(--ink-soft); word-break: break-all; }
+.open { display: inline-block; margin-top: .9rem; font-weight: 600; }
+.open a, .lens-filter-note a { color: var(--accent-text); }
+.hint { color: var(--ink-soft); margin: 0 0 .8rem; font-size: .95rem; }
+.choices { display: grid; gap: .6rem; grid-template-columns: 1fr; margin: .5rem 0 0; padding: 0; border: 0; }
+@media (min-width: 44rem) { .choices { grid-template-columns: 1fr 1fr; } }
+.choice { display: block; width: 100%; text-align: left; font: inherit; cursor: pointer;
+          border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg);
+          color: var(--ink); padding: .8rem 1rem; }
+.choice:hover { border-color: var(--accent); background: var(--accent-soft); }
+.choice strong { display: block; font-size: .98rem; }
+.choice span { display: block; font-size: .85rem; color: var(--ink-soft); margin-top: .15rem; }
+.asks { margin: 1.5rem 0 0; padding: 1rem 1.25rem; border: 1px solid var(--line);
+        border-radius: var(--radius); }
+.asks legend { padding: 0 .4rem; font-weight: 600; font-size: .95rem; }
+.asks label { display: block; margin: .35rem 0; }
+.asks p.muted { margin: .5rem 0 0; font-size: .9rem; }
+.standing dt { font-weight: 600; margin-top: .6rem; }
+.standing dd { margin: 0; color: var(--ink-soft); }

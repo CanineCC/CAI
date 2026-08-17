@@ -138,6 +138,15 @@ public static class CrowdQueues
     public static CrowdRound? Find(string period) =>
         Rounds.TryGetValue(period, out var round) ? round : null;
 
+    /// <summary>Every period with a registered round, newest name first.</summary>
+    /// <remarks>
+    /// ★ SO THE CROWD HAS AN INDEX. A rating page that only answers /noise/rate/{period} needs the reader to
+    /// already know a period — and the standard's layout carries no navigation of its own, so without this the
+    /// crowd's front door is a URL you have to be given by the organisation being measured.
+    /// </remarks>
+    public static IReadOnlyList<string> Periods() =>
+        [.. Rounds.Keys.OrderByDescending(k => k, StringComparer.Ordinal)];
+
     /// <summary>
     /// Parse a cascade state off the wire.
     /// </summary>

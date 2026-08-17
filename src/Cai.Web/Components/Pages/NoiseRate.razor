@@ -1,0 +1,340 @@
+@* The crowd's front door — one finding, its evidence, and the choices.
+
+   ★★ THE ENDPOINTS EXISTED WITH NO FRONT DOOR. Rollout step 2 is "open the crowd — public, cross-vendor raters,
+   so 'is this noise?' is not our opinion even while we are the only participant", and all of it shipped as JSON
+   reachable by a vendor's engineer with a curl. A crowd layer whose only client is the organisation being
+   measured is not a check on that organisation.
+
+   ★★ ONE ITEM, ONE QUESTION. The nine-second median in the pilot came from a 500-item list to get through; there
+   is no slog to race when the ask is a single question.
+
+   ★★ AND NOTHING ABOUT THE TOOL OR WHAT THE JUDGES SAID. Told four judges already agreed, a reasonable person
+   reads "probably fine" and rubber-stamps — which is the one case the spot-check exists to catch. The page reads
+   CrowdOffering, which is the same call the API serves, so the disguise cannot be undone here by accident. *@
+@page "/noise/rate"
+@page "/noise/rate/{Period}"
+@using System.Globalization
+@using Cai.Web.Noise
+@inject INoiseStore Store
+
+<PageTitle>CAI — rate a finding</PageTitle>
+
+@if (Period is not { Length: > 0 })
+{
+    @* ★ AN INDEX, so the crowd is REACHABLE. Without it the front door is a URL a rater has to be given by the
+       organisation being measured. *@
+    var rounds = CrowdQueues.Periods();
+
+    <div class="hero"><div class="wrap">
+        <p class="eyebrow">Rate a finding</p>
+        <h1>Open rating rounds</h1>
+        <p class="lede">
+            Anyone can rate. You are shown one finding at a time, with a link to the code it points at — never
+            which tool reported it, and never what any other rater said.
+        </p>
+    </div></div>
+
+    <section data-region="rate-index"><div class="wrap">
+        @if (rounds.Count == 0)
+        {
+            <p class="muted">
+                <strong>No round is open.</strong> That is an absence, not a finished job — a period with no
+                crowd round has no check on it from outside the model family.
+            </p>
+        }
+        else
+        {
+            <ul>
+                @foreach (var p in rounds)
+                {
+                    <li><a href="@($"/noise/rate/{p}")">@p</a></li>
+                }
+            </ul>
+        }
+    </div></section>
+
+    return;
+}
+
+<div class="hero"><div class="wrap">
+    <p class="eyebrow">Rate a finding</p>
+    <h1>@Period</h1>
+    <p class="lede">
+        One finding at a time. Read the code it points at, then say whether it should have fired. Nothing here
+        tells you which tool reported it or what any other rater said — both would change your answer, and the
+        answer is the only thing this round is for.
+    </p>
+</div></div>
+
+@if (CrowdQueues.Find(Period) is not { } round)
+{
+    <section data-region="no-round"><div class="wrap">
+        <p class="muted"><strong>No round is registered for @Period.</strong></p>
+        <p><a href="/noise/rate">Rounds that are open</a></p>
+    </div></section>
+
+    return;
+}
+
+@if (RaterId is not { Length: > 0 })
+{
+    @* ★★ AN ID, NOT AN ACCOUNT. Agreement between raters is the measurement, so answers have to be attributable
+       to a person — but a sign-up wall on the one surface that exists to bring people in from outside would keep
+       out exactly the raters the standard needs. Pick a name; it publishes with your calibration. *@
+    <section data-region="who"><div class="wrap">
+        <h2>Who is rating?</h2>
+        <form method="get">
+            <p>
+                <label>
+                    Pick a rater name. It publishes with your calibration, so use one you are willing to be
+                    seen answering under.<br />
+                    <input name="raterId" required placeholder="e.g. jo-from-fintech" />
+                </label>
+            </p>
+            <p><button class="choice" type="submit"><strong>Start rating</strong></button></p>
+        </form>
+        <p class="muted">
+            You are never handed a finding on an estate you own. If you work for a vendor taking part, say so at
+            <span class="mono">POST /api/noise/crowd/raters</span> — a vendor rating its own tool's findings is
+            the conflict this standard exists to remove, and it cannot be declared by omission.
+        </p>
+    </div></section>
+
+    return;
+}
+
+@if (Recorded is { Length: > 0 })
+{
+    <section data-region="recorded"><div class="wrap">
+        <p class="muted"><strong>Recorded.</strong> @Recorded</p>
+    </div></section>
+}
+
+@{
+    var offer = CrowdOffering.Next(round, RaterId, Store, DateTimeOffset.UtcNow);
+}
+
+<section data-region="item"><div class="wrap">
+    @if (offer is null)
+    {
+        @* ★ SAYS SO rather than rendering an empty page, which reads as "the crowd is closed". The commonest
+           reason is the estate rule: every finding left in this round is on code this rater owns. *@
+        <h2>There is nothing left for you in this round</h2>
+        <p class="muted">
+            Every finding here has the answers it needs, or you have already rated it, or it sits on an estate
+            you own — nobody rates a finding on their own code, because that bias is systematic rather than
+            random and no amount of averaging removes it.
+        </p>
+        <p><a href="/noise/rate">Other rounds</a></p>
+    }
+    else if (offer.Evidence is null)
+    {
+        @* ★★ FAIL LOUD, not blank, and DO NOT ASK. An operator can register a queue of ids no submission
+           recorded; serving those as ordinary questions is how a round fills with answers from people who were
+           shown nothing — and that round would still have produced an agreement rate. *@
+        <h2>This finding cannot be shown</h2>
+        <p class="muted">@offer.EvidenceProblem</p>
+        <p class="where">@offer.FindingId</p>
+    }
+    else
+    {
+        var e = offer.Evidence;
+
+        <h2>Should this finding have fired?</h2>
+
+        <div class="item">
+            <p class="where">
+                @e.RepoId
+                @if (e.FilePath is { Length: > 0 })
+                {
+                    @(" · ")
+                    @e.FilePath
+                    @if (e.Line is { } line)
+                    {
+                        @($":{line.ToString(CultureInfo.InvariantCulture)}")
+                    }
+                }
+                @(" · ")@e.RuleId@(" · ")@e.ClaimClass
+            </p>
+            <h3>@(e.Title is { Length: > 0 } ? e.Title : e.RuleId)</h3>
+            @if (FindingEvidence.SourceUrl(e.RepoId, e.PinnedSha, e.FilePath, e.Line) is { } url)
+            {
+                @* ★★ THE PINNED REVISION, never the branch: a link to HEAD would show code that may have changed
+                   since the run, and the rater would judge the finding against a file that no longer matches. *@
+                <p class="open">
+                    <a href="@url" target="_blank" rel="noopener noreferrer">
+                        Open the code at the revision that was scanned ↗
+                    </a>
+                </p>
+            }
+        </div>
+
+        <form method="post" @formname="rate" data-region="choices">
+            <AntiforgeryToken />
+            <input type="hidden" name="AnsweredFindingId" value="@offer.FindingId" />
+
+            @* ★★ SIX CHOICES, and every one of them a real button that submits. Two are process defects — "the
+               evidence was not enough" and "the rubric has no answer here" — and a rater denied those has to
+               guess, which puts a fabricated verdict into the rate instead of a filed defect. *@
+            @* ★ ONE LINE, not instructions. Six bordered cards read as a list unless something says they are
+               the answer — and a rater who scrolls looking for a submit button is a rater who leaves. *@
+            <p class="hint">Pick one. It records straight away and hands you the next finding.</p>
+
+            <fieldset class="choices">
+                @foreach (var verdict in Enum.GetValues<NoiseVerdict>())
+                {
+                    <button class="choice" type="submit" name="Verdict" value="@verdict.Wire()">
+                        <strong>@Choice(verdict)</strong>
+                        <span>@Detail(verdict)</span>
+                    </button>
+                }
+            </fieldset>
+
+            @* ★★ WHAT YOU WOULD DO, beside what you called it (#13). 02 §4 validates the spec against
+               practitioner behaviour rather than against opinions of the spec's vocabulary — and where the two
+               disagree is the most informative thing this layer produces. Asked with the item or not at all. *@
+            <fieldset class="asks">
+                <legend>Two more, about what you would do</legend>
+                <label><input type="checkbox" name="WouldFix" value="true" /> @BehaviouralQuestions.WouldFix</label>
+                <label>
+                    <input type="checkbox" name="WantInReport" value="true" /> @BehaviouralQuestions.WantInReport
+                </label>
+                <p class="muted">
+                    Left unticked means no, and that is a useful answer — where the label and the behaviour
+                    disagree is the most informative thing this round produces.
+                </p>
+            </fieldset>
+        </form>
+    }
+</div></section>
+
+<section data-region="standing"><div class="wrap">
+    <h2>Your standing <span class="pill mono">@RaterId</span></h2>
+
+    @{
+        var mine = RaterCalibration.Score([.. round.Answers], [.. round.Honeypots.Values])
+            .FirstOrDefault(s => string.Equals(s.RaterId, RaterId, StringComparison.OrdinalIgnoreCase));
+        var answered = round.Answers.Count(a => string.Equals(a.RaterId, RaterId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    <dl class="standing">
+        <dt>Answered this round</dt>
+        <dd>@answered.ToString(CultureInfo.InvariantCulture)</dd>
+        <dt>Calibration</dt>
+        <dd>
+            @if (mine is null || mine.Answered == 0)
+            {
+                @($"Not yet calibrated — that needs {RaterCalibration.MinimumSample.ToString(CultureInfo.InvariantCulture)} findings whose answer was already settled outside the rating process.")
+            }
+            else
+            {
+                @($"Agreed with {mine.Agreed.ToString(CultureInfo.InvariantCulture)} of {mine.Answered.ToString(CultureInfo.InvariantCulture)} findings whose answer was already settled.")
+                @(mine.Calibrated
+                    ? " Calibrated."
+                    : $" Not yet calibrated — that needs {RaterCalibration.MinimumSample.ToString(CultureInfo.InvariantCulture)}.")
+            }
+        </dd>
+    </dl>
+
+    @* ★★ STATED TO THE RATER, because a rater who suspects a poor score removes their answers will answer to
+       please. It never does: excluding raters by the variable being measured is selection on the outcome, and it
+       leaves the subset that agreed — a cleaner number that means less. *@
+    <div class="callout">
+        <strong>Your score is published and never applied.</strong>
+        No answer of yours is dropped for a poor score: excluding raters by the variable being measured would be
+        selection on the outcome. And you are never handed a finding on an estate you own — that would be a
+        systematic bias rather than a random one, and no amount of averaging removes it.
+    </div>
+</div></section>
+
+@code {
+    [Parameter]
+    public string? Period { get; set; }
+
+    [SupplyParameterFromQuery(Name = "raterId")]
+    public string? RaterId { get; set; }
+
+    /// <summary>
+    /// ★★ THE ITEM THE RATER WAS ACTUALLY SHOWN, carried on the form. Recording the answer against whatever the
+    /// queue would hand out next would attach a verdict to a finding nobody read — and the two are different as
+    /// soon as another rater answers between the render and the click.
+    /// </summary>
+    [SupplyParameterFromForm]
+    public string? AnsweredFindingId { get; set; }
+
+    [SupplyParameterFromForm]
+    public string? Verdict { get; set; }
+
+    [SupplyParameterFromForm]
+    public string? WouldFix { get; set; }
+
+    [SupplyParameterFromForm]
+    public string? WantInReport { get; set; }
+
+    private string? Recorded { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (Verdict is not { Length: > 0 } || Period is not { Length: > 0 } || RaterId is not { Length: > 0 })
+        {
+            return;
+        }
+
+        if (CrowdQueues.Find(Period) is not { } round || NoiseVerdicts.ParseOrNull(Verdict) is not { } verdict)
+        {
+            Recorded = null;
+            return;
+        }
+
+        // ★ Through CrowdOffering, so the page cannot record an answer the API would have refused — the
+        // hand-out check included. A page with its own write path is a second queue that agrees with the first
+        // until the day it does not.
+        var refusal = CrowdOffering.Record(
+            round, RaterId, AnsweredFindingId, verdict,
+
+            // ★★ Ticked or not, both are answers; the marker is the form itself. A checkbox posts nothing when
+            // unticked, so "no" and "not asked" would be the same wire value without this — and they are
+            // different answers (#13).
+            wouldFix: string.Equals(WouldFix, "true", StringComparison.OrdinalIgnoreCase),
+            wantInReport: string.Equals(WantInReport, "true", StringComparison.OrdinalIgnoreCase));
+
+        Recorded = refusal is null
+            ? "Your answer is in. Here is the next one."
+            : refusal;
+    }
+
+    /// <summary>
+    /// The published meaning, with a leading repeat of the choice's own label removed.
+    /// </summary>
+    /// <remarks>
+    /// ★ "Should not have fired / Should not have fired — untrue at the cited code" read as a stutter on the live
+    /// page. Trimmed MECHANICALLY rather than by writing a second wording here: a hand-written gloss beside the
+    /// standard's own text is two sources for one definition, and they drift.
+    /// </remarks>
+    private static string Detail(NoiseVerdict verdict)
+    {
+        var meaning = verdict.Meaning();
+        var label = Choice(verdict);
+
+        if (!meaning.StartsWith(label, StringComparison.OrdinalIgnoreCase))
+        {
+            return meaning;
+        }
+
+        var rest = meaning[label.Length..].TrimStart(' ', '\u2014', '-', ',');
+        return rest.Length == 0 ? meaning : char.ToUpperInvariant(rest[0]) + rest[1..];
+    }
+
+    /// <summary>The rater-facing wording. The API's <c>Meaning</c> addresses an implementer; this addresses a
+    /// person looking at code.</summary>
+    private static string Choice(NoiseVerdict verdict) => verdict switch
+    {
+        NoiseVerdict.Noise => "Should not have fired",
+        NoiseVerdict.ValidAndActionable => "True, and I could act on it",
+        NoiseVerdict.ValidNotActionable => "True, but too thin to act on",
+        NoiseVerdict.BothPositionsWrong => "Both this and its opposite are wrong",
+        NoiseVerdict.CannotTell => "I cannot tell from what I was shown",
+        NoiseVerdict.RubricAmbiguous => "The rubric has no answer here",
+        _ => verdict.Wire(),
+    };
+}
