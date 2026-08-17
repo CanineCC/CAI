@@ -24,6 +24,41 @@ public sealed record SubmittedFinding(
 /// </remarks>
 public sealed record RecencyDeclaration(string RepoId, string Stratum);
 
+/// <summary>One threshold moved off its shipping value.</summary>
+/// <param name="RuleId">Which rule.</param>
+/// <param name="Shipped">What the product ships with. ★ Required: "we changed a threshold" is not checkable.</param>
+/// <param name="Used">What this run used.</param>
+public sealed record ThresholdChange(string? RuleId, string? Shipped, string? Used);
+
+/// <summary>
+/// How the tool was configured for this run — the hole every other check leaves open.
+/// </summary>
+/// <remarks>
+/// <para>★★ VERIFICATION CONSTRAINS THE RUN, NOT THE CONFIGURATION. The submission is checked against the
+/// holdout's repositories and shas; provenance names the build, the model set and the seed; the recency
+/// declaration closes "did you develop against these repos". None of it says which rules were switched on. So
+/// a vendor could run the correct version against the correct shas with its noisiest rules disabled, its
+/// thresholds relaxed, or a profile no customer is ever given, and pass every check the method has.</para>
+///
+/// <para>★★ IT DOES NOT REQUIRE TRUSTING ANYBODY. Its value is the recency declaration's: it converts a vague
+/// impression into a specific, checkable, PUBLIC claim that a competitor or a buyer can point at. Lying
+/// becomes an act rather than an omission.</para>
+///
+/// <para>★ It binds us first — Watchdog is the only participant, so we are the first to state our
+/// configuration and admit any divergence from what customers actually run.</para>
+/// </remarks>
+/// <param name="RulesetId">The ruleset or profile used. Required — a declaration naming nothing is not one.</param>
+/// <param name="IsProductDefault">Whether this IS what customers get.</param>
+/// <param name="DivergenceExplanation">Required when it is not: how it differs, in words that publish.</param>
+/// <param name="RulesDisabled">Rules switched off relative to the shipping default.</param>
+/// <param name="ThresholdsAltered">Thresholds moved, each with its shipped and used value.</param>
+public sealed record RunConfiguration(
+    string? RulesetId,
+    bool IsProductDefault,
+    string? DivergenceExplanation = null,
+    IReadOnlyList<string>? RulesDisabled = null,
+    IReadOnlyList<ThresholdChange>? ThresholdsAltered = null);
+
 /// <summary>A run submitted against a published holdout.</summary>
 /// <param name="RunStartedAt">
 /// ★★ WHEN THE SCANNER RAN, and it must be AFTER the draw was published. That ordering is the neutrality
@@ -36,7 +71,8 @@ public sealed record NoiseSubmission(
     string Period, string Tool, string ToolVersion,
     IReadOnlyList<RecencyDeclaration> Recency,
     IReadOnlyList<SubmittedFinding> Findings,
-    DateTimeOffset? RunStartedAt = null);
+    DateTimeOffset? RunStartedAt = null,
+    RunConfiguration? Configuration = null);
 
 /// <summary>What CAI checked, and what it found.</summary>
 public sealed record SubmissionReceipt(
@@ -137,6 +173,64 @@ public static class NoiseSubmissions
                 problems.Add(
                     $"'{declaration.Stratum}' is not a recency stratum. One of: "
                     + string.Join(", ", Enum.GetValues<RecencyStratum>().Select(RecencyStrata.Wire)) + ".");
+            }
+        }
+
+        // ── How the tool was configured ───────────────────────────────────────────────────────────
+        //
+        // ★★ THE ONE THING NO OTHER CHECK CONSTRAINS. See RunConfiguration: the right version against the
+        // right shas with the noisiest rules off passes everything else in the method.
+        if (submission.Configuration is not { } config)
+        {
+            problems.Add(
+                "a configuration declaration is required: the ruleset or profile used, any rules disabled or "
+                + "thresholds altered from the shipping default, and whether that configuration IS the "
+                + "product default. Every other check constrains the RUN; none of them constrains how the "
+                + "tool was set up.");
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(config.RulesetId))
+            {
+                problems.Add(
+                    "the configuration declaration needs a rulesetId — a declaration that names nothing is "
+                    + "not something a third party could ask to see.");
+            }
+
+            var disabled = config.RulesDisabled ?? [];
+            var altered = config.ThresholdsAltered ?? [];
+
+            // ★★ The likeliest dishonest filling-in is not a lie but a CONTRADICTION: tick "this is what
+            // customers get" and list what you turned off. Refusing it costs an honest vendor one sentence
+            // and costs a dishonest one the whole manoeuvre.
+            if (config.IsProductDefault && (disabled.Count > 0 || altered.Count > 0))
+            {
+                var changed = disabled.Concat(altered.Select(a => a.RuleId ?? "an unnamed rule"));
+                problems.Add(
+                    "this cannot be the product default: the declaration also lists changes to it — "
+                    + string.Join(", ", changed)
+                    + ". Either it is what customers get, or it diverges and says how.");
+            }
+
+            // ★ A divergence is allowed; a silent one is not. "Not the default" plus silence tells a reader
+            // nothing while looking like a disclosure.
+            if (!config.IsProductDefault && string.IsNullOrWhiteSpace(config.DivergenceExplanation))
+            {
+                problems.Add(
+                    "this configuration is declared as NOT the product default, so it must say how it "
+                    + "differs. The explanation publishes with the number.");
+            }
+
+            foreach (var change in altered)
+            {
+                if (string.IsNullOrWhiteSpace(change.RuleId)
+                    || string.IsNullOrWhiteSpace(change.Shipped)
+                    || string.IsNullOrWhiteSpace(change.Used))
+                {
+                    problems.Add(
+                        $"the altered threshold on '{change.RuleId ?? "an unnamed rule"}' must state what was "
+                        + "shipped and what was used. \"We changed a threshold\" is not a checkable claim.");
+                }
             }
         }
 

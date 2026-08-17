@@ -34,7 +34,12 @@ public sealed record PromptRecord(string PromptId, string Text, DateTimeOffset F
 public interface INoiseStore
 {
     /// <summary>Record a receipt. Returns false when an accepted submission already claims (tool, period).</summary>
-    bool TryRecordSubmission(SubmissionReceipt receipt, DateTimeOffset? runStartedAt);
+    /// <param name="configurationJson">
+    /// The configuration declaration as submitted. ★ Stored VERBATIM rather than re-serialised from a parsed
+    /// shape: it is a claim the vendor made, and the record's job is to publish what they said.
+    /// </param>
+    bool TryRecordSubmission(
+        SubmissionReceipt receipt, DateTimeOffset? runStartedAt, string? configurationJson);
 
     /// <summary>A receipt by id, or null.</summary>
     SubmissionReceipt? FindSubmission(string submissionId);
@@ -44,6 +49,9 @@ public interface INoiseStore
 
     /// <summary>Every submission for a period, newest first — the register.</summary>
     IReadOnlyList<SubmissionReceipt> ListSubmissions(string period);
+
+    /// <summary>The configuration a submission declared, as raw JSON, or null when it declared none.</summary>
+    string? ConfigurationJson(string submissionId);
 
     /// <summary>Record one judge's raw verdict.</summary>
     void RecordVerdict(VerdictRecord verdict);
@@ -135,7 +143,8 @@ public sealed class SqliteNoiseStore : INoiseStore
                 problems_json        TEXT NOT NULL,
                 holdout_repositories INTEGER NOT NULL,
                 covered_repositories INTEGER NOT NULL,
-                uncovered_json       TEXT NOT NULL
+                uncovered_json       TEXT NOT NULL,
+                configuration_json   TEXT NULL
             );
             CREATE INDEX IF NOT EXISTS ix_noise_submissions_period ON noise_submissions(period);
 
@@ -182,10 +191,36 @@ public sealed class SqliteNoiseStore : INoiseStore
             );
             """;
         cmd.ExecuteNonQuery();
+
+        // ★ Additive on a table that may already exist in a dev database — SQLite has no ADD COLUMN IF NOT
+        // EXISTS, so this is guarded, exactly as the registry store does it.
+        AddColumnIfMissing(conn, "noise_submissions", "configuration_json", "TEXT NULL");
+    }
+
+    /// <summary>Idempotent ALTER TABLE … ADD COLUMN, checked via PRAGMA table_info.</summary>
+    private static void AddColumnIfMissing(SqliteConnection conn, string table, string column, string def)
+    {
+        using (var check = conn.CreateCommand())
+        {
+            check.CommandText = $"PRAGMA table_info({table})";
+            using var reader = check.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(reader.GetOrdinal("name")), column, StringComparison.Ordinal))
+                {
+                    return;
+                }
+            }
+        }
+
+        using var alter = conn.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {def}";
+        alter.ExecuteNonQuery();
     }
 
     /// <inheritdoc />
-    public bool TryRecordSubmission(SubmissionReceipt receipt, DateTimeOffset? runStartedAt)
+    public bool TryRecordSubmission(
+        SubmissionReceipt receipt, DateTimeOffset? runStartedAt, string? configurationJson)
     {
         ArgumentNullException.ThrowIfNull(receipt);
 
@@ -195,9 +230,10 @@ public sealed class SqliteNoiseStore : INoiseStore
             """
             INSERT INTO noise_submissions
                 (submission_id, period, tool, tool_version, received_at, run_started_at, accepted,
-                 problems_json, holdout_repositories, covered_repositories, uncovered_json)
+                 problems_json, holdout_repositories, covered_repositories, uncovered_json,
+                 configuration_json)
             VALUES ($id, $period, $tool, $toolVersion, $receivedAt, $runStartedAt, $accepted,
-                    $problems, $holdout, $covered, $uncovered)
+                    $problems, $holdout, $covered, $uncovered, $configuration)
             """;
         cmd.Parameters.AddWithValue("$id", receipt.SubmissionId);
         cmd.Parameters.AddWithValue("$period", receipt.Period);
@@ -210,6 +246,7 @@ public sealed class SqliteNoiseStore : INoiseStore
         cmd.Parameters.AddWithValue("$holdout", receipt.HoldoutRepositories);
         cmd.Parameters.AddWithValue("$covered", receipt.CoveredRepositories);
         cmd.Parameters.AddWithValue("$uncovered", JsonSerializer.Serialize(receipt.Uncovered, Json));
+        cmd.Parameters.AddWithValue("$configuration", configurationJson ?? (object)DBNull.Value);
 
         try
         {
@@ -439,6 +476,17 @@ public sealed class SqliteNoiseStore : INoiseStore
         }
 
         return list;
+    }
+
+    /// <inheritdoc />
+    public string? ConfigurationJson(string submissionId)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT configuration_json FROM noise_submissions WHERE submission_id = $id";
+        cmd.Parameters.AddWithValue("$id", submissionId ?? "");
+        var value = cmd.ExecuteScalar();
+        return value is null or DBNull ? null : (string)value;
     }
 
     private static SubmissionReceipt ReadReceipt(SqliteDataReader reader) => new(

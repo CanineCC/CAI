@@ -137,6 +137,12 @@ public static class NoiseStandardEndpoints
             // its noise on the history-derived dimensions is an environment artefact rather than a capability
             // gap, and those are exactly the dimensions facing competitors who publish no error rate at all.
             requiresGitMiningVerified = true,
+
+            // ★★ How the tool was CONFIGURED. Every other check constrains the run — the version, the shas,
+            // the seed, the model set, the recency declaration — and none of them constrains which rules were
+            // switched on, so the right version against the right shas with the noisiest rules off passes all
+            // of them. Required, and it publishes.
+            requiresConfigurationDeclaration = true,
             exclusionRule =
                 "Items nobody could judge leave the rate. Their counts publish per dimension, and a run "
               + "whose combined exclusions exceed the ceiling is VOID — not a pass with a caveat and not "
@@ -237,6 +243,13 @@ public static class NoiseStandardEndpoints
                     receivedAt = r.ReceivedAt,
                     accepted = r.Accepted,
                     problems = r.Problems,
+
+                    // ★★ The declaration publishes BESIDE the number. A configuration nobody can read is not
+                    // a disclosure — the whole value of the declaration is that a competitor or a buyer can
+                    // point at it.
+                    configuration = store.ConfigurationJson(r.SubmissionId) is { Length: > 0 } json
+                        ? System.Text.Json.JsonDocument.Parse(json).RootElement
+                        : (System.Text.Json.JsonElement?)null,
                 }),
             });
         })
@@ -375,7 +388,15 @@ public static class NoiseStandardEndpoints
             // vendor would like to forget is exactly the kind the no-withdrawal rule exists to keep. Only an
             // ACCEPTED one claims the (tool, period) slot, and the claim is a UNIQUE index: losing that race
             // is the rule working, so it comes back as the same conflict a second attempt would get.
-            if (!store.TryRecordSubmission(receipt, submission.RunStartedAt))
+            // ★ Serialised here from the parsed declaration so the record publishes what the gate checked —
+            // the two cannot disagree about what was declared.
+            var configurationJson = submission.Configuration is null
+                ? null
+                : System.Text.Json.JsonSerializer.Serialize(
+                    submission.Configuration,
+                    new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+
+            if (!store.TryRecordSubmission(receipt, submission.RunStartedAt, configurationJson))
             {
                 return Results.Conflict(new
                 {

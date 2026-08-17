@@ -73,6 +73,15 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
             // the whole holdout rests on, and now checked rather than asserted in prose.
             runStartedAt = "2026-08-20T09:00:00Z",
+            // ★ The configuration declaration, required since #23-1: every other check constrains the
+            // RUN, none of them constrains which rules were switched on.
+            configuration = new
+            {
+                rulesetId = "watchdog-default-2026.08",
+                isProductDefault = true,
+                rulesDisabled = Array.Empty<string>(),
+                thresholdsAltered = Array.Empty<object>(),
+            },
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = holdout.Select(h => Finding(h.RepoId, h.Sha)),
         };
@@ -124,6 +133,15 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
             // the whole holdout rests on, and now checked rather than asserted in prose.
             runStartedAt = "2026-08-20T09:00:00Z",
+            // ★ The configuration declaration, required since #23-1: every other check constrains the
+            // RUN, none of them constrains which rules were switched on.
+            configuration = new
+            {
+                rulesetId = "watchdog-default-2026.08",
+                isProductDefault = true,
+                rulesDisabled = Array.Empty<string>(),
+                thresholdsAltered = Array.Empty<object>(),
+            },
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = new[] { Finding("some/other-repo", holdout[0].Sha) },
         };
@@ -152,6 +170,15 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
             // the whole holdout rests on, and now checked rather than asserted in prose.
             runStartedAt = "2026-08-20T09:00:00Z",
+            // ★ The configuration declaration, required since #23-1: every other check constrains the
+            // RUN, none of them constrains which rules were switched on.
+            configuration = new
+            {
+                rulesetId = "watchdog-default-2026.08",
+                isProductDefault = true,
+                rulesDisabled = Array.Empty<string>(),
+                thresholdsAltered = Array.Empty<object>(),
+            },
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = new[] { Finding(holdout[0].RepoId, new string('f', 40)) },
         };
@@ -181,6 +208,15 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
             // the whole holdout rests on, and now checked rather than asserted in prose.
             runStartedAt = "2026-08-20T09:00:00Z",
+            // ★ The configuration declaration, required since #23-1: every other check constrains the
+            // RUN, none of them constrains which rules were switched on.
+            configuration = new
+            {
+                rulesetId = "watchdog-default-2026.08",
+                isProductDefault = true,
+                rulesDisabled = Array.Empty<string>(),
+                thresholdsAltered = Array.Empty<object>(),
+            },
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = new[] { Finding(holdout[0].RepoId, holdout[0].Sha) },
         };
@@ -250,6 +286,15 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
             // the whole holdout rests on, and now checked rather than asserted in prose.
             runStartedAt = "2026-08-20T09:00:00Z",
+            // ★ The configuration declaration, required since #23-1: every other check constrains the
+            // RUN, none of them constrains which rules were switched on.
+            configuration = new
+            {
+                rulesetId = "watchdog-default-2026.08",
+                isProductDefault = true,
+                rulesDisabled = Array.Empty<string>(),
+                thresholdsAltered = Array.Empty<object>(),
+            },
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = new[]
             {
@@ -277,6 +322,15 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
             // the whole holdout rests on, and now checked rather than asserted in prose.
             runStartedAt = "2026-08-20T09:00:00Z",
+            // ★ The configuration declaration, required since #23-1: every other check constrains the
+            // RUN, none of them constrains which rules were switched on.
+            configuration = new
+            {
+                rulesetId = "watchdog-default-2026.08",
+                isProductDefault = true,
+                rulesDisabled = Array.Empty<string>(),
+                thresholdsAltered = Array.Empty<object>(),
+            },
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = new[] { Finding(holdout[0].RepoId, holdout[0].Sha, claimClass: "vibes") },
         };
@@ -313,6 +367,15 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
             // the whole holdout rests on, and now checked rather than asserted in prose.
             runStartedAt = "2026-08-20T09:00:00Z",
+            // ★ The configuration declaration, required since #23-1: every other check constrains the
+            // RUN, none of them constrains which rules were switched on.
+            configuration = new
+            {
+                rulesetId = "watchdog-default-2026.08",
+                isProductDefault = true,
+                rulesDisabled = Array.Empty<string>(),
+                thresholdsAltered = Array.Empty<object>(),
+            },
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = holdout.Select(h => Finding(h.RepoId, h.Sha)),
         };
@@ -350,6 +413,15 @@ public sealed class NoiseSubmissionApiTests(RegistryUnconfiguredFixture fx) : IC
             // ★ The run must have STARTED AFTER the draw was published (2026-08-15) — the ordering
             // the whole holdout rests on, and now checked rather than asserted in prose.
             runStartedAt = "2026-08-20T09:00:00Z",
+            // ★ The configuration declaration, required since #23-1: every other check constrains the
+            // RUN, none of them constrains which rules were switched on.
+            configuration = new
+            {
+                rulesetId = "watchdog-default-2026.08",
+                isProductDefault = true,
+                rulesDisabled = Array.Empty<string>(),
+                thresholdsAltered = Array.Empty<object>(),
+            },
             recency = holdout.Select(h => new { repoId = h.RepoId, stratum = "never-trained" }),
             findings = holdout.Take(2).Select(h => Finding(h.RepoId, h.Sha)),
         };

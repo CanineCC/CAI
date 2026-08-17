@@ -84,6 +84,15 @@ public sealed class NoiseStoreDurabilityTests : IDisposable
             tool,
             toolVersion = "v1",
             runStartedAt = "2026-08-20T09:00:00Z",
+            // ★ The configuration declaration, required since #23-1: every other check constrains the
+            // RUN, none of them constrains which rules were switched on.
+            configuration = new
+            {
+                rulesetId = "watchdog-default-2026.08",
+                isProductDefault = true,
+                rulesDisabled = Array.Empty<string>(),
+                thresholdsAltered = Array.Empty<object>(),
+            },
             recency = holdout.Select(r => new { repoId = r, stratum = "never-trained" }),
             findings = Array.Empty<object>(),
         };
@@ -140,6 +149,15 @@ public sealed class NoiseStoreDurabilityTests : IDisposable
             tool = "second-chance",
             toolVersion = "v1",
             runStartedAt = "2026-08-20T09:00:00Z",
+            // ★ The configuration declaration, required since #23-1: every other check constrains the
+            // RUN, none of them constrains which rules were switched on.
+            configuration = new
+            {
+                rulesetId = "watchdog-default-2026.08",
+                isProductDefault = true,
+                rulesDisabled = Array.Empty<string>(),
+                thresholdsAltered = Array.Empty<object>(),
+            },
             recency = holdout.Select(r => new { repoId = r, stratum = "quite-fresh" }),
             findings = Array.Empty<object>(),
         }));
