@@ -313,6 +313,28 @@ public static class NoiseStandardEndpoints
                 "Publish both the pooled (micro) and cluster-weighted (macro) average, and the "
               + "leave-one-out range. Excluding an outlying repository is NOT permitted — dropping a "
               + "repo for having a high or low rate is selecting on the outcome.",
+
+            // ★★ AND NOW THE RULE HAS AN IMPLEMENTATION BEHIND IT. reportingRule above required both averages
+            // while the publication carried only a COUNT of clusters, which cannot produce a cluster-weighted
+            // anything — a rule published and unimplementable at the same time.
+            clusterAverages = new
+            {
+                requires = "clusterTallies: one entry per repository with its judged and noise counts, "
+                         + "optionally per claim class. A count of clusters is enough for the clustering "
+                         + "interval and cannot produce a cluster-weighted average.",
+                why = "The pooled rate is a count over a count, so a repository contributing half the findings "
+                    + "contributes half the rate and can dominate the number unseen. The remedy is NOT to drop "
+                    + "the outlier — excluding a repository for having an extreme rate is selecting on the "
+                    + "outcome — it is a second average that weights repositories equally, published beside "
+                    + "the first.",
+                notableDivergence = ClusterAverages.NotableDivergence,
+                divergenceMeans = "a run to READ twice, never a run to void: neither average is the wrong "
+                                + "answer, and which one to quote depends on the question asked.",
+                emptyClusters = "a repository the run reached and judged nothing in has NO rate and is "
+                              + "excluded from the macro. Counting it as 0 % would improve the number for "
+                              + "going unjudged.",
+                talliesMustMatchTheCensus = true,
+            },
             });
         })
         .AllowAnonymous()
@@ -1144,6 +1166,13 @@ public static class NoiseStandardEndpoints
                 recency.Add(new RecencyTally(parsed, entry.Judged, entry.Noise));
             }
 
+            // ★★ BOTH AVERAGES, from per-cluster tallies. 02 §5: "so no repository can dominate unseen".
+            var clusterTallies = (request.ClusterTallies ?? [])
+                .Where(t => !string.IsNullOrWhiteSpace(t.ClusterId))
+                .Select(t => new ClusterTally(t.ClusterId!, t.Judged ?? 0, t.Noise ?? 0, t.ClaimClass))
+                .ToList();
+            var clusterAverages = ClusterAverages.Compute(clusterTallies);
+
             // ★★ READ FROM THE STORE, never from the request. See PublicationRequest.RejudgeUnavailable.
             var rejudgeSample = Rejudge.SelectSample(
                 RejudgeSeed(request.Period ?? ""), request.Period ?? "",
@@ -1156,6 +1185,34 @@ public static class NoiseStandardEndpoints
                     Settled(store, request.Period ?? ""),
                     recordedRejudge.ToDictionary(
                         r => r.FindingId, r => r.Verdict, StringComparer.OrdinalIgnoreCase));
+
+            // ★★ TWO ROUTES TO ONE NUMBER IS HOW THEY DRIFT. The headline rate comes from the census counts and
+            // the micro average from the tallies; if they disagree, one of them is wrong and publishing both
+            // would let the reader pick. Checked here rather than in the contract because it is a relation
+            // between two parts of THIS request, not a requirement the method states about a result.
+            var judgedFromCensus = request.ValidAndActionable + request.ValidNotActionable + request.Noise;
+            var talliedJudged = clusterTallies.Sum(t => t.Judged);
+            var talliedNoise = clusterTallies.Sum(t => t.Noise);
+            if (clusterTallies.Count > 0
+                && (talliedJudged != judgedFromCensus || talliedNoise != request.Noise))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "this result does not meet the contract /api/noise/method publishes.",
+                    breaches = new[]
+                    {
+                        new
+                        {
+                            field = "clusterTallies",
+                            error = $"the per-cluster tallies add up to {talliedJudged} judged and "
+                                  + $"{talliedNoise} noise, but the census says {judgedFromCensus} and "
+                                  + $"{request.Noise}. One of the two is wrong: the pooled rate would then be "
+                                  + "computable two ways with two answers, and a reader shown both could pick.",
+                        },
+                    },
+                    methodVersion = MethodVersion,
+                });
+            }
 
             var breaches = PublicationContract.Check(
                 request.LocCovered,
@@ -1274,6 +1331,13 @@ public static class NoiseStandardEndpoints
                     judged = c.Judged,
                     noise = c.Noise,
                     noiseRate = c.NoiseRate,
+
+                    // ★★ THE MACRO PER CLASS. A pooled rate across claim classes is a category error the
+                    // method already refuses; a pooled macro across them is the same error one level up, so
+                    // the pointwise average must be readable without the structural findings moving it.
+                    macroRate = ClusterAverages
+                        .ComputeFor(clusterTallies, ClaimSpecificity.Wire(c.Class)).MacroRate,
+
                     measurable = c.Measurable,
                     notMeasurableReason = c.Measurable
                         ? null
@@ -1380,6 +1444,31 @@ public static class NoiseStandardEndpoints
                 },
 
                 clusters = summary.Clusters,
+
+                // ★★ THE SAME RATE, TWICE. 02 §5 requires both so no repository can dominate the number
+                // unseen — and the defence cannot be to drop the outlier, because excluding a repository for
+                // having an extreme rate is selecting on the outcome.
+                clusterAverages = new
+                {
+                    micro = clusterAverages.MicroRate,
+                    macro = clusterAverages.MacroRate,
+                    leaveOneOutLow = clusterAverages.LeaveOneOutLow,
+                    leaveOneOutHigh = clusterAverages.LeaveOneOutHigh,
+
+                    // ★ Named: "the range is wide" without saying which repository did it is a fact nobody
+                    // can act on.
+                    mostInfluentialCluster = clusterAverages.MostInfluentialCluster,
+
+                    clustersWithARate = clusterAverages.ClustersWithARate,
+                    clustersWithNothingJudged = clusterAverages.ClustersWithNothingJudged,
+
+                    // ★★ Flagged rather than left as arithmetic: publishing two numbers and expecting the
+                    // reader to subtract them is how the second one gets ignored.
+                    averagesDiverge = clusterAverages.AveragesDiverge,
+                    notableDivergence = ClusterAverages.NotableDivergence,
+                    note = clusterAverages.Note,
+                },
+
                 intraClusterCorrelation = PublicationSurface.DefaultIntraClusterCorrelation,
                 minimumDetectableDifference = summary.MinimumDetectableDifference,
 
@@ -1922,6 +2011,9 @@ public static class NoiseStandardEndpoints
         bool? GitMiningVerified = null,
         int? GapsFoundSinceLastPeriod = null,
 
+        // ★★ PER-CLUSTER TALLIES, without which the macro average cannot exist. See ClusterTallyEntry.
+        IReadOnlyList<ClusterTallyEntry>? ClusterTallies = null,
+
         // ★★ A stated reason no second pass was run. NOTE there is deliberately NO field for its OUTCOME: CAI
         // holds that, and a body able to declare its own reproducibility would be publishing the self-measured
         // number the standard exists to replace. Optional and LAST, because inserting a required parameter in
@@ -1943,6 +2035,16 @@ public static class NoiseStandardEndpoints
     /// ★ Whether a real before/after fix pair establishes this defect. Those findings leave the pool: a commit
     /// is evidence where a pool is consensus, and blending them publishes the blend under the stronger name.
     /// </param>
+    /// <summary>One cluster's judged findings as they arrive on the wire.</summary>
+    /// <remarks>
+    /// ★★ A COUNT OF CLUSTERS CANNOT PRODUCE A CLUSTER-WEIGHTED AVERAGE. The publication carried
+    /// <c>clusters: 14</c> and nothing else about them, which is enough for the clustering interval and
+    /// structurally insufficient for 02 §5's second average — so the requirement was published in
+    /// <c>reportingRule</c> and unimplementable at the same time.
+    /// </remarks>
+    public sealed record ClusterTallyEntry(
+        string? ClusterId, int? Judged, int? Noise, string? ClaimClass = null);
+
     public sealed record PooledFindingEntry(
         string? Tool, string? RepoId, string? FilePath, int? Line, bool? Valid,
         bool? HasFixPairOracle = null);
