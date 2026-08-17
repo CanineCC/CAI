@@ -1149,34 +1149,21 @@ public static class NoiseStandardEndpoints
 
         // ★★ THE READ SIDE OF #23-4. Watchdog fetches this at request time; it is the only copy.
         endpoints.MapGet("/api/noise/published/{period}", (string period, INoiseStore store) =>
-        {
-            var latest = store.LatestPublication(period);
-            if (latest is not { } published)
-            {
-                // ★★ NEVER a zero-filled body. "We measured that period and found nothing" and "nothing has
-                // been published for it" are different claims, and the first one is false.
-                return Results.NotFound(new
-                {
-                    period,
-                    error = $"no result has been published for period '{period}'.",
-                    published = store.PublishedPeriods(),
-                });
-            }
-
-            var node = JsonNode.Parse(published.PayloadJson)!.AsObject();
-            node["publishedAt"] = JsonValue.Create(published.PublishedAt);
-
-            // ★★ A CORRECTION IS VISIBLE AS ONE. On the single figure where §01 says that being seen to
-            // suppress ends the standard, a store that overwrote would make the second publication of a
-            // period indistinguishable from the first.
-            node["supersededCount"] = JsonValue.Create(published.History.Count - 1);
-            node["history"] = new JsonArray(
-                published.History.Select(h => (JsonNode?)JsonValue.Create(h)).ToArray());
-
-            return Results.Json(node);
-        })
+            ServePublished(store, period))
         .AllowAnonymous()
         .WithName("NoisePublishedResult");
+
+        // ★★ AND THE SAME THING WITHOUT A PERIOD. A transcluding surface does not know which period is
+        // current: given only the keyed route it would have to derive one — "this month", "last month if this
+        // 404s" — which is the same class of guess the standard exists to remove, and it would quietly show a
+        // stale period the month a cycle slips. The LATEST is a fact CAI holds, so CAI answers it.
+        endpoints.MapGet("/api/noise/published", (INoiseStore store) =>
+            // ★ PublishedPeriods() is ordered by period descending, so the answer comes from the period the
+            // result measures and never from insertion order — a correction to an older period must not
+            // become "the current number".
+            ServePublished(store, store.PublishedPeriods().FirstOrDefault()))
+        .AllowAnonymous()
+        .WithName("NoiseLatestPublishedResult");
 
         // ★★ THE COUNTERWEIGHT TO THE NOISE RATE. Precision alone rewards under-firing: a tool reporting
         // one finding it is certain about scores a perfect 0%, and a tool reporting everything worth
@@ -1421,6 +1408,49 @@ public static class NoiseStandardEndpoints
         })
         .AllowAnonymous()
         .WithName("NoiseCrowdResults");
+    }
+
+    /// <summary>
+    /// Serve one period's published result, or a stated 404.
+    /// </summary>
+    /// <remarks>
+    /// ★ ONE implementation behind both routes. Two would be two chances for the keyed and the latest answer to
+    /// carry different fields, and a consumer that got a thinner body from one of them would render a rate
+    /// without its interval — the one thing #23-4 forbids outright.
+    /// </remarks>
+    private static IResult ServePublished(INoiseStore store, string? period)
+    {
+        var stored = string.IsNullOrWhiteSpace(period) ? null : store.LatestPublication(period);
+
+        if (stored is not { } published)
+        {
+            // ★★ NEVER a zero-filled body. "We measured that period and found nothing" and "nothing has been
+            // published for it" are different claims, and the first one is false.
+            return Results.NotFound(new
+            {
+                period,
+                error = period is { Length: > 0 }
+                    ? $"no result has been published for period '{period}'."
+                    : "no result has been published yet.",
+                published = store.PublishedPeriods(),
+            });
+        }
+
+        var node = JsonNode.Parse(published.PayloadJson)!.AsObject();
+        node["publishedAt"] = JsonValue.Create(published.PublishedAt);
+
+        // ★★ A CORRECTION IS VISIBLE AS ONE. On the single figure where §01 says that being seen to suppress
+        // ends the standard, a store that overwrote would make the second publication of a period
+        // indistinguishable from the first.
+        node["supersededCount"] = JsonValue.Create(published.History.Count - 1);
+        node["history"] = new JsonArray(
+            published.History.Select(h => (JsonNode?)JsonValue.Create(h)).ToArray());
+
+        // ★ What else exists, so a reader who arrived without a period can walk back through the history.
+        node["publishedPeriods"] = new JsonArray(
+            store.PublishedPeriods().Select(p => (JsonNode?)JsonValue.Create(p)).ToArray());
+
+        return Results.Json(node);
     }
 
     private static bool Same(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
