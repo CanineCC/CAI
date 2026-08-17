@@ -868,6 +868,25 @@ public static class NoiseStandardEndpoints
 
             var outcome = JudgingCascade.Resolve([.. round1!], [.. round2!]);
 
+            // ★★ THE COST LEDGER (#25). Attributed from the STORED FINDING — the cascade judges one tool's
+            // findings, so the tool is looked up rather than taken from the caller: a cost the caller attributes
+            // is one it can attribute to somebody else, and on a per-participant figure that is the whole game.
+            // An unknown finding's cost is recorded with no tool rather than dropped; a total smaller than what
+            // was spent would understate every participant computed from it.
+            if (request.Period is { Length: > 0 } costPeriod && request.FindingId is { Length: > 0 } costFinding)
+            {
+                // ★ NO TOOL ON THE ROW. Attribution is a JOIN at read time, because a finding two tools
+                // reported cost the standard once and was spent on both — see CostTally.JudgementsSolelyYours.
+                var costAt = DateTimeOffset.UtcNow;
+
+                foreach (var vote in request.Round1!.Concat(request.Round2 ?? []))
+                {
+                    store.RecordCost(new CostEntry(
+                        costPeriod, null, "judging", costFinding,
+                        vote.ModelSeconds, vote.InputTokens, vote.OutputTokens, costAt));
+                }
+            }
+
             // ── The verdict record ────────────────────────────────────────────────────────────────
             //
             // ★★ 01 PROMISES THIS AND NOTHING STORED IT. "Every judge prompt, every model and version, every
@@ -1074,7 +1093,7 @@ public static class NoiseStandardEndpoints
         .AllowAnonymous()
         .WithName("NoiseCrowdNext");
 
-        endpoints.MapPost("/api/noise/crowd/answers", (CrowdAnswerRequest request) =>
+        endpoints.MapPost("/api/noise/crowd/answers", (CrowdAnswerRequest request, INoiseStore store) =>
         {
             if (string.IsNullOrWhiteSpace(request?.Period) || CrowdQueues.Find(request.Period) is not { } round)
             {
@@ -1099,6 +1118,13 @@ public static class NoiseStandardEndpoints
             {
                 return Results.Conflict(new { error = refusal, findingId = request.FindingId });
             }
+
+            // ★ THE OTHER HALF OF THE MARGINAL COST (#25): a rated item. Counted as an item and never as money —
+            // nobody has priced a rater's minute, and a currency figure invented here would be quoted as the cost
+            // of the crowd.
+            store.RecordCost(new CostEntry(
+                request.Period!, null, "crowd",
+                request.FindingId ?? "", null, null, null, DateTimeOffset.UtcNow));
 
             return Results.Ok(new { recorded = true, findingId = request.FindingId });
         })
@@ -1251,6 +1277,78 @@ public static class NoiseStandardEndpoints
         })
         .AllowAnonymous()
         .WithName("NoiseFinding");
+
+        // ★★ WHAT ONE MORE PARTICIPANT COSTS, counted while it happens (#25). #23-3 deliberately asserts no
+        // figure because none has been measured, and says to measure it during the first full period. An estimate
+        // reconstructed afterwards is the kind of number this standard exists not to publish.
+        endpoints.MapGet("/api/noise/cost/{period}", (string period, INoiseStore store) =>
+        {
+            var tallies = store.CostFor(period);
+            var attributed = tallies.Where(t => t.Tool is { Length: > 0 }).ToList();
+            var unattributed = tallies.FirstOrDefault(t => t.Tool is null);
+
+            return Results.Ok(new
+            {
+                methodVersion = MethodVersion,
+                period,
+
+                participants = attributed.Select(t => new
+                {
+                    tool = t.Tool,
+                    judgements = t.Judgements,
+
+                    // ★★ Published beside the seconds, because a mean over the judgements that reported a time
+                    // is not the mean anybody will quote. Null was not read as zero when it was stored, and it
+                    // is not read as zero here either.
+                    judgementsWithNoTimeReported = t.JudgementsWithNoTimeReported,
+                    modelSeconds = t.ModelSeconds,
+                    inputTokens = t.InputTokens,
+                    outputTokens = t.OutputTokens,
+
+                    // ★★ THE MARGINAL FIGURE, and the one #23-3 asks for: judgements on findings no other
+                    // participant reported. The rest were spent on findings that would have been judged anyway.
+                    judgementsSolelyYours = t.JudgementsSolelyYours,
+                    modelSecondsSolelyYours = t.ModelSecondsSolelyYours,
+
+                    // ★ Items, never money.
+                    crowdItemsRated = t.CrowdItemsRated,
+                }),
+
+                // ★★ A cost nobody can attribute must not vanish into a smaller total — that would understate
+                // every participant computed from it. Its own row, so the gap is visible.
+                unattributed = new
+                {
+                    judgements = unattributed?.Judgements ?? 0,
+                    judgementsWithNoTimeReported = unattributed?.JudgementsWithNoTimeReported ?? 0,
+                    modelSeconds = unattributed?.ModelSeconds ?? 0,
+                    inputTokens = unattributed?.InputTokens ?? 0,
+                    outputTokens = unattributed?.OutputTokens ?? 0,
+                    crowdItemsRated = unattributed?.CrowdItemsRated ?? 0,
+                    note = "judgements against a finding no submission recorded. Real cost, attributable to "
+                         + "nobody — counted here rather than absorbed into a total that would then be smaller "
+                         + "than what was spent.",
+                },
+
+                // ★★ STATED, because a marginal cost that quietly omitted these would be read as the cost of
+                // participation — and #23-3 asserts no figure precisely because a partial one is worse than none.
+                // ★★ THEY DO NOT SUM, and saying so is the difference between a figure and a misreading. A
+                // finding two tools reported was judged once and appears in both their tallies, because the cost
+                // WAS spent on both — so adding the participants up double-counts the shared work. The
+                // `solelyYours` figures are the ones that add up to a marginal cost.
+                perParticipantFiguresOverlap =
+                    "a finding two participants both reported was judged once and is counted for each of them: "
+                  + "the judgement was spent on both. So these rows do not sum to the period's spend. The "
+                  + "'solelyYours' figures are the marginal ones — what would not have been spent had that "
+                  + "participant not taken part.",
+
+                notCounted = "human time (ours and the raters'), our own engine's compute for the run being "
+                           + "measured, corpus hosting, and the operator's attention. No price is attached to "
+                           + "any of this: nobody has priced a rater's minute or a judge's second, and a currency "
+                           + "figure here would be quoted as the cost of the standard.",
+            });
+        })
+        .AllowAnonymous()
+        .WithName("NoiseParticipantCost");
 
         // ── The compliance mark ───────────────────────────────────────────────────────────────────
         //
@@ -2983,7 +3081,13 @@ public static class NoiseStandardEndpoints
         // same answer. Both nullable on the wire so a missing one is REFUSED rather than defaulted: an undeclared
         // family that counted as "some other family", or an undeclared temperature that counted as 0, would let
         // every panel pass by omitting the field.
-        string? ModelFamily = null, double? Temperature = null);
+        string? ModelFamily = null, double? Temperature = null,
+
+        // ★★ WHAT THE JUDGEMENT COST (#25). #23-3 asserts no cost figure because none has been measured and says
+        // to measure it during the first full period — which only happens if the counter exists before the period
+        // opens. Nullable, and null is NOT zero: a judge that did not report its time is counted as a judgement
+        // with no time, because a mean over the half that reported is not the mean anybody will quote.
+        double? ModelSeconds = null, int? InputTokens = null, int? OutputTokens = null);
 
     /// <summary>
     /// The votes to resolve. Round two is absent until round one has actually split — sending both at
