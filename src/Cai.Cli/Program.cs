@@ -37,7 +37,7 @@ if (args.Length < 1 || !commands.Contains(args[0]))
           cai verify-delivery <package.json> --keys keys.json [--no-reproduce]
                                                          verify signature (+ reproduce headline); exit 1 on failure
 
-        See cai.canine.dev/spec (scoring) and cai.canine.dev/spec/delivery (package + registry).
+        See codeassuranceindex.info/spec (scoring) and codeassuranceindex.info/spec/delivery (package + registry).
         """);
     return 2;
 }

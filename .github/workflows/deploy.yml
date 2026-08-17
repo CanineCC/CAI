@@ -1,4 +1,4 @@
-name: Deploy cai.canine.dev
+name: Deploy codeassuranceindex.info
 
 # Mirrors the watchdog deploy: a self-hosted runner ON canine-wrx1 verifies the build, publishes the app + rubrics to
 # /home/jimmy/apps/cai-web, then bounces cai-web.service (~1s). VERIFY before stopping anything, so a broken build is a
@@ -35,7 +35,7 @@ jobs:
     # protection rules (configure them in repo Settings → Environments). With no rules it deploys straight through.
     environment:
       name: production
-      url: https://cai.canine.dev
+      url: https://codeassuranceindex.info
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
@@ -73,7 +73,7 @@ jobs:
           [ -d /home/jimmy/apps/cai-web/app.prev ] && { rm -rf /home/jimmy/apps/cai-web/app; mv /home/jimmy/apps/cai-web/app.prev /home/jimmy/apps/cai-web/app; sudo systemctl restart cai-web.service; }
           exit 1
 
-      # Advisory registry probe (api.cai.canine.dev rides this same service). Warn-only until the
+      # Advisory registry probe (api.codeassuranceindex.info rides this same service). Warn-only until the
       # registry endpoints are merged + configured — /health above stays the rollback gate.
       - name: Registry probe (advisory)
         run: |

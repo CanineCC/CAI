@@ -14,8 +14,11 @@ public static class DeliverySchema
     /// shape/trust change); a higher MINOR is forward-compatible (additive, unknown fields ignored).</summary>
     public const int SupportedMajor = 1;
 
-    /// <summary>The published JSON Schema id for the current version.</summary>
-    public const string SchemaId = "https://cai.canine.dev/schemas/cai-delivery-1.0.schema.json";
+    /// <summary>The published JSON Schema id for the current version. The identifier moved with the
+    /// standard onto its own domain; it is descriptive only — verification checks
+    /// <see cref="SupportedMajor"/>, never this string — so packages signed under the old
+    /// <c>cai.canine.dev</c> id keep verifying unchanged.</summary>
+    public const string SchemaId = "https://codeassuranceindex.info/schemas/cai-delivery-1.0.schema.json";
 
     /// <summary>Parse a <c>MAJOR.MINOR</c> version, returning its major, or null when unparseable.</summary>
     public static int? MajorOf(string? schemaVersion)

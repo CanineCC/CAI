@@ -1,6 +1,6 @@
 # Cai.Scoring
 
-The open reference scorer for the **CAI (Codebase Assurance Index)** standard — [cai.canine.dev](https://cai.canine.dev).
+The open reference scorer for the **CAI (Codebase Assurance Index)** standard — [codeassuranceindex.info](https://codeassuranceindex.info).
 
 Producing an evidence bundle (measuring the code) is an analyzer's job; **scoring** that bundle is this library's, and it is the single, reproducible authority: the same evidence under the same rubric yields the same number, on anyone's machine.
 
@@ -20,6 +20,6 @@ CaiScore score = CaiScorer.Score(bundle);
 Console.WriteLine($"{score.Headline:0.0} ({score.Band.Label()})");
 ```
 
-Deterministic, dependency-free, and auditable — the headline reconstructs from the lens contributions. See the spec at [cai.canine.dev/spec](https://cai.canine.dev/spec).
+Deterministic, dependency-free, and auditable — the headline reconstructs from the lens contributions. See the spec at [codeassuranceindex.info/spec](https://codeassuranceindex.info/spec).
 
 MIT-licensed.

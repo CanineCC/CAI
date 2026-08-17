@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cai.canine.dev/schemas/cai-delivery-1.0.schema.json",
+  "$id": "https://codeassuranceindex.info/schemas/cai-delivery-1.0.schema.json",
   "title": "CAI-delivery package",
-  "description": "A signed (Ed25519), tamper-evident, portable CAI evidence artifact: a point-in-time CAI verdict cai.canine.dev recomputed, the evidence it folds from, and the provenance — with a detached signature over the payload's canonical form. Format version 1.x (MAJOR 1). A verifier MUST reject a package whose payload.schemaVersion MAJOR it does not implement; a higher MINOR is forward-compatible and unknown fields are ignored.",
+  "description": "A signed (Ed25519), tamper-evident, portable CAI evidence artifact: a point-in-time CAI verdict codeassuranceindex.info recomputed, the evidence it folds from, and the provenance — with a detached signature over the payload's canonical form. Format version 1.x (MAJOR 1). A verifier MUST reject a package whose payload.schemaVersion MAJOR it does not implement; a higher MINOR is forward-compatible and unknown fields are ignored.",
   "type": "object",
   "required": ["payload", "signature"],
   "additionalProperties": false,
@@ -30,7 +30,7 @@
           "required": ["name", "keyId"],
           "additionalProperties": false,
           "properties": {
-            "name": { "type": "string", "description": "The signer — cai.canine.dev." },
+            "name": { "type": "string", "description": "The signer — codeassuranceindex.info." },
             "keyId": { "type": "string", "minLength": 1, "description": "The signing key id; must equal signature.keyId." }
           }
         },

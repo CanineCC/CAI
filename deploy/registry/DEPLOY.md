@@ -1,15 +1,15 @@
-# Deploying the cai registry — api.cai.canine.dev
+# Deploying the cai registry — api.codeassuranceindex.info
 
 The registry (ADR-0010, [spec](../../docs/spec/cai-registry.md)) ships **inside Cai.Web** — SQLite
-store + bearer-token principals, under `/api/registry`. So `api.cai.canine.dev` is **a second
+store + bearer-token principals, under `/api/registry`. So `api.codeassuranceindex.info` is **a second
 hostname on the existing `cai-web.service`** (canine-wrx1 :8090), not a new deployable: the normal
 [`deploy.yml`](../../.github/workflows/deploy.yml) pipeline (push to main → wrx1 runner → verify →
 publish → bounce → health-gate → rollback) deploys it.
 
 ```
 client ──https──▶ dgx1 nginx (TLS)
-  cai.canine.dev      ──http──▶ wrx1 192.168.1.10:8090 ┐
-  api.cai.canine.dev  ──http──▶ wrx1 192.168.1.10:8090 ┴─ cai-web.service (Cai.Web incl. /api/registry)
+  codeassuranceindex.info      ──http──▶ wrx1 192.168.1.10:8090 ┐
+  api.codeassuranceindex.info  ──http──▶ wrx1 192.168.1.10:8090 ┴─ cai-web.service (Cai.Web incl. /api/registry)
                                           │
                                           └─ /home/jimmy/apps/cai-web/registry-data/   ← survives deploys
                                              ├─ registry.db          (SQLite: deliveries + grants)
@@ -41,9 +41,9 @@ deliveries + grants (nightly `sqlite3 registry.db ".backup ..."` or plain file c
 
 ## Edge (dgx1) — founder-gated
 
-Install [`../nginx/api.cai.canine.dev.conf`](../nginx/api.cai.canine.dev.conf) on the edge
+Install [`../nginx/api.codeassuranceindex.info.conf`](../nginx/api.codeassuranceindex.info.conf) on the edge
 (192.168.1.159), issue the cert (`sudo certbot certonly --webroot -w /var/www/html -d
-api.cai.canine.dev`), `nginx -t && systemctl reload nginx`. DNS is already covered by the
+api.codeassuranceindex.info`), `nginx -t && systemctl reload nginx`. DNS is already covered by the
 `*.canine.dev` wildcard.
 
 ## Rate limits (RESOLVED — the limiter is traffic-class aware)
@@ -66,9 +66,9 @@ If a legitimate batch ever approaches the principal fuse, raise
 ## Verify after the registry merges + deploys
 
 ```bash
-curl -s https://api.cai.canine.dev/api/registry/health          # 200 "Healthy"; "Degraded" until trusted-keys.json is provisioned (NEVER 500)
-curl -s https://api.cai.canine.dev/api/registry/keys            # 200, public key set (empty set until provisioned)
-curl -s -o /dev/null -w '%{http_code}' https://api.cai.canine.dev/api/registry/deliveries  # 401 (default-deny challenge)
+curl -s https://api.codeassuranceindex.info/api/registry/health          # 200 "Healthy"; "Degraded" until trusted-keys.json is provisioned (NEVER 500)
+curl -s https://api.codeassuranceindex.info/api/registry/keys            # 200, public key set (empty set until provisioned)
+curl -s -o /dev/null -w '%{http_code}' https://api.codeassuranceindex.info/api/registry/deliveries  # 401 (default-deny challenge)
 ls -la /home/jimmy/apps/cai-web/registry-data/                  # registry.db present, survives next deploy
 ```
 

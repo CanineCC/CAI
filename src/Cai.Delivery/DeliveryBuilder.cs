@@ -23,7 +23,7 @@ public sealed record DeliveryBuildRequest
     public DeliveryMeasurement? Measurement { get; init; }
 
     /// <summary>The issuer name stamped into the payload (defaults to cai).</summary>
-    public string IssuerName { get; init; } = "cai.canine.dev";
+    public string IssuerName { get; init; } = "codeassuranceindex.info";
 }
 
 /// <summary>

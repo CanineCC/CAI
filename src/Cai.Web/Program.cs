@@ -33,7 +33,7 @@ builder.Services.AddHttpClient("watchdog").AddStandardResilienceHandler(o =>
     o.Retry.MaxRetryAttempts = 2;
 });
 
-// cai.canine.dev OWNS the rubric catalogs (the versioned, archived standard). Resolve their root from config, else the
+// codeassuranceindex.info OWNS the rubric catalogs (the versioned, archived standard). Resolve their root from config, else the
 // repo's /rubrics dir relative to the app — so it runs from a clone with no extra setup.
 var rubricsRoot = builder.Configuration["Rubrics:Root"]
     ?? Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "..", "rubrics"));
@@ -83,7 +83,7 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy(RegistryClaims.ProducerPolicy, p => p.RequireRole(RegistryClaims.ProducerRole));
 
 // ── CORS for the marketing islands ────────────────────────────────────────────────────────────────────────────
-// cai.canine.dev is served by the imprint CMS, and its widgets are cross-origin web components that call this API
+// codeassuranceindex.info is served by the imprint CMS, and its widgets are cross-origin web components that call this API
 // from the reader's browser (score an evidence bundle, verify a delivery). Without an explicit allow they simply
 // cannot: the standard would ship interactive proof tools that only work on a hostname nobody links to.
 //
@@ -164,7 +164,7 @@ builder.Services.AddRateLimiter(options =>
         }
 
         await ctx.HttpContext.Response.WriteAsJsonAsync(
-            new { error = "rate limit exceeded — cache the rubric you use; see https://cai.canine.dev/api-reference" }, ct).ConfigureAwait(false);
+            new { error = "rate limit exceeded — cache the rubric you use; see https://api.codeassuranceindex.info/api-reference" }, ct).ConfigureAwait(false);
     };
 });
 
@@ -454,17 +454,17 @@ The score is deterministic: identical evidence under the same rubric version alw
 - Spec: versioned, CC-BY. Free to copy, protected to call it CAI — only spec-reproducible results may carry the CAI mark.
 
 ## Pages
-- The standard and definition: https://cai.canine.dev/
-- The open algorithm, versioned: https://cai.canine.dev/spec
-- The {lensCount} lenses and the dimensions under each: https://cai.canine.dev/lenses
-- The {dimCount}-dimension catalog, by lens and rubric version: https://cai.canine.dev/dimensions
-- Compute it yourself (the reference CLI): https://cai.canine.dev/cli
-- Score your evidence in the browser: https://cai.canine.dev/calculator
-- Verify a published number reproduces: https://cai.canine.dev/verify
-- The public registry of signed surveys: https://cai.canine.dev/registry
-- The badge and mark-usage policy: https://cai.canine.dev/badge
-- The JSON API (rubric and scoring): https://cai.canine.dev/api-reference
-- The vocabulary as schema.org DefinedTermSet (JSON-LD): https://cai.canine.dev/glossary.jsonld
+- The standard and definition: https://codeassuranceindex.info/
+- The open algorithm, versioned: https://codeassuranceindex.info/spec
+- The {lensCount} lenses and the dimensions under each: https://codeassuranceindex.info/lenses
+- The {dimCount}-dimension catalog, by lens and rubric version: https://codeassuranceindex.info/dimensions
+- Compute it yourself (the reference CLI): https://codeassuranceindex.info/cli
+- Score your evidence in the browser: https://codeassuranceindex.info/calculator
+- Verify a published number reproduces: https://codeassuranceindex.info/verify
+- The public registry of signed surveys: https://codeassuranceindex.info/registry
+- The badge and mark-usage policy: https://codeassuranceindex.info/badge
+- The JSON API (rubric and scoring): https://api.codeassuranceindex.info/api-reference
+- The vocabulary as schema.org DefinedTermSet (JSON-LD): https://codeassuranceindex.info/glossary.jsonld
 
 ## Get an independent survey
 The standard is free to use. An independent, signed CAI survey — with the deductions and what to do about them — is a service from the surveyor: https://watchdog.canine.dev
@@ -582,7 +582,12 @@ static string[] ReadCorsOrigins(IConfiguration cfg)
     // them, which is the failure that actually costs something. Override the key to narrow or extend it.
     return configured.Length > 0
         ? configured
-        : ["https://cai.canine.dev", "https://imprint.canine.dev",
+        : ["https://codeassuranceindex.info", "https://www.codeassuranceindex.info",
+           // Kept through the domain move: cai.canine.dev still serves pages until its vhost
+           // becomes 301-only, and a page that has loaded cannot be un-served. Drop it once the
+           // redirect is in place and nothing is rendered on the old hostname any more.
+           "https://cai.canine.dev",
+           "https://imprint.canine.dev",
            "https://watchdog.canine.dev", "https://assay.canine.dev"];
 }
 

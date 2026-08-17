@@ -67,7 +67,7 @@ public static class CaiGlossary
             ["@type"] = "DefinedTermSet",
             ["name"] = "Codebase Assurance Index (CAI) glossary",
             ["description"] = "The canonical vocabulary of the CAI standard — the open reference for the CAI and its companion terms.",
-            ["url"] = "https://cai.canine.dev/glossary.jsonld",
+            ["url"] = "https://codeassuranceindex.info/glossary.jsonld",
             ["hasDefinedTerm"] = terms,
         };
 

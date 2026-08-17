@@ -13,7 +13,7 @@ falsifiable claim is one you can win an argument against with proof rather than 
 
 | You think… | That's a dispute about… | Where it goes | Who decides |
 |---|---|---|---|
-| "The number doesn't follow from the evidence." | the **arithmetic** of a published score | reproduce it yourself — [`/verify`](https://cai.canine.dev/verify) / `cai verify` | nobody — it's mechanical & falsifiable |
+| "The number doesn't follow from the evidence." | the **arithmetic** of a published score | reproduce it yourself — [`/verify`](https://codeassuranceindex.info/verify) / `cai verify` | nobody — it's mechanical & falsifiable |
 | "The open scorer disagrees with the published spec." | a **reference-scorer bug** | an issue on [CanineCC/CAI](https://github.com/CanineCC/CAI/issues) | the standard's maintainers, in the open |
 | "This finding / deduction mis-measures my code." | a **measurement** in one signed survey | the **issuer** of that survey (e.g. [watchdog.canine.dev](https://watchdog.canine.dev)) | the named human who attested it |
 | "This dimension / weight / formula is unfair." | the **rubric or methodology** | an issue or PR on [CanineCC/CAI](https://github.com/CanineCC/CAI/issues) | the standard's maintainers → a *future* rubric version |
@@ -28,7 +28,7 @@ weights). Fold that evidence through the open scorer and you get either the same
 cai verify survey-evidence.json --expect 72.2      # exit 0 = reproduced, exit 1 = mismatch
 ```
 
-or paste the bundle into the [calculator / verifier](https://cai.canine.dev/calculator) — when the bundle carries a
+or paste the bundle into the [calculator / verifier](https://codeassuranceindex.info/calculator) — when the bundle carries a
 `headlineScore`, it shows the reproduction verdict (✓ / ✗) inline. A mismatch is **falsifiable proof** the published
 number doesn't follow from its evidence: no committee has to agree with you. If the survey is also a signed
 [CAI-delivery package](spec/cai-delivery-package.md), the same file lets you check *who* attested it (Ed25519) as well
@@ -41,7 +41,7 @@ bug (§2). Take it to the issuer, or, if the open scorer itself is at fault, to 
 ## 2. "The open scorer disagrees with the spec." — that's a bug
 
 Reproducibility is a **contract**, not a hope: the reference scorer in [`src/Cai.Scoring`](../src/Cai.Scoring) must
-produce exactly the number the [published algorithm](https://cai.canine.dev/spec) describes. If you can fold an evidence
+produce exactly the number the [published algorithm](https://codeassuranceindex.info/spec) describes. If you can fold an evidence
 bundle and get a headline the spec doesn't predict — a lens roll-up, an OWA weight, a critical-gate band, a rounding
 edge that disagrees with the written method — **that is a defect in the standard**, and we want it.
 
@@ -85,7 +85,7 @@ Two properties of the standard make this safe to do and safe to accept:
 
 - **Rubrics are frozen and versioned** ([ADR-0004](adr/0004-versioned-frozen-rubrics.md)). An accepted change lands in a
   **new** rubric version; it never mutates a rubric that scores already cite. Every past version stays published and
-  served at [`/api/rubrics`](https://cai.canine.dev/api/rubrics), so every past number remains reproducible to the exact
+  served at [`/api/rubrics`](https://api.codeassuranceindex.info/api/rubrics), so every past number remains reproducible to the exact
   definitions it was computed under. Your challenge can improve the standard **without** retroactively rewriting anyone's
   score.
 - **The change is public.** Rubric evolution happens in the open — in issues, PRs, the [CHANGELOG](../CHANGELOG.md), and,

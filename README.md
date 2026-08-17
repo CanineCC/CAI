@@ -2,7 +2,7 @@
 
 **An open, reproducible 0–100 standard for the health of a C#/.NET codebase. Same code in, same score out.**
 
-This repository is the home of the CAI standard: the website (cai.canine.dev) and — over time — the reference
+This repository is the home of the CAI standard: the website (codeassuranceindex.info) and — over time — the reference
 implementation that lets anyone compute and verify the number.
 
 The model is **method open, judgment sold**: the *standard* (how a codebase is measured) is open and free; the
@@ -50,11 +50,11 @@ dotnet run --project src/Cai.Cli -- verify examples/evidence.sample.json --expec
 
 `Cai.Scoring` is the library (bands, lenses, evidence bundle, the fold); `Cai.Cli` is the `cai` tool; `Cai.Tests`
 covers determinism, banding, the fold, and verify. The evidence-bundle format + the algorithm are documented at
-[cai.canine.dev/spec](https://cai.canine.dev/spec.html#evidence).
+[codeassuranceindex.info/spec](https://codeassuranceindex.info/spec.html#evidence).
 
 ## The app (`/src/Cai.Web`)
 
-cai.canine.dev is a hosted ASP.NET Core + Blazor app — it OWNS the rubric catalogs and serves them, the scorer, and the
+codeassuranceindex.info is a hosted ASP.NET Core + Blazor app — it OWNS the rubric catalogs and serves them, the scorer, and the
 content over one origin:
 
 | Route | What it is |
