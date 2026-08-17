@@ -640,6 +640,24 @@ public static class NoiseStandardEndpoints
                 claims.Add(new ClaimClassTally(parsed, entry.Judged, entry.Noise));
             }
 
+            // ★ The vendor's own declaration of which holdout repositories it has developed against. It
+            // cannot be derived from the draw — "has this tool seen this code?" is a property of the tool —
+            // so it is declared, and published, which is what makes it costly to get wrong.
+            List<RecencyTally> recency = [];
+            foreach (var entry in request.RecencyStrata ?? [])
+            {
+                if (Noise.RecencyStrata.ParseOrNull(entry.Stratum) is not { } parsed)
+                {
+                    return Results.BadRequest(new
+                    {
+                        error = $"unrecognised recency stratum '{entry.Stratum}'",
+                        strata = Enum.GetValues<RecencyStratum>().Select(Noise.RecencyStrata.Wire),
+                    });
+                }
+
+                recency.Add(new RecencyTally(parsed, entry.Judged, entry.Noise));
+            }
+
             var breaches = PublicationContract.Check(
                 request.LocCovered,
                 request.RecallEstimate, request.RecallMethod, request.RecallNote,
@@ -747,6 +765,35 @@ public static class NoiseStandardEndpoints
                 // ★★ The ceiling, APPLIED. It was published here and compared against nothing.
                 exclusionRate = PublicationContract.ExclusionRate(request.Adjudicated, request.Excluded),
                 maxExclusionRate = PublicationContract.MaxExclusionRate,
+
+                // ★★ THE OVERFITTING NUMBER — the most interesting figure the standard produces, and one no
+                // vendor would publish about itself unprompted. Every other number here can be improved by
+                // building a better tool; this one can only be improved by building one that generalises.
+                recency = new
+                {
+                    declared = recency.Count > 0,
+                    hasPristineSlice = Noise.RecencyStrata.HasPristineSlice(recency),
+                    strata = recency.Select(t => new
+                    {
+                        stratum = Noise.RecencyStrata.Wire(t.Stratum),
+                        means = Noise.RecencyStrata.Means(t.Stratum),
+                        judged = t.Judged,
+                        noise = t.Noise,
+                        noiseRate = t.NoiseRate,
+                    }),
+                    overfittingGapPoints = Noise.RecencyStrata.OverfittingGap(recency),
+                    gapIsNotable = Noise.RecencyStrata.GapIsNotable(Noise.RecencyStrata.OverfittingGap(recency)),
+                    // ★ A missing gap and a gap of zero are OPPOSITE claims and look identical when one of
+                    // them is a blank, so the absence is stated rather than left as null.
+                    note = recency.Count == 0
+                        ? "no recency strata declared: this run says nothing about whether its rate describes "
+                        + "the instrument or the vendor's familiarity with the sample."
+                        : Noise.RecencyStrata.HasPristineSlice(recency)
+                            ? null
+                            : "no pristine slice in this holdout, so the overfitting gap cannot be computed. "
+                            + "Without a never-trained endpoint the decay curve measures nothing, and "
+                            + "'one cycle of cooling off is enough' stays an assertion.",
+                },
 
                 // ★ The recall counterpart, beside the precision figure rather than in a side endpoint.
                 recall = new
@@ -1128,6 +1175,7 @@ public static class NoiseStandardEndpoints
         string? RecallMethod = null,
         string? RecallNote = null,
         IReadOnlyList<ClaimClassEntry>? ClaimClasses = null,
+        IReadOnlyList<RecencyEntry>? RecencyStrata = null,
         string? ToolVersion = null,
         string? HoldoutSeed = null,
         string? ModelSet = null,
@@ -1136,6 +1184,9 @@ public static class NoiseStandardEndpoints
 
     /// <summary>One claim class's share of the run, as it arrives on the wire.</summary>
     public sealed record ClaimClassEntry(string? ClaimClass, int Judged, int Noise);
+
+    /// <summary>One recency stratum's share of the run, as it arrives on the wire.</summary>
+    public sealed record RecencyEntry(string? Stratum, int Judged, int Noise);
 
     /// <summary>A count per 100k LoC, or null without a denominator.</summary>
     private static double? Per100k(int count, long? loc) =>
