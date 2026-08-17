@@ -34,6 +34,23 @@ public sealed record RejudgeRecord(
     string Period, string FindingId, string Verdict,
     string Model, string ModelVersion, string PromptId, string Reasoning, DateTimeOffset RecordedAt);
 
+/// <summary>A contested verdict, and how the contest was answered.</summary>
+/// <param name="Reason">
+/// ★★ Required. "I disagree" is not contestation — 01 §5 is about arguing against published reasoning, and the
+/// reason is the half that makes the dispute answerable rather than a vote.
+/// </param>
+/// <param name="Outcome">
+/// <c>upheld</c> or <c>overturned</c>, or null while it is open. ★ An OPEN dispute is the state a reader most
+/// needs: it is the one where the standard has been challenged and has not answered.
+/// </param>
+/// <param name="ResolutionReasoning">
+/// Why it was answered that way. ★ Required in BOTH directions: an outcome without reasoning is "the standard
+/// says so", the exact argument 01 §5 says CAI does not get to make.
+/// </param>
+public sealed record DisputeRecord(
+    string DisputeId, string Period, string FindingId, string RaisedBy, string Reason, DateTimeOffset RaisedAt,
+    string? Outcome, string? ResolutionReasoning, DateTimeOffset? ResolvedAt);
+
 /// <summary>A judge prompt, stored once and published in full.</summary>
 public sealed record PromptRecord(string PromptId, string Text, DateTimeOffset FirstSeenAt);
 
@@ -113,6 +130,25 @@ public interface INoiseStore
 
     /// <summary>Every re-judge verdict recorded for a period.</summary>
     IReadOnlyList<RejudgeRecord> ListRejudge(string period);
+
+    /// <summary>Record a raised dispute.</summary>
+    void RaiseDispute(DisputeRecord dispute);
+
+    /// <summary>One dispute by id, or null.</summary>
+    DisputeRecord? FindDispute(string disputeId);
+
+    /// <summary>
+    /// Answer an open dispute. Returns false when it is already answered.
+    /// </summary>
+    /// <remarks>
+    /// ★★ ONCE. Otherwise the outcome is whatever was written last, and "publishes either way" becomes
+    /// "publishes whichever way we ended up preferring". Enforced in SQL by the <c>outcome IS NULL</c> predicate
+    /// rather than by a read-then-write above it.
+    /// </remarks>
+    bool ResolveDispute(string disputeId, string outcome, string reasoning, DateTimeOffset resolvedAt);
+
+    /// <summary>Every dispute for a period, oldest first.</summary>
+    IReadOnlyList<DisputeRecord> ListDisputes(string period);
 }
 
 /// <summary>
@@ -231,6 +267,22 @@ public sealed class SqliteNoiseStore : INoiseStore
                 published_at   TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS ix_noise_publications_period ON noise_publications(period, published_at);
+
+            -- ★★ BESIDE the verdicts, never instead of them. A dispute that could delete what it overturned
+            -- would be a withdrawal mechanism, and the register would quietly become "the verdicts nobody
+            -- objected to". noise_verdicts is untouched by anything in here.
+            CREATE TABLE IF NOT EXISTS noise_disputes (
+                dispute_id           TEXT PRIMARY KEY,
+                period               TEXT NOT NULL,
+                finding_id           TEXT NOT NULL,
+                raised_by            TEXT NOT NULL,
+                reason               TEXT NOT NULL,
+                raised_at            TEXT NOT NULL,
+                outcome              TEXT NULL,
+                resolution_reasoning TEXT NULL,
+                resolved_at          TEXT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_noise_disputes_period ON noise_disputes(period, raised_at);
 
             CREATE TABLE IF NOT EXISTS noise_rejudge (
                 period        TEXT NOT NULL,
@@ -555,6 +607,93 @@ public sealed class SqliteNoiseStore : INoiseStore
         var value = cmd.ExecuteScalar();
         return value is null or DBNull ? null : (string)value;
     }
+
+    /// <inheritdoc />
+    public void RaiseDispute(DisputeRecord dispute)
+    {
+        ArgumentNullException.ThrowIfNull(dispute);
+
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            INSERT INTO noise_disputes
+                (dispute_id, period, finding_id, raised_by, reason, raised_at)
+            VALUES ($id, $period, $finding, $by, $reason, $at)
+            """;
+        cmd.Parameters.AddWithValue("$id", dispute.DisputeId);
+        cmd.Parameters.AddWithValue("$period", dispute.Period);
+        cmd.Parameters.AddWithValue("$finding", dispute.FindingId);
+        cmd.Parameters.AddWithValue("$by", dispute.RaisedBy);
+        cmd.Parameters.AddWithValue("$reason", dispute.Reason);
+        cmd.Parameters.AddWithValue("$at", dispute.RaisedAt.ToString("O"));
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <inheritdoc />
+    public DisputeRecord? FindDispute(string disputeId)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = DisputeSelect + " WHERE dispute_id = $id";
+        cmd.Parameters.AddWithValue("$id", disputeId ?? "");
+        using var reader = cmd.ExecuteReader();
+
+        return reader.Read() ? ReadDispute(reader) : null;
+    }
+
+    /// <inheritdoc />
+    public bool ResolveDispute(string disputeId, string outcome, string reasoning, DateTimeOffset resolvedAt)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+
+        // ★★ `outcome IS NULL` is the lock. A read-then-write above this could resolve the same dispute twice
+        // from two requests, and the second answer would silently replace the first.
+        cmd.CommandText =
+            """
+            UPDATE noise_disputes
+               SET outcome = $outcome, resolution_reasoning = $reasoning, resolved_at = $at
+             WHERE dispute_id = $id AND outcome IS NULL
+            """;
+        cmd.Parameters.AddWithValue("$outcome", outcome);
+        cmd.Parameters.AddWithValue("$reasoning", reasoning);
+        cmd.Parameters.AddWithValue("$at", resolvedAt.ToString("O"));
+        cmd.Parameters.AddWithValue("$id", disputeId ?? "");
+
+        return cmd.ExecuteNonQuery() == 1;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<DisputeRecord> ListDisputes(string period)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = DisputeSelect + " WHERE period = $period ORDER BY raised_at, dispute_id";
+        cmd.Parameters.AddWithValue("$period", period ?? "");
+        using var reader = cmd.ExecuteReader();
+
+        var list = new List<DisputeRecord>();
+        while (reader.Read())
+        {
+            list.Add(ReadDispute(reader));
+        }
+
+        return list;
+    }
+
+    private const string DisputeSelect =
+        "SELECT dispute_id, period, finding_id, raised_by, reason, raised_at, outcome, resolution_reasoning, "
+      + "resolved_at FROM noise_disputes";
+
+    private static DisputeRecord ReadDispute(SqliteDataReader reader) => new(
+        reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4),
+        DateTimeOffset.Parse(reader.GetString(5), System.Globalization.CultureInfo.InvariantCulture),
+        reader.IsDBNull(6) ? null : reader.GetString(6),
+        reader.IsDBNull(7) ? null : reader.GetString(7),
+        reader.IsDBNull(8)
+            ? null
+            : DateTimeOffset.Parse(reader.GetString(8), System.Globalization.CultureInfo.InvariantCulture));
 
     /// <inheritdoc />
     public IReadOnlyList<PeriodTally> PublishedTallies()

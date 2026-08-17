@@ -314,6 +314,26 @@ public static class NoiseStandardEndpoints
               + "leave-one-out range. Excluding an outlying repository is NOT permitted — dropping a "
               + "repo for having a high or low rate is selecting on the outcome.",
 
+            // ★★ THE CONTESTATION ROUTE, published — a right nobody can find is not one. 01 §5 promises it and
+            // nothing said where to go.
+            contestation = new
+            {
+                endpoint = "/api/noise/verdicts/{findingId}/dispute",
+                resolveEndpoint = "/api/noise/disputes/{disputeId}/resolve",
+                requires = "the period, and a REASON. An unexplained objection cannot be argued with in either "
+                         + "direction, and the reason publishes with the dispute.",
+                publishes = "either way. Upheld and overturned appear identically in the period's record, with "
+                          + "the resolution's reasoning — a dispute that only appeared when the vendor won "
+                          + "would be a complaints box.",
+                rawVerdictIsKept = "always. The verdict register is append-only and nothing here deletes from "
+                                 + "it: a contestation mechanism that removed what it overturned would be a "
+                                 + "withdrawal mechanism, and the register would become 'the verdicts nobody "
+                                 + "objected to'.",
+                effectOnAPublishedRate = "an overturned verdict does not silently change a published number. "
+                                       + "The rate is corrected by publishing the period again, which the "
+                                       + "append-only publication record shows as a correction.",
+            },
+
             // ★★ THE ROLLING FIGURE, published as a rule rather than as a habit. 02 §5 lists it as required
             // with every rate and nothing computed one.
             twelveMonth = new
@@ -391,6 +411,11 @@ public static class NoiseStandardEndpoints
                 // ★★ The prompts, in full and once each. The same prompt answers thousands of findings; a
                 // record that repeats it per verdict is a record nobody downloads.
                 prompts = prompts.Select(p => new { promptId = p.PromptId, text = p.Text, firstSeenAt = p.FirstSeenAt }),
+
+                // ★★ DISPUTES, BESIDE THE VERDICTS THEY CONTEST. An open one is the state a reader most needs
+                // to see: it is where the standard has been challenged and has not answered, and absent from the
+                // record "no disputes" and "three we have not got round to" look identical.
+                disputes = RenderDisputes(store, period),
 
                 // ★★ THE SECOND PASS, RAW, beside the first. A reproducibility claim is worth exactly what its
                 // evidence is: a reader who doubts "the judging reproduces" must be able to read both answers
@@ -995,6 +1020,112 @@ public static class NoiseStandardEndpoints
 
         // ★★ What has to travel with a rate for the rate to mean anything: the funnel it was computed
         // over, the actionability split, and the difference this sample could actually detect.
+        // ── Contestation ──────────────────────────────────────────────────────────────────────────
+        //
+        // ★★ 01 §5: "a vendor who thinks a verdict is wrong can contest it in public, against published
+        // reasoning. 'The standard says so' is not an argument CAI gets to make." There was no way to say so —
+        // which makes the standard the last word on its own judgements, the position it exists to avoid.
+        endpoints.MapPost("/api/noise/verdicts/{findingId}/dispute",
+            (string findingId, DisputeRequest request, INoiseStore store) =>
+        {
+            if (string.IsNullOrWhiteSpace(request?.Period))
+            {
+                return Results.BadRequest(new { error = "a dispute names the period the verdict was recorded in" });
+            }
+
+            // ★★ THE REASON IS THE POINT. "I disagree" is not contestation: 01 §5 is about arguing against
+            // published reasoning, and the reason is the half that makes the dispute answerable rather than a vote.
+            if (string.IsNullOrWhiteSpace(request.Reason))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "a dispute requires a reason. It publishes with the dispute, and it is what makes "
+                          + "the contest answerable rather than a vote — an unexplained objection cannot be "
+                          + "argued with in either direction.",
+                });
+            }
+
+            // ★ A dispute about a judgement nobody made would fill the register with noise of its own, and
+            // "twelve disputes this period" would stop meaning anything.
+            var judged = store.ListResolutions(request.Period)
+                .Any(r => string.Equals(r.FindingId, findingId, StringComparison.OrdinalIgnoreCase));
+            if (!judged)
+            {
+                return Results.NotFound(new
+                {
+                    findingId,
+                    request.Period,
+                    error = "no verdict has been recorded for that finding in that period, so there is nothing "
+                          + "to contest yet.",
+                });
+            }
+
+            var dispute = new DisputeRecord(
+                DisputeId: Guid.CreateVersion7().ToString("n"),
+                Period: request.Period,
+                FindingId: findingId,
+                RaisedBy: request.RaisedBy ?? "unnamed",
+                Reason: request.Reason,
+                RaisedAt: DateTimeOffset.UtcNow,
+                Outcome: null,
+                ResolutionReasoning: null,
+                ResolvedAt: null);
+
+            store.RaiseDispute(dispute);
+
+            return Results.Ok(RenderDispute(dispute));
+        })
+        .AllowAnonymous()
+        .WithName("NoiseVerdictDispute");
+
+        endpoints.MapPost("/api/noise/disputes/{disputeId}/resolve",
+            (string disputeId, DisputeResolutionRequest request, INoiseStore store) =>
+        {
+            var outcome = ParseDisputeOutcome(request?.Outcome);
+            if (outcome is null)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "a dispute is answered as upheld or overturned",
+                    outcomes = new[] { DisputeOutcomes.Upheld, DisputeOutcomes.Overturned },
+                });
+            }
+
+            // ★★ REQUIRED IN BOTH DIRECTIONS. An outcome with no reasoning is "the standard says so", which is
+            // exactly the argument 01 §5 says CAI does not get to make — and upholding needs a reason as much as
+            // overturning does, because the upheld ones are what show this is not a complaints box.
+            if (string.IsNullOrWhiteSpace(request!.Reasoning))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "a resolution requires its reasoning, whichever way it goes. An outcome without one "
+                          + "is 'the standard says so', which is not an argument CAI gets to make.",
+                });
+            }
+
+            if (store.FindDispute(disputeId) is null)
+            {
+                return Results.NotFound(new { disputeId, error = "no such dispute" });
+            }
+
+            if (!store.ResolveDispute(disputeId, outcome, request.Reasoning, DateTimeOffset.UtcNow))
+            {
+                // ★ Already answered. Otherwise the outcome is whatever was written last, and "publishes either
+                // way" becomes "publishes whichever way we ended up preferring".
+                return Results.Conflict(new
+                {
+                    disputeId,
+                    error = "this dispute has already been answered, and an answer is not replaced. Raise a new "
+                          + "dispute if there is something new to say.",
+                    resolved = RenderDispute(store.FindDispute(disputeId)!),
+                });
+            }
+
+            return Results.Ok(RenderDispute(store.FindDispute(disputeId)!));
+        })
+        .AllowAnonymous()
+        .WithName("NoiseDisputeResolve");
+
         // ★★ THE CHECK THAT POINTS AT US. Every other verification asks whether a vendor's run answered the
         // holdout it claims; this one asks whether the standard's own judging REPRODUCES. A rate produced by a
         // process that disagrees with itself is not a measurement however carefully the corpus was drawn, and
@@ -1948,6 +2079,61 @@ public static class NoiseStandardEndpoints
         return Results.Json(node);
     }
 
+    /// <summary>The two answers a dispute can have.</summary>
+    private static class DisputeOutcomes
+    {
+        public const string Upheld = "upheld";
+        public const string Overturned = "overturned";
+    }
+
+    /// <summary>The outcome, or null when it is not one of the two.</summary>
+    private static string? ParseDisputeOutcome(string? outcome) => outcome?.Trim().ToLowerInvariant() switch
+    {
+        DisputeOutcomes.Upheld => DisputeOutcomes.Upheld,
+        DisputeOutcomes.Overturned => DisputeOutcomes.Overturned,
+        _ => null,
+    };
+
+    /// <summary>One dispute as it publishes.</summary>
+    private static object RenderDispute(DisputeRecord d) => new
+    {
+        disputeId = d.DisputeId,
+        period = d.Period,
+        findingId = d.FindingId,
+        raisedBy = d.RaisedBy,
+        reason = d.Reason,
+        raisedAt = d.RaisedAt,
+
+        // ★ "open" is a state, not a missing field — see RenderDisputes.
+        state = d.Outcome is null ? "open" : "answered",
+        outcome = d.Outcome,
+        resolutionReasoning = d.ResolutionReasoning,
+        resolvedAt = d.ResolvedAt,
+    };
+
+    /// <summary>A period's disputes, with the counts a reader needs before the list.</summary>
+    private static object RenderDisputes(INoiseStore store, string period)
+    {
+        var disputes = store.ListDisputes(period);
+
+        return new
+        {
+            raised = disputes.Count,
+            open = disputes.Count(d => d.Outcome is null),
+            upheld = disputes.Count(d => d.Outcome == DisputeOutcomes.Upheld),
+            overturned = disputes.Count(d => d.Outcome == DisputeOutcomes.Overturned),
+
+            // ★★ Two things a reader would otherwise assume, said once: the raw verdict survives an overturn,
+            // and an overturn does not silently move a published rate.
+            note = "The raw verdicts are append-only and nothing here removes one — an overturned verdict is "
+                 + "still in this record, with the dispute beside it. An overturned verdict does not change a "
+                 + "published rate by itself either: that takes a corrected publication, which the "
+                 + "append-only publication record shows as a correction.",
+
+            items = disputes.Select(RenderDispute),
+        };
+    }
+
     /// <summary>
     /// A 503 when the shipped corpus does not verify, or null when it does.
     /// </summary>
@@ -2268,6 +2454,12 @@ public static class NoiseStandardEndpoints
     /// <summary>A period's crowd queue, as a participant registers it.</summary>
     public sealed record CrowdQueueRequest(
         string? Period, string? Seed, int SpotCheck, IReadOnlyList<CrowdCandidateRequest>? Candidates);
+
+    /// <summary>A verdict being contested.</summary>
+    public sealed record DisputeRequest(string? Period, string? RaisedBy, string? Reason);
+
+    /// <summary>How a dispute was answered.</summary>
+    public sealed record DisputeResolutionRequest(string? Outcome, string? Reasoning);
 
     /// <summary>One verdict from the independent second pass.</summary>
     public sealed record RejudgeVote(
