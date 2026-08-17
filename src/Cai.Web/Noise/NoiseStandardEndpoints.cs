@@ -453,6 +453,15 @@ public static class NoiseStandardEndpoints
         // standard rests on it being a fact.
         endpoints.MapGet("/api/noise/holdout/{period}", (string period) =>
         {
+            // ★★ FAIL CLOSED. An unverifiable corpus serves NO draws rather than serving them unsigned: a
+            // holdout endpoint that quietly degrades to "here is the pool, unsigned" is worse than one that
+            // stops, because the degradation is invisible in the thing it hands back — and a draw from a pool
+            // nobody can check is not a draw. 503, because the fault is ours and it is fixable.
+            if (CorpusUnverifiable() is { } unverifiable)
+            {
+                return unverifiable;
+            }
+
             if (!NoiseCorpus.Draws.TryGetValue(period, out var draw))
             {
                 // ★ 404, never an empty draw. An empty holdout reads as "we measured nothing there",
@@ -472,6 +481,10 @@ public static class NoiseStandardEndpoints
                 period,
                 methodVersion = MethodVersion,
                 samplerVersion = NoiseCorpus.SamplerVersion,
+
+                // ★★ WHICH MANIFEST THIS DRAW CAME FROM, and the signature over it. 01 §2 asks for the draw
+                // "timestamped AND signed"; the timestamp was here and the signature was our word.
+                manifest = ManifestIdentity(),
 
                 // Everything needed to re-run the draw, and nothing that could have steered it.
                 seed = draw.Seed,
@@ -513,9 +526,23 @@ public static class NoiseStandardEndpoints
         // ★ The pool publishes too. A third party re-deriving a draw needs the seed AND the candidates
         // it was drawn from — publishing only the seed proves nothing, because the pool could have been
         // chosen after the fact.
-        endpoints.MapGet("/api/noise/corpus", () => Results.Ok(new
+        endpoints.MapGet("/api/noise/corpus", () =>
+        {
+            // ★★ Fail closed here too — an unverifiable pool must not be served as though it were the published
+            // one, and this is the endpoint a third party fetches to check a draw against.
+            if (CorpusUnverifiable() is { } unverifiable)
+            {
+                return unverifiable;
+            }
+
+            return Results.Ok(new
         {
             samplerVersion = NoiseCorpus.SamplerVersion,
+
+            // ★★ The manifest identity and how to check it — beside the pool, not in a document elsewhere.
+            manifest = ManifestIdentity(),
+            howToVerify = CorpusManifest.VerificationInstructions,
+
             note = "Public repositories only. Everything a human rater is shown must already be public.",
             count = NoiseCorpus.Candidates.Count,
             repositories = NoiseCorpus.Candidates
@@ -528,7 +555,8 @@ public static class NoiseStandardEndpoints
                     licence = c.Licence,
                     pinnedSha = c.PinnedSha,
                 }),
-        }))
+        });
+        })
         .AllowAnonymous()
         .WithName("NoiseCorpus");
 
@@ -1918,6 +1946,60 @@ public static class NoiseStandardEndpoints
             store.PublishedPeriods().Select(p => (JsonNode?)JsonValue.Create(p)).ToArray());
 
         return Results.Json(node);
+    }
+
+    /// <summary>
+    /// A 503 when the shipped corpus does not verify, or null when it does.
+    /// </summary>
+    /// <remarks>
+    /// ★★ FAIL CLOSED, AND SAY WHY. The alternative is an endpoint that serves the pool with the signature field
+    /// missing or false — a degradation nobody reading the response would notice, on the one artefact whose whole
+    /// job is to be checkable. 503 rather than 500: the corpus is fixable and the fault is ours.
+    /// </remarks>
+    private static IResult? CorpusUnverifiable()
+    {
+        var manifest = CorpusManifest.Load();
+
+        // ★ The DECISION is CorpusManifest.RefusalReason — a pure function, so it has a test. Shipping a broken
+        // manifest is the only other way to reach this branch, and that breaks every other test in the suite.
+        return CorpusManifest.RefusalReason(manifest) is not { } reason
+            ? null
+            : Results.Json(
+                new
+                {
+                    error = reason,
+                    detail = manifest.Problem,
+                    manifestVersion = manifest.Version,
+                    keyId = manifest.KeyId,
+                    howToVerify = CorpusManifest.VerificationInstructions,
+                },
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    /// <summary>Which manifest, signed by which key — published with every draw and with the pool.</summary>
+    private static object ManifestIdentity()
+    {
+        var manifest = CorpusManifest.Load();
+
+        return new
+        {
+            version = manifest.Version,
+            keyId = manifest.KeyId,
+            algorithm = CorpusManifest.Algorithm,
+            signature = manifest.Signature,
+
+            // ★★ THE KEY SAYS WHAT IT IS WORTH. The mechanism is complete; the custody of a production signing
+            // key is a decision nobody has made yet, so a reader who checks the key id learns that rather than
+            // assuming a signature means more than it does.
+            keyIsDevelopmentOnly = manifest.KeyId.Contains("dev", StringComparison.OrdinalIgnoreCase),
+
+            files = new
+            {
+                manifest = CorpusManifest.ManifestFileName,
+                signature = CorpusManifest.SignatureFileName,
+                publicKey = CorpusManifest.PublicKeyFileName,
+            },
+        };
     }
 
     /// <summary>
