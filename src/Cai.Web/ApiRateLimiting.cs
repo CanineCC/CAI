@@ -43,6 +43,18 @@ internal enum ApiTrafficClass
     /// </remarks>
     Crowd,
 
+    /// <summary>
+    /// A read of a document the standard PUBLISHES — the method contract and the published result.
+    /// </summary>
+    /// <remarks>
+    /// ★★ THE OPEN BUDGET WAS SIZED FOR FETCHING AN IMMUTABLE CATALOGUE ONCE, and applied to these two it
+    /// contradicts the standard's purpose. Watchdog's customer-facing page renders the published rate on every
+    /// view and caches NOTHING — on purpose, because a cached rate and a suppressed rate are indistinguishable
+    /// from outside — so on 15/day that page dies after fifteen views from one host, and starves the operator
+    /// console's submission on the same IP.
+    /// </remarks>
+    PublishedRead,
+
     /// <summary>Anonymous traffic to the SELF-SERVICE verification endpoints (<c>/api/score</c>, <c>/api/verify</c>,
     /// <c>/api/verify-delivery</c>). These are the public half of "don't trust the number, reproduce it" — the
     /// calculator and verifier embedded on codeassuranceindex.info call them from the reader's own browser. The open API's
@@ -102,6 +114,23 @@ internal static class ApiRateLimiting
     /// <summary>The endpoints that carry <see cref="ApiTrafficClass.Crowd"/>, as one list so the budget and the
     /// paths cannot drift apart.</summary>
     public static readonly string[] CrowdPaths = ["/api/noise/crowd"];
+
+    /// <summary>The per-IP budget for the published documents: 60/min — see <see cref="ApiTrafficClass.PublishedRead"/>.</summary>
+    /// <remarks>
+    /// ★ Generous rather than unlimited. These are cheap, cacheable-by-the-caller documents and the limiter is
+    /// a fuse against a runaway client, not a quota — but a fuse that never blows is decoration.
+    /// </remarks>
+    public const int PublishedReadPermitsPerMinute = 60;
+
+    /// <summary>The endpoints that carry <see cref="ApiTrafficClass.PublishedRead"/>, as one list so the budget
+    /// and the paths cannot drift apart.</summary>
+    /// <remarks>
+    /// ★★ EXACTLY TWO, and deliberately not the whole read surface. <c>holdout</c>, <c>cost</c>, <c>record</c>
+    /// and <c>mark</c> are also published documents and the same argument reaches them — but each is read once
+    /// per period by a participant rather than once per page view by a customer, so they stay on the open
+    /// budget until something is actually shown to be starved by it.
+    /// </remarks>
+    public static readonly string[] PublishedReadPaths = ["/api/noise/published", "/api/noise/method"];
 
     /// <summary>The per-IP budget for first-party browser reads: 120/min. A page view costs two calls (the version
     /// list, then one catalog), so this is roughly a reader opening the catalogue once a second all minute.</summary>
@@ -192,6 +221,12 @@ internal static class ApiRateLimiting
         if (SelfServiceVerifyPaths.Any(p => path.StartsWithSegments(p)))
         {
             return new(ApiTrafficClass.SelfServiceVerify, clientIp);
+        }
+
+        // ★★ The documents the standard publishes, on their own budget — see ApiTrafficClass.PublishedRead.
+        if (PublishedReadPaths.Any(p => path.StartsWithSegments(p)))
+        {
+            return new(ApiTrafficClass.PublishedRead, clientIp);
         }
 
         // ★★ The public rating loop, on its own budget — see ApiTrafficClass.Crowd.

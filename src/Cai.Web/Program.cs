@@ -165,6 +165,8 @@ builder.Services.AddRateLimiter(options =>
             ApiRateLimiting.CrowdPermitsPerDay, TimeSpan.FromDays(1))),
         PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.SiteReader, "b",
             ApiRateLimiting.SiteReaderPermitsPerMinute, TimeSpan.FromMinutes(1))),
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.PublishedRead, "p",
+            ApiRateLimiting.PublishedReadPermitsPerMinute, TimeSpan.FromMinutes(1))),
         PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.Principal, "p",
             ApiRateLimiting.PrincipalPermitsPerMinute, TimeSpan.FromMinutes(1))));
     options.OnRejected = async (ctx, ct) =>

@@ -107,6 +107,67 @@ public sealed class RateLimitingTests(RateLimitingFixture fx) : IClassFixture<Ra
     }
 
     [Fact]
+    public async Task STAR_The_PUBLISHED_Documents_Are_Not_On_The_Fifteen_A_Day_Budget()
+    {
+        // ★★ THE BUDGET AND THE NO-CACHE RULE WERE INCOMPATIBLE, and the collision only shows in production.
+        // Watchdog's customer-facing page renders the published rate by calling this endpoint on EVERY view and
+        // caching nothing, anywhere — deliberately, because a cached rate and a suppressed rate are the same
+        // event seen from outside. On the open budget that page dies after fifteen views a day from one host's
+        // IP, and takes the operator console's submission budget down with it.
+        //
+        // ★★ These two are the documents the standard most wants read: the method is the contract a new
+        // participant builds a client against, and the published result is the number the whole thing exists to
+        // publish. Rate-limiting them like a scraping attempt argues against the standard's own purpose.
+        using var client = fx.Client(token: null, ip: "203.0.113.91");
+
+        // Twenty — past 1/s, past 3/min, past the 15/day open budget.
+        for (var i = 0; i < 20; i++)
+        {
+            var method = await client.GetAsync("/api/noise/method", Ct);
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, method.StatusCode);
+
+            var published = await client.GetAsync("/api/noise/published", Ct);
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, published.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task STAR_The_Published_Read_Budget_Does_Not_Widen_The_Rest_Of_The_API()
+    {
+        // ★ A wider window for two documents must not become a wider window for everything: the endpoints that
+        // accept a MEASUREMENT keep the budget they had.
+        using var client = fx.Client(token: null, ip: "203.0.113.92");
+
+        for (var i = 0; i < 20; i++)
+        {
+            await client.GetAsync("/api/noise/method", Ct);
+        }
+
+        // Same IP, an endpoint that is NOT a published document — the open budget still applies.
+        HttpStatusCode last = HttpStatusCode.OK;
+        for (var i = 0; i < 20; i++)
+        {
+            last = (await client.GetAsync("/api/noise/holdout/2026-09", Ct)).StatusCode;
+            if (last == HttpStatusCode.TooManyRequests)
+            {
+                break;
+            }
+        }
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, last);
+    }
+
+    [Fact]
+    public void STAR_The_Published_Read_Paths_Are_One_List_Beside_Their_Budget()
+    {
+        // ★★ Same reason the crowd's list lives beside its number: a budget whose paths drift from the endpoints
+        // silently reverts them to the open one, and nothing fails when it does.
+        Assert.Equal(60, Cai.Web.ApiRateLimiting.PublishedReadPermitsPerMinute);
+        Assert.Contains("/api/noise/published", Cai.Web.ApiRateLimiting.PublishedReadPaths);
+        Assert.Contains("/api/noise/method", Cai.Web.ApiRateLimiting.PublishedReadPaths);
+    }
+
+    [Fact]
     public async Task STAR_The_Crowd_Budget_Does_Not_Leak_Into_The_Rest_Of_The_API()
     {
         // ★ A separate window for one path must not widen or narrow the others: the crowd caller's minute is
