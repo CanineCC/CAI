@@ -198,6 +198,45 @@ public sealed class EmbargoApiTests(RegistryUnconfiguredFixture fx) : IClassFixt
     }
 
     [Fact]
+    public async Task STAR_The_Judging_DECLARATION_Is_Embargoed_Like_The_Register_It_Names()
+    {
+        // ★★ A LEAK INTRODUCED BY #27 AND CAUGHT BY THE END-TO-END RUN. The record grew a `judgingUnavailable`
+        // list so a participant filing no per-judge verdicts could say why — and it was built from the RAW
+        // submission list, so it named every tool that had submitted, before the date on which the register may
+        // name anybody. The embargo's whole content is "who took part and how it went"; a second field carrying
+        // the tool defeats it exactly as thoroughly as the first would.
+        // ★ The rival must actually DECLARE one, or the list is empty for a reason that has nothing to do with
+        //   the embargo — which is how this test passed the first time it was written.
+        using (var client = fx.Client())
+        {
+            var holdout = JsonDocument.Parse(await client.GetStringAsync("/api/noise/holdout/2026-09", Ct))
+                .RootElement.GetProperty("repositories").EnumerateArray()
+                .Select(r => (Repo: r.GetProperty("repoId").GetString()!,
+                              Sha: r.GetProperty("pinnedSha").GetString()!))
+                .ToList();
+
+            await client.PostAsJsonAsync("/api/noise/submissions", new
+            {
+                period = "2026-09",
+                tool = "a-rival-with-its-own-judging",
+                toolVersion = "engine-1.0",
+                runStartedAt = "2026-08-20T09:00:00Z",
+                configuration = new { rulesetId = "r", isProductDefault = true },
+                recency = holdout.Select(h => new { repoId = h.Repo, stratum = "never-trained" }),
+                findings = Array.Empty<object>(),
+                reportedFindingCount = 0,
+                judgingUnavailable = "we judge with a single reviewer, not a two-judge cascade.",
+            }, Ct);
+        }
+
+        var record = await RecordAsync("2026-09");
+
+        Assert.True(record.GetProperty("embargo").GetProperty("inForce").GetBoolean());
+        Assert.Empty(record.GetProperty("submissions").EnumerateArray());
+        Assert.Empty(record.GetProperty("judgingUnavailable").EnumerateArray());
+    }
+
+    [Fact]
     public async Task STAR_A_Period_With_No_Draw_Is_Not_Embargoed()
     {
         // ★ A period the standard never drew is not one it measures — a submission against it is refused

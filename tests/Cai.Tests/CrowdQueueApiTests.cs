@@ -74,6 +74,29 @@ public sealed class CrowdQueueApiTests(RegistryUnconfiguredFixture fx) : IClassF
     }
 
     [Fact]
+    public async Task STAR_A_Queue_Naming_The_Same_Finding_TWICE_Is_Refused_Not_Accepted_And_Exploded_Later()
+    {
+        // ★★ FOUND BY THE END-TO-END RUN, not by any unit test on either side. Kennel registered a round whose
+        // candidates included the same derived finding id twice — legitimately, because two repo-level findings
+        // of one dimension in one repository ARE one finding under the id rule (#21a) — and this endpoint
+        // accepted it. The duplicate then threw `An item with the same key has already been added` inside
+        // CrowdSlice, which is rendered by the PUBLICATION endpoint: a malformed crowd queue took down
+        // publishing, several calls later, with a 500 that named neither the queue nor the finding.
+        //
+        // ★ Refused HERE, where the caller can see what it sent. An accepted-then-fatal input is the worst of
+        // both: the client is told it succeeded and the failure surfaces somewhere unrelated.
+        var (status, body) = await RegisterAsync(Period(),
+        [
+            Candidate("dupe-001", "accepted"),
+            Candidate("dupe-001", "accepted"),
+            Candidate("fine-002", "accepted"),
+        ]);
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains("dupe-001", body.GetProperty("error").GetString()!, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_queue_with_no_candidates_is_rejected()
     {
         var (status, _) = await RegisterAsync(Period(), []);

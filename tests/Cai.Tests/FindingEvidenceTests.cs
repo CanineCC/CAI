@@ -209,6 +209,51 @@ public sealed class FindingEvidenceApiTests(RegistryUnconfiguredFixture fx)
     }
 
     [Fact]
+    public async Task STAR_A_Participant_Whose_Judging_Is_Not_A_CASCADE_Says_So_And_It_PUBLISHES()
+    {
+        // ★★ THE RECORD MODELS A TWO-JUDGE CASCADE, and not every participant judges that way. Watchdog's own
+        // pipeline is one blind machine judge per finding plus a two-human gate — so it has no per-judge rows to
+        // file, and filing nothing silently reads on the record page exactly like a run whose judging was never
+        // done. Those are opposite claims, so the absence is DECLARED and it publishes with the record.
+        using var client = fx.Client();
+        var holdout = JsonDocument.Parse(await client.GetStringAsync("/api/noise/holdout/2026-09", Ct))
+            .RootElement.GetProperty("repositories").EnumerateArray()
+            .Select(r => (Repo: r.GetProperty("repoId").GetString()!, Sha: r.GetProperty("pinnedSha").GetString()!))
+            .First();
+
+        var response = await client.PostAsJsonAsync("/api/noise/submissions", new
+        {
+            period = "2026-09",
+            tool = "one-judge-scanner",
+            toolVersion = "engine-1.0",
+            runStartedAt = "2026-08-20T09:00:00Z",
+            configuration = new { rulesetId = "r", isProductDefault = true },
+            recency = new[] { new { repoId = holdout.Repo, stratum = "never-trained" } },
+            findings = new[]
+            {
+                new
+                {
+                    repoId = holdout.Repo, pinnedSha = holdout.Sha, filePath = "src/A.cs", line = 3,
+                    ruleId = "D4", title = "a finding", claimClass = "pointwise",
+                },
+            },
+            reportedFindingCount = 1,
+            judgingUnavailable = "one blind machine judge per finding, then a two-human gate — not a cascade.",
+        }, Ct);
+
+        var receipt = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct)).RootElement;
+        Assert.Contains("not a cascade", receipt.GetProperty("judgingUnavailable").GetString()!,
+            StringComparison.OrdinalIgnoreCase);
+
+        // ★★ AND IT IS EMBARGOED UNTIL THE PERIOD PUBLISHES, like every other field naming a participant. It
+        // reaches the RECORD when the register does — see EmbargoApiTests, which proves it is withheld before
+        // the date. Asserting it on the record here would assert the leak instead of the rule.
+        var record = JsonDocument.Parse(
+            await client.GetStringAsync("/api/noise/record/2026-09", Ct)).RootElement;
+        Assert.Empty(record.GetProperty("judgingUnavailable").EnumerateArray());
+    }
+
+    [Fact]
     public async Task An_Unknown_Finding_Is_A_Stated_404()
     {
         using var client = fx.Client();

@@ -462,6 +462,9 @@ public sealed class SqliteNoiseStore : INoiseStore
         // ★★ The panel's shape, per verdict (#10). Additive for the same reason: a dev database already holds
         // verdicts recorded before these were required, and dropping them to add two columns would destroy the
         // record the standard promises to keep.
+        // ★★ Why a participant files no per-judge verdicts (#27). Additive for the same reason.
+        AddColumnIfMissing(conn, "noise_submissions", "judging_unavailable", "TEXT NULL");
+
         AddColumnIfMissing(conn, "noise_verdicts", "model_family", "TEXT NOT NULL DEFAULT ''");
         AddColumnIfMissing(conn, "noise_verdicts", "temperature", "REAL NOT NULL DEFAULT 0");
     }
@@ -500,9 +503,9 @@ public sealed class SqliteNoiseStore : INoiseStore
             INSERT INTO noise_submissions
                 (submission_id, period, tool, tool_version, received_at, run_started_at, accepted,
                  problems_json, holdout_repositories, covered_repositories, uncovered_json,
-                 configuration_json)
+                 configuration_json, judging_unavailable)
             VALUES ($id, $period, $tool, $toolVersion, $receivedAt, $runStartedAt, $accepted,
-                    $problems, $holdout, $covered, $uncovered, $configuration)
+                    $problems, $holdout, $covered, $uncovered, $configuration, $judging)
             """;
         cmd.Parameters.AddWithValue("$id", receipt.SubmissionId);
         cmd.Parameters.AddWithValue("$period", receipt.Period);
@@ -516,6 +519,7 @@ public sealed class SqliteNoiseStore : INoiseStore
         cmd.Parameters.AddWithValue("$covered", receipt.CoveredRepositories);
         cmd.Parameters.AddWithValue("$uncovered", JsonSerializer.Serialize(receipt.Uncovered, Json));
         cmd.Parameters.AddWithValue("$configuration", configurationJson ?? (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("$judging", (object?)receipt.JudgingUnavailable ?? DBNull.Value);
 
         try
         {
@@ -1273,5 +1277,8 @@ public sealed class SqliteNoiseStore : INoiseStore
         HoldoutRepositories: reader.GetInt32(reader.GetOrdinal("holdout_repositories")),
         CoveredRepositories: reader.GetInt32(reader.GetOrdinal("covered_repositories")),
         Uncovered: JsonSerializer.Deserialize<List<string>>(
-            reader.GetString(reader.GetOrdinal("uncovered_json")), Json) ?? []);
+            reader.GetString(reader.GetOrdinal("uncovered_json")), Json) ?? [],
+        JudgingUnavailable: reader.IsDBNull(reader.GetOrdinal("judging_unavailable"))
+            ? null
+            : reader.GetString(reader.GetOrdinal("judging_unavailable")));
 }

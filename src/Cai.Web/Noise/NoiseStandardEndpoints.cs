@@ -499,6 +499,20 @@ public static class NoiseStandardEndpoints
                     ? "no judging has been recorded for this period yet — this is an absence, not a clean run."
                     : null,
 
+                // ★★ AND WHO DELIBERATELY FILED NONE, WITH THEIR REASON (#27). The record models a two-judge
+                // cascade; a participant judging some other way has no per-judge rows to file, and a silent
+                // absence reads exactly like a run whose judging was never done. Those are opposite claims, so
+                // the declaration publishes here — where a reader looking for the verdicts will be standing.
+                // ★★ EMBARGOED LIKE THE REGISTER IT NAMES. This carries a TOOL, and "who took part" is the
+                // whole of what the embargo withholds — a second field naming the participant defeats it
+                // exactly as thoroughly as the first would. Caught by the end-to-end run, which read the
+                // register before the publish date and found a name in it.
+                judgingUnavailable = submissions
+                    .Where(s => s.JudgingUnavailable is { Length: > 0 })
+                    .Where(s => !embargoed || Embargo.MayRead(caller, s.Tool, publishesAt, DateTimeOffset.UtcNow))
+                    .GroupBy(s => s.Tool, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => new { tool = g.Key, reason = g.First().JudgingUnavailable }),
+
                 // ★★ The prompts, in full and once each. The same prompt answers thousands of findings; a
                 // record that repeats it per verdict is a record nobody downloads.
                 prompts = prompts.Select(p => new { promptId = p.PromptId, text = p.Text, firstSeenAt = p.FirstSeenAt }),
@@ -1015,6 +1029,35 @@ public static class NoiseStandardEndpoints
                 }
 
                 candidates.Add(new CrowdCandidate(c.FindingId ?? "", state, c.OwnerId ?? ""));
+            }
+
+            // ★★ ONE ROW PER FINDING, REFUSED HERE RATHER THAN FATAL LATER. A queue naming the same finding
+            // twice was accepted and then threw "an item with the same key has already been added" inside the
+            // slice the PUBLICATION endpoint renders — so a malformed crowd round took down publishing, several
+            // calls later, with a 500 that named neither the queue nor the finding. Found by the end-to-end run;
+            // no unit test on either side could see it, because each side was correct on its own.
+            //
+            // ★ Refused rather than de-duplicated: two rows for one finding means the caller's set is not what
+            // it thinks it is — under the standard's own id rule two repo-level findings of one dimension in one
+            // repository ARE one finding — and silently collapsing them would hide that from the sender.
+            var repeated = candidates
+                .GroupBy(c => c.FindingId, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToList();
+            if (repeated.Count > 0)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "these findings appear more than once in the queue: "
+                          + string.Join(", ", repeated.Take(10))
+                          + (repeated.Count > 10 ? $" (+{repeated.Count - 10} more)" : "")
+                          + ". A finding id is DERIVED from its coordinates, so two rows with one id are two "
+                          + "reports of the same finding — which the crowd must be handed once. Group them "
+                          + "before registering the round.",
+                    duplicates = repeated.Count,
+                });
             }
 
             var queue = CrowdQueue.Build(
@@ -3132,6 +3175,10 @@ public static class NoiseStandardEndpoints
         },
 
         complete = r.Accepted && r.Uncovered.Count == 0,
+        // ★★ Why this participant files no per-judge verdicts, when it files none (#27). A reader looking for
+        // the judging finds the reason rather than an empty list they must interpret.
+        judgingUnavailable = r.JudgingUnavailable,
+
         completenessNote = r.Uncovered.Count == 0
             ? "full coverage: every drawn repository appears in this run."
             : $"PARTIAL coverage: {r.CoveredRepositories} of {r.HoldoutRepositories} drawn repositories "

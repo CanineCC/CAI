@@ -84,7 +84,15 @@ public sealed record NoiseSubmission(
     IReadOnlyList<SubmittedFinding> Findings,
     DateTimeOffset? RunStartedAt = null,
     RunConfiguration? Configuration = null,
-    int? ReportedFindingCount = null);
+    int? ReportedFindingCount = null,
+
+    // ★★ WHY THIS PARTICIPANT FILES NO PER-JUDGE VERDICTS, when it files none. The record models a two-judge
+    // cascade and not every pipeline is one: Watchdog's own is a single blind machine judge per finding plus a
+    // two-human gate, so it has no per-judge rows to file. Filing nothing silently reads, on the record page,
+    // exactly like a run whose judging was never done — and those are opposite claims. Declared, and published
+    // with the record. NOT a way to opt out of the cascade's rules: a participant that DOES file verdicts is
+    // still held to the panel shape.
+    string? JudgingUnavailable = null);
 
 /// <summary>What CAI checked, and what it found.</summary>
 /// <param name="ReportedFindingCount">What the run said it produced, as declared. Null when not declared.</param>
@@ -97,7 +105,8 @@ public sealed record SubmissionReceipt(
     DateTimeOffset ReceivedAt, bool Accepted,
     IReadOnlyList<string> Problems,
     int HoldoutRepositories, int CoveredRepositories, IReadOnlyList<string> Uncovered,
-    int? ReportedFindingCount = null, int SubmittedFindingCount = 0);
+    int? ReportedFindingCount = null, int SubmittedFindingCount = 0,
+    string? JudgingUnavailable = null);
 
 /// <summary>
 /// The submission surface: validate a run against the published holdout, and keep the receipt.
@@ -370,7 +379,11 @@ public static class NoiseSubmissions
             CoveredRepositories: covered.Count,
             Uncovered: uncovered,
             ReportedFindingCount: submission.ReportedFindingCount,
-            SubmittedFindingCount: submittedCount);
+            SubmittedFindingCount: submittedCount,
+
+            // ★ Carried through untouched: it is the participant's statement about its own pipeline, and the
+            //   receipt is where a reader looks for it.
+            JudgingUnavailable: submission.JudgingUnavailable);
 
         // ★ Persistence is the CALLER's, via INoiseStore. This method decides only whether the run
         // answers the holdout it names; storing it is where the no-withdrawal claim is enforced.
