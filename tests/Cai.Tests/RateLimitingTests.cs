@@ -81,6 +81,58 @@ public sealed class RateLimitingTests(RateLimitingFixture fx) : IClassFixture<Ra
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
+    public async Task STAR_The_CROWD_Endpoints_Get_Their_Own_Budget_Not_The_15_A_Day_One()
+    {
+        // ★★ THE OPEN BUDGET IS SIZED FOR FETCHING AN IMMUTABLE CATALOGUE ONCE — 1/s, 3/min, 15/day. Applied to
+        // the crowd it caps a rater at fifteen requests a day, which is SEVEN findings: fetch an item, post an
+        // answer, fetch the next. Rollout step 2 is "open the crowd", and a limit that stops a willing rater at
+        // seven items closes it again with a 429 nobody would think to look for.
+        //
+        // ★★ COUNTED PER ITEM, because that is the unit the budget is about: one item a minute, 120 items a day
+        // — which is two requests a minute and 240 a day, since rating an item costs a GET and a POST.
+        using var client = fx.Client(token: null, ip: "203.0.113.77");
+
+        // The pair that rates one item: both inside a second, which the OPEN budget's 1/s window would refuse.
+        var fetch = await client.GetAsync("/api/noise/crowd/next?period=2026-09&raterId=r1", Ct);
+        var answer = await client.PostAsync("/api/noise/crowd/answers",
+            new StringContent("{}", System.Text.Encoding.UTF8, "application/json"), Ct);
+
+        Assert.NotEqual(HttpStatusCode.TooManyRequests, fetch.StatusCode);
+        Assert.NotEqual(HttpStatusCode.TooManyRequests, answer.StatusCode);
+
+        // ★ And the SECOND item inside the same minute is refused: one a minute is the rate, and a person
+        // reading code and judging it does not answer twice in sixty seconds.
+        var tooSoon = await client.GetAsync("/api/noise/crowd/next?period=2026-09&raterId=r1", Ct);
+        Assert.Equal(HttpStatusCode.TooManyRequests, tooSoon.StatusCode);
+    }
+
+    [Fact]
+    public async Task STAR_The_Crowd_Budget_Does_Not_Leak_Into_The_Rest_Of_The_API()
+    {
+        // ★ A separate window for one path must not widen or narrow the others: the crowd caller's minute is
+        // their own, and the rubric catalogue is still on the open budget.
+        using var client = fx.Client(token: null, ip: "203.0.113.78");
+
+        await client.GetAsync("/api/noise/crowd/next?period=2026-09&raterId=r2", Ct);
+
+        var openApi = await client.GetAsync("/api/noise/method", Ct);
+        Assert.NotEqual(HttpStatusCode.TooManyRequests, openApi.StatusCode);
+    }
+
+    [Fact]
+    public void STAR_The_Crowd_Budget_Is_Stated_In_ITEMS_And_Its_Paths_Are_One_List()
+    {
+        // ★★ The daily ceiling cannot be exercised in a test — 240 requests over a day — so the NUMBER is
+        // asserted where it is declared, beside the path list that decides who gets it. A budget whose paths
+        // drift from the endpoints is a budget that quietly reverts to the open one.
+        Assert.Equal(2, Cai.Web.ApiRateLimiting.CrowdPermitsPerMinute);
+        Assert.Equal(240, Cai.Web.ApiRateLimiting.CrowdPermitsPerDay);
+
+        Assert.Equal(120, Cai.Web.ApiRateLimiting.CrowdPermitsPerDay / 2);
+        Assert.Contains("/api/noise/crowd", Cai.Web.ApiRateLimiting.CrowdPaths);
+    }
+
+    [Fact]
     public async Task Authenticated_registry_burst_beyond_the_public_budget_is_never_throttled()
     {
         // 30 back-to-back authenticated reads — double the 15/day public budget, way past 1/s and 3/min. The

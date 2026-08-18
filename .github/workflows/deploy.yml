@@ -28,6 +28,11 @@ env:
   DOTNET_TieredCompilation: "0"
   DOTNET_TieredPGO: "0"
 
+permissions:
+  # ★ Write, because the deploy COMMITS BACK the public key this host generated — see "Publish the signing key"
+  #   below. Nothing else in the workflow writes to the repository.
+  contents: write
+
 jobs:
   deploy:
     runs-on: self-hosted
@@ -53,6 +58,38 @@ jobs:
         run: tools/sign-corpus.sh
         env:
           CAI_CORPUS_SIGNING_KEY: /home/jimmy/apps/cai-web/registry-data/cai-corpus.key.pem
+
+      # ★★ THE REPOSITORY AND THE SITE MUST AGREE ON THE KEY. The signing key is generated on this host on its
+      # first run, so the .pub.pem and .sig committed before that were signed by a placeholder key nobody has —
+      # and VERIFYING-THE-CORPUS.md tells a third party that "this directory holds everything needed". Left
+      # alone, anyone cross-checking the published corpus against GitHub would get a Verification Failure and no
+      # way to tell a key rotation from a tampered manifest.
+      #
+      # ★★ ONLY WHEN THE PUBLIC KEY CHANGED, which is first-run and rotation and nothing else. ECDSA signatures
+      # are randomised, so the .sig differs on every run even over identical bytes — committing that would put a
+      # commit on main after every deploy. Gated on the key, both files go together, so the committed pair stays
+      # internally consistent and verifies.
+      #
+      # ★ [skip ci] because the corpus lives under src/**, which is in this workflow's own path filter: without
+      # it the commit would trigger the deploy that produced it.
+      #
+      # ★ A failed push WARNS rather than failing the deploy. The site is already correct at this point; the
+      # repository lagging by one file is a documentation defect, not a broken release.
+      - name: Publish the signing key this host generated
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- src/Cai.Web/Noise/corpus/'*.pub.pem'; then
+            echo "public key unchanged — nothing to commit"
+            exit 0
+          fi
+          git config user.name  "cai-deploy"
+          git config user.email "deploy@codeassuranceindex.info"
+          git add src/Cai.Web/Noise/corpus/*.pub.pem src/Cai.Web/Noise/corpus/*.json.sig
+          git commit -m "chore(corpus): publish the signing key this host generated [skip ci]"
+          if ! git push origin HEAD:main; then
+            echo "::warning::could not push the new public key — the SITE is signed correctly, but the "\
+                 "repository copy is stale. Re-run this workflow or commit src/Cai.Web/Noise/corpus/ by hand."
+          fi
 
       # VERIFY (the old service keeps serving; any failure here = safe no-op).
       - name: Verify build (Release)

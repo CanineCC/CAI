@@ -156,6 +156,13 @@ builder.Services.AddRateLimiter(options =>
             ApiRateLimiting.RegistryPublicPermitsPerMinute, TimeSpan.FromMinutes(1))),
         PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.SelfServiceVerify, "v",
             ApiRateLimiting.SelfServiceVerifyPermitsPerMinute, TimeSpan.FromMinutes(1))),
+
+        // ★★ The crowd's own budget, chained minute AND day: one item a minute, 120 items a day. The open
+        //    budget's 15/day is seven findings, which would close the crowd rollout with a 429.
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.Crowd, "cm",
+            ApiRateLimiting.CrowdPermitsPerMinute, TimeSpan.FromMinutes(1))),
+        PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.Crowd, "cd",
+            ApiRateLimiting.CrowdPermitsPerDay, TimeSpan.FromDays(1))),
         PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.SiteReader, "b",
             ApiRateLimiting.SiteReaderPermitsPerMinute, TimeSpan.FromMinutes(1))),
         PartitionedRateLimiter.Create<HttpContext, string>(ctx => Window(ctx, ApiTrafficClass.Principal, "p",

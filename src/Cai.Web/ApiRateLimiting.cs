@@ -25,6 +25,24 @@ internal enum ApiTrafficClass
     /// generous enough that a full-corpus verify loop cannot trip it while a flood still hits a ceiling.</summary>
     RegistryPublic,
 
+    /// <summary>
+    /// Anonymous traffic to the CROWD endpoints (<c>/api/noise/crowd/*</c>) — the public rating loop.
+    /// </summary>
+    /// <remarks>
+    /// ★★ THE OPEN BUDGET WOULD CLOSE THE CROWD. 1/s, 3/min and 15/day is sized for fetching an immutable
+    /// catalogue once and caching it; a rater fetches an item and posts an answer, so fifteen requests is SEVEN
+    /// findings before a 429 nobody would think to look for. Rollout step 2 is "open the crowd — public,
+    /// cross-vendor raters", and a limit that stops a willing one at seven items closes it again.
+    /// <para>★★ COUNTED PER ITEM, because that is the unit the budget is about: <b>one item a minute, 120 items
+    /// a day</b> — two requests a minute and 240 a day, since rating an item costs a GET and a POST. A person
+    /// reading code and judging it does not answer twice in sixty seconds, so the minute window is the abuse
+    /// control and the daily ceiling is what a determined rater could reach and a script cannot pass quietly.
+    /// </para>
+    /// <para>★ The PAGE at <c>/noise/rate</c> is unaffected either way: it renders server-side and its form
+    /// posts to the page, not to <c>/api</c>. This budget is for API-driven raters.</para>
+    /// </remarks>
+    Crowd,
+
     /// <summary>Anonymous traffic to the SELF-SERVICE verification endpoints (<c>/api/score</c>, <c>/api/verify</c>,
     /// <c>/api/verify-delivery</c>). These are the public half of "don't trust the number, reproduce it" — the
     /// calculator and verifier embedded on codeassuranceindex.info call them from the reader's own browser. The open API's
@@ -74,6 +92,16 @@ internal static class ApiRateLimiting
     /// <summary>The endpoints that carry <see cref="ApiTrafficClass.SelfServiceVerify"/>. Kept as one list so the
     /// classifier and the API reference cannot drift apart about which checks are open to the public.</summary>
     public static readonly string[] SelfServiceVerifyPaths = ["/api/score", "/api/verify", "/api/verify-delivery"];
+
+    /// <summary>Two requests a minute — ONE ITEM a minute, since rating one costs a GET and a POST.</summary>
+    public const int CrowdPermitsPerMinute = 2;
+
+    /// <summary>240 requests a day — 120 ITEMS, the ceiling a determined rater could reach.</summary>
+    public const int CrowdPermitsPerDay = 240;
+
+    /// <summary>The endpoints that carry <see cref="ApiTrafficClass.Crowd"/>, as one list so the budget and the
+    /// paths cannot drift apart.</summary>
+    public static readonly string[] CrowdPaths = ["/api/noise/crowd"];
 
     /// <summary>The per-IP budget for first-party browser reads: 120/min. A page view costs two calls (the version
     /// list, then one catalog), so this is roughly a reader opening the catalogue once a second all minute.</summary>
@@ -164,6 +192,12 @@ internal static class ApiRateLimiting
         if (SelfServiceVerifyPaths.Any(p => path.StartsWithSegments(p)))
         {
             return new(ApiTrafficClass.SelfServiceVerify, clientIp);
+        }
+
+        // ★★ The public rating loop, on its own budget — see ApiTrafficClass.Crowd.
+        if (CrowdPaths.Any(p => path.StartsWithSegments(p)))
+        {
+            return new(ApiTrafficClass.Crowd, clientIp);
         }
 
         return IsFirstPartyBrowserRead(ctx)

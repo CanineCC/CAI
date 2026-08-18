@@ -5,6 +5,12 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Cai.Web</RootNamespace>
   </PropertyGroup>
+
+  <!-- ★ The rate-limiting policy's NUMBERS are asserted where they are declared: a daily ceiling of 240 cannot
+       be exercised by a test, so the constant and its path list are checked directly rather than inferred. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Cai.Tests" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Cai.Scoring\Cai.Scoring.csproj" />
     <ProjectReference Include="..\Cai.Delivery\Cai.Delivery.csproj" />
