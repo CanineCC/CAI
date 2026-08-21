@@ -150,9 +150,20 @@ jobs:
   #   neither.
   #
   # ★ It distinguishes the two failure shapes on purpose, because they have different fixes: a 503 is the
-  #   signature failing to verify (fail-closed, working as designed, re-sign), a 500 is an unhandled
-  #   exception (almost always a corpus resource that did not get embedded — the exception NAMES the missing
-  #   resource and lists what is available).
+  #   signature failing to verify (fail-closed, working as designed, re-sign), a 500 is an UNHANDLED
+  #   exception — LoadCore catches only CryptographicException, so anything else reaching it lands here.
+  #
+  # ★★ AND IT DELIBERATELY DOES NOT GUESS THE CAUSE OF A 500. The first version of this line asserted "almost
+  #    certainly a corpus resource that was not embedded", reasoning from the one unhandled throw in OUR code.
+  #    The first real 500 was nothing of the kind: unattended-upgrades replaced dotnet-runtime-10.0 underneath
+  #    a RUNNING process and deleted the shared-framework directory it was mapped to, so the assembly load
+  #    inside Verify() — System.Formats.Asn1, reached only on this path — threw FileNotFoundException. The
+  #    runtime can throw here too, and a hint that names one cause sends the next reader past the real one.
+  #
+  # ★★ NOTE WHAT THIS GATE CANNOT SEE. That break happened BETWEEN deploys, with no deploy running, and the
+  #    Lazy<T> cached the exception so it stayed broken until a restart. A deploy-time check is structurally
+  #    blind to it. The fix for that class is not here — it is restarting long-running .NET services when the
+  #    runtime is upgraded under them.
   verify-noise-api:
     needs: deploy
     runs-on: self-hosted
@@ -168,7 +179,7 @@ jobs:
             bad=1
             case "$code" in
               503) echo "::error::$path 503 — the corpus signature does not verify. This is the fail-closed path working. Re-run this deploy: it re-signs on the box before publishing." ;;
-              500) echo "::error::$path 500 — UNHANDLED. Almost certainly a corpus resource that was not embedded in the published artifact. The exception names it: journalctl -u cai-web -n 100 --no-pager | grep -A3 'not embedded'" ;;
+              500) echo "::error::$path 500 — UNHANDLED inside CorpusManifest.LoadCore, which catches only CryptographicException. READ THE EXCEPTION; do not assume the cause: journalctl -u cai-web -n 200 --no-pager | grep -B5 -A20 CorpusManifest" ;;
               *)   echo "::error::$path answered $code" ;;
             esac
           done
