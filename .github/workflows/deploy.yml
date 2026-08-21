@@ -133,3 +133,43 @@ jobs:
           if [ "$code" = "200" ]; then echo "registry serving (/api/registry/keys 200)"; else
             echo "::warning::/api/registry/keys returned $code — registry not live yet (expected until the registry context ships + keys are provisioned)"
           fi
+
+  # ---------- THE STANDARD MUST ACTUALLY SERVE ----------
+  # ★★ /health IS NOT A TEST OF THE STANDARD. It answers 200 from a process that has started, and the noise
+  #    endpoints load the SIGNED CORPUS lazily on first request — so a corpus that cannot be read takes out
+  #    /api/noise/* completely while /health stays green and the deploy goes out reporting success.
+  #
+  #    That is not hypothetical. On 2026-08-21 the production noise API was found returning 500 on every
+  #    endpoint, and the last deploy had been three days earlier, green. Nobody had looked, because nothing
+  #    looked. The preprod workflow got this check the same morning; production, which is the one that
+  #    matters, did not have it.
+  #
+  # ★ A SEPARATE JOB, `needs: deploy`, so it reddens the run WITHOUT rolling back. Rolling back on this would
+  #   swap in the previous build, which — when the fault is in the corpus or its embedding rather than in the
+  #   new code — is broken in exactly the same way. Red and shipped beats green and silent; churn beats
+  #   neither.
+  #
+  # ★ It distinguishes the two failure shapes on purpose, because they have different fixes: a 503 is the
+  #   signature failing to verify (fail-closed, working as designed, re-sign), a 500 is an unhandled
+  #   exception (almost always a corpus resource that did not get embedded — the exception NAMES the missing
+  #   resource and lists what is available).
+  verify-noise-api:
+    needs: deploy
+    runs-on: self-hosted
+    steps:
+      - name: The noise standard serves its own documents
+        run: |
+          set -uo pipefail
+          bad=0
+          for path in /api/noise/method /api/noise/corpus /api/noise/verdicts; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:8090$path" || echo 000)
+            printf '%-26s HTTP %s\n' "$path" "$code"
+            [ "$code" = "200" ] && continue
+            bad=1
+            case "$code" in
+              503) echo "::error::$path 503 — the corpus signature does not verify. This is the fail-closed path working. Re-run this deploy: it re-signs on the box before publishing." ;;
+              500) echo "::error::$path 500 — UNHANDLED. Almost certainly a corpus resource that was not embedded in the published artifact. The exception names it: journalctl -u cai-web -n 100 --no-pager | grep -A3 'not embedded'" ;;
+              *)   echo "::error::$path answered $code" ;;
+            esac
+          done
+          exit "$bad"
