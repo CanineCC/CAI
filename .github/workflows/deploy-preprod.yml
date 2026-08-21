@@ -107,16 +107,38 @@ jobs:
       #
       # ★ Nothing is committed back. If the key does not exist yet, production has never deployed on this host
       #   and preprod must not be the thing that mints the publishing key.
-      - name: Sign the noise corpus (reusing production's host key)
+      # ★★ PREPROD GETS ITS OWN CORPUS, ITS OWN KEY AND ITS OWN DATES — the same way it already gets its own
+      #    database, env, artifact root and port. Until now it was built from PRODUCTION's corpus and signed
+      #    with production's key, so its register accumulated submissions against the real holdout at the real
+      #    pinned shas: rows distinguishable from production's only by which database they landed in.
+      #    See deploy/preprod-corpus.py for why this is a build-time substitution and not a runtime lever.
+      - name: Build the PREPROD corpus (own key id, own dates)
+        if: steps.guard.outputs.go == 'yes'
+        run: python3 deploy/preprod-corpus.py
+
+      # ★★ PREPROD'S OWN SIGNING KEY, generated on first run into the PREPROD data directory. Reusing
+      #    production's key — which this step used to do — meant a preprod artifact carried a signature that
+      #    verifies against the PUBLISHED production key, so anything fetched from preprod would check out as
+      #    genuine to a third party running the documented openssl command. Separate tiers, separate keys.
+      - name: Sign the PREPROD corpus with the PREPROD key
         if: steps.guard.outputs.go == 'yes'
         run: |
           set -euo pipefail
-          KEY=/home/jimmy/apps/cai-web/registry-data/cai-corpus.key.pem
-          if [ ! -f "$KEY" ]; then
-            echo "::error::no signing key at $KEY — production has not deployed on this host yet. Preprod must not mint the publishing key."
-            exit 1
-          fi
-          tools/sign-corpus.sh "$KEY"
+          mkdir -p /home/jimmy/apps/cai-web-preprod/registry-data
+          tools/sign-corpus.sh /home/jimmy/apps/cai-web-preprod/registry-data/cai-corpus-preprod.key.pem
+
+      # ★★ AND PROVE THE SUBSTITUTION HAPPENED, before anything is published. A preprod that silently built
+      #    production's corpus is the exact failure this step exists to remove, and it would look perfectly
+      #    healthy — it would just be quietly writing test rows against the live holdout again.
+      - name: The corpus about to ship is the PREPROD one
+        if: steps.guard.outputs.go == 'yes'
+        run: |
+          set -euo pipefail
+          id=$(python3 -c 'import json;print(json.load(open("src/Cai.Web/Noise/corpus/noise-corpus-1.0.json"))["keyId"])')
+          echo "corpus keyId: $id"
+          [ "$id" = "cai-corpus-preprod" ] || { echo "::error::preprod is about to build corpus '$id', not the preprod one. Refusing."; exit 1; }
+          test -f src/Cai.Web/Noise/corpus/cai-corpus-preprod.pub.pem \
+            || { echo "::error::the preprod public key is not in the tree, so the artifact could not verify itself."; exit 1; }
 
       - name: Verify build (Release)
         if: steps.guard.outputs.go == 'yes'

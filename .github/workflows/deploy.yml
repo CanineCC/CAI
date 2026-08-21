@@ -91,6 +91,24 @@ jobs:
                  "repository copy is stale. Re-run this workflow or commit src/Cai.Web/Noise/corpus/ by hand."
           fi
 
+      # ★★ THE OTHER HALF OF THE SEPARATION. deploy-preprod.yml rewrites the corpus in ITS checkout to a
+      #    preprod one — own key id, own dates, embargo open — so that preprod can rehearse the whole standard
+      #    without touching anything here. That transformation must never travel in this direction.
+      #
+      #    It cannot today: the two workflows check out independently and preprod has `contents: read`, so it
+      #    cannot commit its transformed corpus back. This asserts it anyway, because "cannot happen" is a
+      #    claim about a workflow file that somebody will edit, and the failure it prevents is publishing a
+      #    holdout with preprod's dates and a key nobody outside the box holds — under the production name,
+      #    to an audience whose whole reason for trusting it is that it is checkable.
+      - name: The corpus about to ship is the PUBLISHED one, not preprod's
+        run: |
+          set -euo pipefail
+          id=$(python3 -c 'import json;print(json.load(open("src/Cai.Web/Noise/corpus/noise-corpus-1.0.json"))["keyId"])')
+          echo "corpus keyId: $id"
+          case "$id" in
+            *preprod*) echo "::error::production is about to ship the PREPROD corpus ('$id'). Refusing."; exit 1 ;;
+          esac
+
       # VERIFY (the old service keeps serving; any failure here = safe no-op).
       - name: Verify build (Release)
         run: dotnet build src/Cai.Web -c Release -m:1 /p:UseSharedCompilation=false
