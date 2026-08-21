@@ -48,13 +48,25 @@ Once, from anywhere — no LAN needed, the runner is on the box:
 gh workflow run "Deploy CAI to preprod" -R CanineCC/CAI -f provision=true
 ```
 
-Then point the kennel preprod tier at it:
+Then point the kennel preprod tier at it. **On the box** (five seconds, and the path an on-prem
+operator should use):
+
+```bash
+bash deploy/preprod/set-noise-api.sh --status                # read it first
+bash deploy/preprod/set-noise-api.sh http://127.0.0.1:8240   # then set it
+```
+
+Or off-network, which runs that same script on the runner — correct, but it queues behind every
+other job on a single-capacity runner, and one push to main fans out into seven serialized builds:
 
 ```bash
 gh workflow run "Preprod ops" -R CanineCC/kennel.canine.dev \
   -f action=set-preprod-noise-api -f value=http://127.0.0.1:8240
-gh workflow run "Preprod ops" -R CanineCC/kennel.canine.dev -f action=noise-api-status   # read it back
 ```
+
+★ This key is **not** carried by any deploy. `deploy-preprod.yml` writes it into the PROD env files,
+and `provision-preprod.sh` copies the prod env once at provision time; nothing re-derives it after
+that. So it has to be set directly — "it will land on the next deploy" was never true for it.
 
 Afterwards every push to `main` redeploys it, like the production tier.
 
@@ -63,7 +75,7 @@ Afterwards every push to `main` redeploys it, like the production tier.
 - **A browsable preprod site.** The kennel preprod tier reaches this over loopback, which needs no vhost, no
   certificate and no DNS — and loopback is also how it stays exempt from the public rate limits. Fronting it
   at a `preprod.*` hostname needs an nginx vhost on **canine-dgx1**, which is the one host no GitHub runner
-  can reach. See `~/Hentet/onprem-cai-preprod-edge.txt` for that hand-over.
+  can reach. See `~/Hentet/onprem-cai-preprod-setup.txt` for that hand-over.
 - **A lifted embargo.** The embargo date is inside the **signed** corpus manifest and embedded in
   `Cai.Web.dll`; a preprod deployment built from `main` carries exactly the same one. A period publishes when
   its date arrives, here as in production — that is the point of signing it. Testing the published half of
