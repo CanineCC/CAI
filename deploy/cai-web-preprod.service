@@ -1,0 +1,41 @@
+[Unit]
+# The PREPROD copy of the standard. Same code, same signed corpus, a SEPARATE database — so a rehearsal on
+# the preprod kennel tier files its intent records, its submissions and its publications here instead of into
+# the register the world reads.
+#
+# ★★ WHY THIS TIER EXISTS AT ALL. The operator console's submit posts an intent record and a publication, and
+#    #14's no-withdrawal rule makes both permanent: there is deliberately no delete. So "try it on preprod" is
+#    only safe if preprod has somewhere else to write, and until this unit existed it did not — the preprod
+#    console either pointed at the live standard or at nothing.
+#
+# ★ SINGLE INSTANCE, no blue-green: preprod takes the continuous push stream and a two-second restart is not
+#   worth a colour swap. Mirrors kennel-*-preprod on 82x0.
+Description=CAI — PREPROD (the open standard, on its own database)
+Documentation=https://github.com/CanineCC/CAI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jimmy
+Group=jimmy
+WorkingDirectory=/home/jimmy/apps/cai-web-preprod/app
+Environment=ASPNETCORE_ENVIRONMENT=Production
+# 8240 — the preprod port reserved for CAI alongside kennel's 8210/8220/8230 (and imprint's 8242).
+# ★ Bound on 0.0.0.0 like the other preprod services so the dgx1 edge CAN front it if somebody stands that
+#   vhost up. The kennel preprod tier does not need the edge: it calls this over loopback, which is also how
+#   it stays exempt from the public rate limits.
+Environment=ASPNETCORE_URLS=http://0.0.0.0:8240
+Environment=ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+Environment=HOME=/home/jimmy
+Environment=Rubrics__Root=/home/jimmy/apps/cai-web-preprod/rubrics
+# ★★ ITS OWN DATABASE, and this is the whole safety property. Anything else here — a shared path, a relative
+#    path resolved against a shared working directory — makes preprod a writer to the production register.
+Environment=Registry__DbPath=/home/jimmy/apps/cai-web-preprod/registry-data/cai-registry.db
+ExecStart=/usr/bin/dotnet /home/jimmy/apps/cai-web-preprod/app/Cai.Web.dll
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target

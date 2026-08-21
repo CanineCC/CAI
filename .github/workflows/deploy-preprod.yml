@@ -1,0 +1,174 @@
+name: Deploy CAI to preprod
+
+# The PREPROD copy of the standard, on canine-wrx1:8240 with its OWN database.
+#
+# ★★ WHY IT EXISTS. The operator console's submit posts an intent record and a publication, and #14's
+#    no-withdrawal rule makes both permanent — there is deliberately no delete and no replace. So a rehearsal
+#    on the preprod kennel tier had exactly two options: point at the LIVE standard and file a real,
+#    unretractable result under our own tool name, or point at nothing and rehearse none of it. This is the
+#    third option, and it is the only one that lets the two-tier wiring be exercised at all.
+#
+# ★★ SEPARATE DATABASE IS THE WHOLE SAFETY PROPERTY, and it is asserted below rather than assumed: the deploy
+#    refuses if the preprod unit's Registry__DbPath is not distinct from production's. A preprod that shares a
+#    store is not a preprod, it is a second writer to the register the world reads.
+#
+# ★ NO EDGE, NO CERT, NO DNS. The preprod kennel tier calls this over loopback (127.0.0.1:8240), which is also
+#   how it stays exempt from the public rate limits. Fronting it at preprod.*.canine.dev is optional, needs an
+#   nginx vhost on dgx1, and dgx1 is the one host no runner can reach — see deploy/PREPROD.md.
+on:
+  push:
+    branches: [main]
+    paths: ["src/**", "tests/**", "rubrics/**", ".github/workflows/deploy-preprod.yml", "deploy/cai-web-preprod.service"]
+  workflow_dispatch:
+    inputs:
+      provision:
+        description: "(Re)install the preprod systemd unit before deploying. Idempotent."
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-cai-preprod
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  # Same GC/JIT mitigation the production deploy uses — the runner host is shared with the scan fleet and
+  # Server GC under that contention intermittently CLR-aborts (exit 134).
+  DOTNET_gcServer: "0"
+  DOTNET_TieredCompilation: "0"
+  DOTNET_TieredPGO: "0"
+
+permissions:
+  # ★ READ ONLY, unlike the production deploy. That workflow commits the public key this host generated;
+  #   this one must never touch the published corpus — two workflows racing to commit the same signature
+  #   would put the repository's copy and the site's copy into a disagreement nobody could read.
+  contents: read
+
+jobs:
+  deploy-preprod:
+    runs-on: self-hosted
+    environment:
+      name: preprod
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Provision the preprod unit
+        if: ${{ inputs.provision }}
+        run: |
+          set -euo pipefail
+          base=/home/jimmy/apps/cai-web-preprod
+          mkdir -p "$base/app" "$base/rubrics" "$base/registry-data"
+          sudo install -m 0644 deploy/cai-web-preprod.service /etc/systemd/system/cai-web-preprod.service
+          sudo systemctl daemon-reload
+          sudo systemctl enable cai-web-preprod.service
+          # LAN only, matching every other preprod port. Harmless when the rule already exists.
+          sudo ufw allow from 192.168.1.0/24 to any port 8240 proto tcp comment "cai preprod (LAN, dgx1 nginx)" || true
+          echo "cai-web-preprod provisioned"
+
+      - name: Skip cleanly if preprod is not provisioned
+        id: guard
+        run: |
+          if [ ! -f /etc/systemd/system/cai-web-preprod.service ]; then
+            echo "::warning::cai-web-preprod is not provisioned — run this workflow once with provision=true. Skipping."
+            echo "go=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ★★ THE ASSERTION THAT MAKES THIS TIER SAFE, and it runs before anything is published. A preprod whose
+      #    database path is production's is a second writer to the live register — and #14 means what it
+      #    writes cannot be taken back. CLAUDE.md's rule holds here as much as in a datafix: read the value,
+      #    compare it to what was intended, and refuse rather than proceed on a hopeful assumption.
+      - name: The preprod database is NOT production's
+        if: steps.guard.outputs.go == 'yes'
+        run: |
+          set -euo pipefail
+          pre=$(systemctl show cai-web-preprod.service -p Environment --value | tr ' ' '\n' | grep '^Registry__DbPath=' | cut -d= -f2- || true)
+          prod=$(systemctl show cai-web.service -p Environment --value | tr ' ' '\n' | grep '^Registry__DbPath=' | cut -d= -f2- || true)
+          echo "preprod db: ${pre:-<unset>}"
+          echo "prod    db: ${prod:-<unset, service default>}"
+          if [ -z "$pre" ]; then
+            echo "::error::the preprod unit sets no Registry__DbPath, so it would fall back to the service default — which is production's store."
+            exit 1
+          fi
+          if [ "$pre" = "$prod" ]; then
+            echo "::error::preprod and production resolve to the SAME database ($pre). Refusing to deploy: a rehearsal would write into the register the world reads, and #14 does not allow a withdrawal."
+            exit 1
+          fi
+          case "$pre" in
+            /home/jimmy/apps/cai-web-preprod/*) : ;;
+            *) echo "::error::preprod's database ($pre) is outside the preprod app directory."; exit 1 ;;
+          esac
+
+      # ★★ SIGN INTO THIS CHECKOUT, with the key production already generated on this host. The corpus is
+      #    verified at start-up and CAI fails CLOSED on a bad signature, so an unsigned preprod would simply
+      #    refuse to serve a draw — and the signature must cover the bytes this artifact ships.
+      #
+      # ★ Nothing is committed back. If the key does not exist yet, production has never deployed on this host
+      #   and preprod must not be the thing that mints the publishing key.
+      - name: Sign the noise corpus (reusing production's host key)
+        if: steps.guard.outputs.go == 'yes'
+        run: |
+          set -euo pipefail
+          KEY=/home/jimmy/apps/cai-web/registry-data/cai-corpus.key.pem
+          if [ ! -f "$KEY" ]; then
+            echo "::error::no signing key at $KEY — production has not deployed on this host yet. Preprod must not mint the publishing key."
+            exit 1
+          fi
+          tools/sign-corpus.sh "$KEY"
+
+      - name: Verify build (Release)
+        if: steps.guard.outputs.go == 'yes'
+        run: dotnet build src/Cai.Web -c Release -m:1 /p:UseSharedCompilation=false
+
+      - name: Publish + restart (single instance; seconds of downtime, no drain)
+        if: steps.guard.outputs.go == 'yes'
+        run: |
+          set -euo pipefail
+          base=/home/jimmy/apps/cai-web-preprod
+          mkdir -p "$base/registry-data"
+          rm -rf "$base/app.next"
+          dotnet publish src/Cai.Web -c Release -m:1 /p:UseSharedCompilation=false -o "$base/app.next"
+          rsync -a --delete rubrics/ "$base/rubrics/"
+          rm -rf "$base/app.prev"
+          [ -d "$base/app" ] && mv "$base/app" "$base/app.prev" || true
+          mv "$base/app.next" "$base/app"
+          sudo systemctl restart cai-web-preprod.service
+
+      - name: Health check (roll back on failure)
+        if: steps.guard.outputs.go == 'yes'
+        run: |
+          set -euo pipefail
+          base=/home/jimmy/apps/cai-web-preprod
+          for i in $(seq 1 25); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8240/health || true)
+            [ "$code" = "200" ] && { echo "cai-web-preprod healthy on 8240"; ok=1; break; }
+            sleep 2
+          done
+          if [ "${ok:-0}" != "1" ]; then
+            echo "::error::cai-web-preprod did not come healthy — rolling back"
+            [ -d "$base/app.prev" ] && { rm -rf "$base/app"; mv "$base/app.prev" "$base/app"; sudo systemctl restart cai-web-preprod.service; }
+            exit 1
+          fi
+
+      # ★★ THE STANDARD MUST ACTUALLY SERVE A DRAW, not merely answer /health. CAI fails closed on an
+      #    unverifiable corpus — which is correct, and means a signature problem shows up as a 5xx on the one
+      #    endpoint that matters rather than as an unhealthy process. /health would stay green throughout.
+      - name: The preprod standard serves its holdout
+        if: steps.guard.outputs.go == 'yes'
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8240/api/noise/method || true)
+          [ "$code" = "200" ] || { echo "::error::/api/noise/method answered $code on preprod"; exit 1; }
+          valid=$(curl -fsS http://127.0.0.1:8240/api/noise/corpus | python3 -c 'import json,sys; print(json.load(sys.stdin)["manifest"]["signature"] != "")')
+          echo "corpus served, signature present: $valid"
+
+      # ★ And a reminder of the half this workflow cannot do. Pointing the kennel preprod tier at this is one
+      #   dispatch in the OTHER repository, and leaving it unsaid is how a tier gets stood up and never used.
+      - name: What still has to be pointed here
+        if: steps.guard.outputs.go == 'yes'
+        run: |
+          echo "preprod CAI is live on 127.0.0.1:8240."
+          echo "To point the kennel preprod tier at it, in CanineCC/kennel.canine.dev:"
+          echo "  gh workflow run 'Preprod ops' -f action=set-preprod-noise-api -f value=http://127.0.0.1:8240"
