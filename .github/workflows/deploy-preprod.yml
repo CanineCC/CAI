@@ -18,7 +18,9 @@ name: Deploy CAI to preprod
 on:
   push:
     branches: [main]
-    paths: ["src/**", "tests/**", "rubrics/**", ".github/workflows/deploy-preprod.yml", "deploy/cai-web-preprod.service"]
+    # ★ preprod-corpus.py IS in this list: it decides what holdout preprod rehearses against, so a
+    #   change to it that did not redeploy would leave the tier testing the previous answer.
+    paths: ["src/**", "tests/**", "rubrics/**", ".github/workflows/deploy-preprod.yml", "deploy/cai-web-preprod.service", "deploy/preprod-corpus.py"]
   workflow_dispatch:
     inputs:
       provision:
@@ -101,12 +103,9 @@ jobs:
             *) echo "::error::preprod's database ($pre) is outside the preprod app directory."; exit 1 ;;
           esac
 
-      # ★★ SIGN INTO THIS CHECKOUT, with the key production already generated on this host. The corpus is
-      #    verified at start-up and CAI fails CLOSED on a bad signature, so an unsigned preprod would simply
-      #    refuse to serve a draw — and the signature must cover the bytes this artifact ships.
+      # ★ Nothing is committed back: this workflow has `contents: read`, so the transformed corpus below
+      #   cannot travel out of this checkout. deploy.yml asserts the same thing from the other side.
       #
-      # ★ Nothing is committed back. If the key does not exist yet, production has never deployed on this host
-      #   and preprod must not be the thing that mints the publishing key.
       # ★★ PREPROD GETS ITS OWN CORPUS, ITS OWN KEY AND ITS OWN DATES — the same way it already gets its own
       #    database, env, artifact root and port. Until now it was built from PRODUCTION's corpus and signed
       #    with production's key, so its register accumulated submissions against the real holdout at the real
