@@ -62,15 +62,19 @@ public sealed record VerifyResult(bool Reproduced, double Computed, double Claim
 public static class CaiScorer
 {
     /// <summary>Geometric decay of the WITHIN-lens worst-first OWA: a lens carries many items (15+), so a sharp decay
-    /// would let the best ten weigh almost nothing. q = 0.75 keeps the worst item dominant while the rest still count.</summary>
+    /// would let the best ten weigh almost nothing. q = 0.75 keeps the worst item dominant while the rest still count.
+    /// <para>This is the DEFAULT — the value used when the rubric catalog publishes no <c>scoring</c> block. A catalog
+    /// that publishes one governs the fold instead (<see cref="ScoringParameters"/>).</para></summary>
     public const double WithinLensQ = 0.75;
 
     /// <summary>Geometric decay of the ACROSS-lens worst-first OWA: the headline folds only 4–8 lenses, so a sharper
-    /// q = 0.55 (≈46% on the worst of six) makes the weakest area dominate without the min()-degeneracy.</summary>
+    /// q = 0.55 (≈46% on the worst of six) makes the weakest area dominate without the min()-degeneracy. The DEFAULT;
+    /// a catalog's <c>scoring</c> block governs when it publishes one.</summary>
     public const double AcrossLensQ = 0.55;
 
     /// <summary>A measured, non-advisory contributor below this (0–10) is Critical and gates its lens's displayed band
-    /// at Fair — the gate changes the band, never the number.</summary>
+    /// at Fair — the gate changes the band, never the number. The DEFAULT; a catalog's <c>scoring</c> block governs
+    /// when it publishes one.</summary>
     public const double CriticalGate = 4.0;
 
     private const double ShippedWeightTolerance = 0.02;
@@ -105,7 +109,7 @@ public static class CaiScorer
 
         if (bundle.Lenses.Count > 0)
         {
-            return ScoreFromLensScores(bundle);
+            return ScoreFromLensScores(bundle, catalog?.Scoring ?? ScoringParameters.Default);
         }
 
         throw new ArgumentException("Evidence bundle carries no dimensions, meta-dimensions or lens scores.", nameof(bundle));
@@ -161,6 +165,10 @@ public static class CaiScorer
         Validate(bundle);
         var frozen = catalog?.CategoryMap() ?? EmptyCategoryMap;
 
+        // The rubric's own score-moving constants when it publishes them; otherwise the values the scorer has always
+        // used — so a catalog minted before the block existed folds exactly as it did (ADR-0004).
+        var p = catalog?.Scoring ?? ScoringParameters.Default;
+
         // ── Stage 1: per-category confidence-weighted roll-up (0–100). Advisory dimensions are kept out of the number.
         // gatedDimsByLens records the critical (<4.0 effective) contributors so a lens with one can cap its band.
         var categories = new List<CategoryResult>();
@@ -183,7 +191,7 @@ public static class CaiScorer
                 Bucket(categoryScoresByLens, lens).Add(s);
             }
 
-            foreach (var d in measured.Where(d => d.Confidence > 0 && Effective(d) < CriticalGate))
+            foreach (var d in measured.Where(d => d.Confidence > 0 && Effective(d) < p.CriticalGate))
             {
                 Bucket(gatedByLens, lens).Add(d.Id);
             }
@@ -194,7 +202,7 @@ public static class CaiScorer
         foreach (var meta in bundle.MetaDimensions.Where(m => m is { Advisory: false, ScoreZeroToTen: not null }))
         {
             Bucket(metaScoresByLens, meta.Lens).Add(meta.ScoreZeroToTen!.Value * 10.0);
-            if (meta.ScoreZeroToTen.Value < CriticalGate)
+            if (meta.ScoreZeroToTen.Value < p.CriticalGate)
             {
                 Bucket(gatedByLens, meta.Lens).Add(meta.Id);
             }
@@ -215,10 +223,10 @@ public static class CaiScorer
                 items.AddRange(metas);
             }
 
-            double? lensScore = items.Count > 0 ? RankWeightedOwa(items, WithinLensQ) : null;
+            double? lensScore = items.Count > 0 ? RankWeightedOwa(items, p.WithinLensQ) : null;
             if (string.Equals(lens, "architecture", StringComparison.Ordinal))
             {
-                lensScore = ArchitectureSurfaceFloor.Apply(lensScore, bundle.AnalyzableProjects, bundle.ProductionLoc);
+                lensScore = ArchitectureSurfaceFloor.Apply(lensScore, bundle.AnalyzableProjects, bundle.ProductionLoc, p);
             }
 
             // The critical contributors gate the band only while the lens still HAS a score (a dropped lens has no band
@@ -235,10 +243,10 @@ public static class CaiScorer
             throw new ArgumentException("No measured lenses to score.", nameof(bundle));
         }
 
-        var weights = OwaWeights(measuredLenses.Select(l => l.Score).ToList(), AcrossLensQ);
+        var weights = OwaWeights(measuredLenses.Select(l => l.Score).ToList(), p.AcrossLensQ);
         var lensResults = measuredLenses.Zip(weights, (l, w) =>
         {
-            var band = QualityBarBands.ForLens(l.Score, bundle.QualityBar, l.Lens);
+            var band = QualityBarBands.ForLens(l.Score, bundle.QualityBar, l.Lens, p);
             var gated = l.Gated.Count > 0;
             return new LensResult(l.Lens, l.Score, CapBand(band, gated), gated, l.Items, w, l.Score * w)
             {
@@ -250,7 +258,7 @@ public static class CaiScorer
 
         // Bands + transparency from the measured category scores (the coherence gate's reference set).
         var measuredCategoryScores = categories.Where(c => c.Score is not null).Select(c => c.Score!.Value).ToList();
-        var (headlineBand, coherenceNote) = BandCoherence.Cap(Bands.For(headline), measuredCategoryScores);
+        var (headlineBand, coherenceNote) = BandCoherence.Cap(p.Bands.For(headline), measuredCategoryScores, p);
         var aggregate = measuredCategoryScores.Count > 0 ? measuredCategoryScores.Average() : 0.0;
 
         return new CaiScore(
@@ -263,7 +271,7 @@ public static class CaiScorer
     /// <summary>Fallback: a bundle that carries pre-computed lens scores but no dimension evidence (a thin sidecar).
     /// Uses the shipped OWA weights when present (exact reproduction), else derives the across-lens worst-first
     /// weights. Carries no category layer, so the legacy aggregate and coherence note are empty.</summary>
-    private static CaiScore ScoreFromLensScores(EvidenceBundle bundle)
+    private static CaiScore ScoreFromLensScores(EvidenceBundle bundle, ScoringParameters p)
     {
         foreach (var l in bundle.Lenses.Where(l => l.Score is < 0 or > 100))
         {
@@ -274,11 +282,11 @@ public static class CaiScorer
         var shippedSum = ordered.Sum(l => l.OwaWeight);
         var weights = Math.Abs(shippedSum - 1.0) <= ShippedWeightTolerance && ordered.All(l => l.OwaWeight > 0)
             ? ordered.Select(l => l.OwaWeight).ToList()
-            : OwaWeights(ordered.Select(l => l.Score).ToList(), AcrossLensQ);
+            : OwaWeights(ordered.Select(l => l.Score).ToList(), p.AcrossLensQ);
         var results = ordered.Zip(weights, (l, w) => new LensResult(
-            l.Lens, l.Score, Bands.For(l.Score), CriticalGated: false, ItemCount: 0, w, l.Score * w)).ToList();
+            l.Lens, l.Score, p.Bands.For(l.Score), CriticalGated: false, ItemCount: 0, w, l.Score * w)).ToList();
         var headline = results.Sum(r => r.Contribution);
-        return new CaiScore(headline, Bands.For(headline), bundle.RubricVersion, results, [], 0.0, null, "");
+        return new CaiScore(headline, p.Bands.For(headline), bundle.RubricVersion, results, [], 0.0, null, "");
     }
 
     /// <summary>Reproduce a published headline from its evidence — recompute and compare to the claimed

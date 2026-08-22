@@ -28,16 +28,14 @@ public enum Band
 /// <summary>Bands a 0–100 score and maps each positional rank token to its published display word.</summary>
 public static class Bands
 {
-    /// <summary>The band for a 0–100 score. The thresholds are the standard; do not vary them by rubric version
-    /// (a rubric version changes how the score is computed, never how a computed score is banded).</summary>
-    public static Band For(double scoreZeroToOneHundred) => scoreZeroToOneHundred switch
-    {
-        >= 90 => Band.Exemplary,
-        >= 70 => Band.Healthy,
-        >= 50 => Band.Fair,
-        >= 25 => Band.Poor,
-        _ => Band.Critical,
-    };
+    /// <summary>The band for a 0–100 score under the DEFAULT cutlines (90/70/50/25).
+    /// <para>The cutlines are a pinned scoring input, not a presentation detail: they decide the published WORD, and
+    /// the quality bar already shifts them per repo (<see cref="QualityBarBands"/>). A rubric version carries them in
+    /// its catalog's <c>scoring</c> block (<see cref="BandCutlines"/>), so a report replays under the lines it was
+    /// read off. This overload resolves to <see cref="ScoringParameters.Default"/> — use
+    /// <see cref="BandCutlines.For(double)"/> with the catalog's cutlines when scoring against a published rubric.</para></summary>
+    public static Band For(double scoreZeroToOneHundred) =>
+        ScoringParameters.Default.Bands.For(scoreZeroToOneHundred);
 
     /// <summary>The published display label — the canonical CAI vocabulary, unified with the Watchdog surveyor. The
     /// enum members are positional rank tokens; this maps them to the display words.</summary>

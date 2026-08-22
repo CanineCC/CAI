@@ -11,16 +11,17 @@ internal static class BandCoherence
     /// <summary>The headline band capped at one band above the worst measured category, with a human note when the cap
     /// bit. <paramref name="measuredCategoryScores"/> are the 0–100 scores of the categories that produced data (null
     /// categories are already excluded by the caller). An empty set leaves the headline band untouched.</summary>
-    public static (Band Band, string Note) Cap(Band headline, IReadOnlyList<double> measuredCategoryScores)
+    public static (Band Band, string Note) Cap(Band headline, IReadOnlyList<double> measuredCategoryScores, ScoringParameters p)
     {
         ArgumentNullException.ThrowIfNull(measuredCategoryScores);
+        ArgumentNullException.ThrowIfNull(p);
         if (measuredCategoryScores.Count == 0)
         {
             return (headline, "");
         }
 
         var worst = measuredCategoryScores.Min();
-        var worstBand = Bands.For(worst);
+        var worstBand = p.Bands.For(worst);
         var cappedTier = (Band)Math.Min((int)headline, (int)worstBand + 1);
         if (cappedTier >= headline)
         {

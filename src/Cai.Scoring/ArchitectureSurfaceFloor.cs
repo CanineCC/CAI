@@ -9,31 +9,21 @@ namespace Cai.Scoring;
 /// </summary>
 internal static class ArchitectureSurfaceFloor
 {
-    /// <summary>A repo needs at least this many production projects before cross-project architecture metrics carry
-    /// real signal. Below it (with too little production LoC) the lens is CAPPED, never zeroed.</summary>
-    public const int MinProjectsForFullCredit = 2;
-
-    /// <summary>A repo needs at least this much hand-written production LoC before cross-project architecture metrics
-    /// carry real signal (a single big library can clear the bar on LoC alone).</summary>
-    public const int MinProductionLocForFullCredit = 1500;
-
-    /// <summary>Cap (0–100) applied to the architecture lens when surface is below the bar — a fair-band ceiling, so a
-    /// genuinely tidy tiny repo still reads "fine" but a stub solution cannot claim Exemplary structure.</summary>
-    public const double LowSurfaceCap = 69.0;
-
     /// <summary>The architecture-lens score capped by analyzable surface. When there is genuinely nothing to grade (no
-    /// analyzable projects) the lens is dropped (returns null) so the headline excludes it rather than crediting a 69.
-    /// When surface is below the bar (too few projects AND too little production LoC) the score is capped at
-    /// <see cref="LowSurfaceCap"/>; otherwise it is returned unchanged.</summary>
-    public static double? Apply(double? architectureScore, int analyzableProjects, int productionLoc)
+    /// analyzable projects) the lens is dropped (returns null) so the headline excludes it rather than crediting the
+    /// cap. When surface is below the bar (too few projects AND too little production LoC) the score is capped;
+    /// otherwise it is returned unchanged. The thresholds come from the rubric's pinned
+    /// <see cref="ScoringParameters"/>.</summary>
+    public static double? Apply(double? architectureScore, int analyzableProjects, int productionLoc, ScoringParameters p)
     {
+        ArgumentNullException.ThrowIfNull(p);
         if (architectureScore is not { } score)
         {
             return architectureScore;
         }
 
         // Nothing to grade (empty graph) → drop the lens from the headline entirely; an empty graph yields no
-        // architecture verdict, not a 69.
+        // architecture verdict, not a passing score.
         if (analyzableProjects == 0)
         {
             return null;
@@ -41,7 +31,8 @@ internal static class ArchitectureSurfaceFloor
 
         // A single big library (≥ the LoC bar) still has intra-project structure worth grading, and a small but
         // multi-project solution likewise — so only cap when BOTH bars are missed.
-        var lowSurface = analyzableProjects < MinProjectsForFullCredit && productionLoc < MinProductionLocForFullCredit;
-        return lowSurface ? Math.Min(score, LowSurfaceCap) : score;
+        var surface = p.ArchitectureSurface;
+        var lowSurface = analyzableProjects < surface.MinProjects && productionLoc < surface.MinProductionLoc;
+        return lowSurface ? Math.Min(score, surface.LowSurfaceCap) : score;
     }
 }

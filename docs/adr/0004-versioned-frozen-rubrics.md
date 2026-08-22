@@ -35,3 +35,21 @@ scorer resolves against that exact version.
   catalog)` folds under the CATALOG's assignment: evidence that contradicts the frozen map is
   refused rather than scored under a map nobody can fetch. Catalogs published before `.18` carry no
   category and keep verifying on the bundle's own, exactly as they were computed.
+- **The catalog also pins the FOLD's own constants, and the band cutlines with them.** The rule above —
+  pin every input that can move a score — was false as written for as long as the OWA decays, the
+  critical gate, the architecture surface floor and the band cutlines lived only as `const` in
+  `Cai.Scoring`. `rubricVersion` selected the dimension→category map and nothing else, so verifying a
+  `rubric-2026.06.0` report ran the current build's constants, and a future change to any of them
+  would have moved published numbers with no version to distinguish them. Two documents also
+  disagreed: `Band.cs` said thresholds are fixed and must not vary by rubric version, while
+  `QualityBarBands` already shifted all four cutlines by the evidence-carried `qualityBar` and called
+  itself "the single source of truth for the cutlines." A catalog now carries a `scoring` block
+  (`ScoringParameters`) holding all of it, and `CaiScorer` folds under the catalog's values.
+  **Cutlines are rubric data.** They decide the published WORD, they already vary per repository by
+  quality bar, and a constant frozen in code is not a stable vocabulary — it is an unenforced promise
+  of one, since nothing stops it being edited and the archive cannot detect that it was. Pinning them
+  in the versioned, digest-bound catalog is what makes stability *checkable*: while the values do not
+  change, every catalog carries the same ones and any holder of an older report can prove it.
+  Catalogs published without the block resolve to `ScoringParameters.Default` — exactly the values the
+  scorer has always used — so every already-published version keeps verifying to the same number, and
+  the block is omitted from the serialized form so no archived catalog's content digest changes.

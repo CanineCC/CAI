@@ -57,6 +57,17 @@ public sealed record RubricCatalog
     /// <summary>Every dimension this version defines, across all lenses.</summary>
     [JsonPropertyName("dimensions")] public IReadOnlyList<CatalogDimension> Dimensions { get; init; } = [];
 
+    /// <summary>
+    /// The score-moving constants this rubric version was computed under — the OWA decays, the critical gate, the
+    /// architecture surface floor, the band cutlines and the quality-bar shift. Null on catalogs published before the
+    /// block existed, which resolve to <see cref="ScoringParameters.Default"/>: exactly the values the scorer has
+    /// always used, so those versions keep verifying to the same number.
+    /// <para>Publishing them here is what makes ADR-0004's rule — "a catalog must pin every input that can move a
+    /// score" — true of the cutlines and the fold constants, and it is what lets a rubric version SELECT its scorer
+    /// semantics without the scorer carrying a switch over every historical version.</para>
+    /// </summary>
+    [JsonPropertyName("scoring")] public ScoringParameters? Scoring { get; init; }
+
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNameCaseInsensitive = true,

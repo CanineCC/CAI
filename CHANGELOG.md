@@ -11,6 +11,23 @@ move a score for unchanged evidence mints a new rubric version (see
 ## [Unreleased]
 
 ### Added
+- **The rubric catalog now pins the fold's own constants and the band cutlines (`scoring` block), so a
+  rubric version selects its scorer semantics.** ADR-0004 requires a catalog to pin every input that can
+  move a score, but the OWA decays, the critical gate, the architecture surface floor and the band
+  cutlines lived only as `const` in `Cai.Scoring`: `rubricVersion` selected the dimension→category map
+  and nothing else, so verifying an old report ran the current build's constants. Two documents also
+  disagreed about the cutlines — `Band.cs` said they must not vary by rubric version, while
+  `QualityBarBands` already shifted all four by the evidence-carried `qualityBar` and called itself
+  their single source of truth (and both restated `90/70/50/25`, so editing one would have diverged
+  them silently). `RubricCatalog.Scoring` now carries all of it and the scorer folds under the
+  catalog's values, which means old rubrics replay because their own catalog says what they meant —
+  no version-dispatch switch, and no historical code path kept alive.
+  **Nothing moved.** A catalog without the block resolves to `ScoringParameters.Default`, the values
+  the scorer has always used, and the block is omitted from the serialized form, so no archived
+  catalog's content digest changes and every published version verifies to the same number. The 631
+  existing tests pass unchanged; 11 new ones pin that a published block governs the fold and that two
+  rubric versions replay their own parameters from the same evidence.
+
 - **A signed delivery now carries how complete the survey behind it was (`evidence.surveyFit`).** A CAI is a fold of
   the evidence that was produced, and the artifact said nothing about how much of the survey actually resolved — so a
   headline over ten resolved lenses and the same headline over four were indistinguishable to the party holding the

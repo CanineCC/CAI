@@ -121,7 +121,7 @@ public sealed class CaiScorerTests
             ProductionLoc = 100, // below both bars
             Dimensions = [Dim("AX1", DimensionCategory.Architecture, 10)],
         }), "architecture");
-        Assert.Equal(ArchitectureSurfaceFloor.LowSurfaceCap, arch.Score, 2); // 100 capped to 69
+        Assert.Equal(ScoringParameters.Default.ArchitectureSurface.LowSurfaceCap, arch.Score, 2); // 100 capped to 69
     }
 
     [Fact]
@@ -234,12 +234,12 @@ public sealed class CaiScorerTests
     public void Headline_band_is_capped_so_it_never_out_promises_the_weakest_category()
     {
         // Worst category Poor (30) but headline lands Healthy → cap to one band above Poor = Fair.
-        var (band, note) = BandCoherence.Cap(Band.Healthy, [30.0, 100.0]);
+        var (band, note) = BandCoherence.Cap(Band.Healthy, [30.0, 100.0], ScoringParameters.Default);
         Assert.Equal(Band.Fair, band);
         Assert.NotEqual("", note);
 
         // Worst category Fair (65): Healthy is exactly one above Fair, so no cap.
-        Assert.Equal(Band.Healthy, BandCoherence.Cap(Band.Healthy, [65.0, 100.0]).Band);
+        Assert.Equal(Band.Healthy, BandCoherence.Cap(Band.Healthy, [65.0, 100.0], ScoringParameters.Default).Band);
     }
 
     // ── Determinism, weights, bands, verify, json ────────────────────────────────────────────────────────────────
