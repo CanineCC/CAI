@@ -304,6 +304,138 @@ public sealed class DeliveryTests
         Assert.DoesNotContain("busFactor", canonical);
     }
 
+    // ── survey clarity (FIT) ────────────────────────────────────────────────────────────────────────────────────
+    // How much of the survey RESOLVED. Carried so a reader can tell a thin reading from a complete one — a headline
+    // of 70 over ten resolved lenses and a headline of 70 over four are different claims. Descriptive: it must never
+    // reach the fold, because a thin survey is not a bad codebase.
+
+    private static SurveyFit SampleFit() => new()
+    {
+        DepthApplicable = 8,
+        DepthFired = 5,
+        LanguageApplicability = 9,
+        Band = "HIGH",
+        Explanation = "5 of 8 applicable domain and architecture lenses resolved on this codebase.",
+    };
+
+    [Fact]
+    public void EvidenceBundle_round_trips_surveyFit()
+    {
+        var reparsed = EvidenceBundle.Parse((SampleEvidence() with { SurveyFit = SampleFit() }).ToJson());
+
+        Assert.NotNull(reparsed.SurveyFit);
+        Assert.Equal(8, reparsed.SurveyFit!.DepthApplicable);
+        Assert.Equal(5, reparsed.SurveyFit.DepthFired);
+        Assert.Equal(9, reparsed.SurveyFit.LanguageApplicability);
+        Assert.Equal("HIGH", reparsed.SurveyFit.Band);
+        Assert.Equal("5 of 8 applicable domain and architecture lenses resolved on this codebase.", reparsed.SurveyFit.Explanation);
+    }
+
+    [Fact]
+    public void SurveyFit_reports_blind_spots_and_distinguishes_zero_clarity_from_none()
+    {
+        Assert.Equal(3, SampleFit().Abstained);
+        Assert.Equal(5.0 / 8.0, SampleFit().Depth);
+
+        // Nothing applied is NOT "clarity zero" — only the first says something about the survey.
+        var nothingApplied = new SurveyFit { DepthApplicable = 0, DepthFired = 0 };
+        Assert.Null(nothingApplied.Depth);
+        Assert.Equal(0, nothingApplied.Abstained);
+
+        // Applied and nothing resolved IS clarity zero — a total blind spot, and it must read as one.
+        var allBlind = new SurveyFit { DepthApplicable = 6, DepthFired = 0 };
+        Assert.Equal(0.0, allBlind.Depth);
+        Assert.Equal(6, allBlind.Abstained);
+    }
+
+    [Fact]
+    public void SurveyFit_never_moves_the_headline() // SACROSANCT
+    {
+        var without = SampleEvidence();
+        var with = without with { SurveyFit = SampleFit() };
+
+        var a = CaiScorer.Score(without);
+        var b = CaiScorer.Score(with);
+
+        // The whole point: a thin survey is not a bad codebase. Reporting the clarity must not score it.
+        Assert.Equal(a.Headline, b.Headline);
+        Assert.Equal(a.Band, b.Band);
+
+        // Nor may the WORST case — a survey that resolved nothing — cost the repository a single point.
+        var blind = CaiScorer.Score(without with { SurveyFit = new SurveyFit { DepthApplicable = 9, DepthFired = 0 } });
+        Assert.Equal(a.Headline, blind.Headline);
+        Assert.Equal(a.Band, blind.Band);
+    }
+
+    [Fact]
+    public void DeliveryBuilder_carries_surveyFit_into_the_signed_payload()
+    {
+        var payload = DeliveryBuilder.Build(SampleEvidence() with { SurveyFit = SampleFit() }, Request());
+
+        Assert.NotNull(payload.Evidence.SurveyFit);
+        Assert.Equal(8, payload.Evidence.SurveyFit!.DepthApplicable);
+        Assert.Equal(5, payload.Evidence.SurveyFit.DepthFired);
+
+        // It is INSIDE the signed bytes — that is the point: the clarity travels with the verdict.
+        var canonical = System.Text.Encoding.UTF8.GetString(CanonicalJson.Canonicalize(payload));
+        Assert.Contains("surveyFit", canonical);
+        Assert.Contains("depthApplicable", canonical);
+    }
+
+    [Fact]
+    public void A_package_without_surveyFit_signs_verifies_and_omits_it_from_the_canonical_form()
+    {
+        // BACKWARD COMPAT: a bundle predating the field must canonicalize without it, so every signature already in
+        // somebody's hands is wholly unaffected by this addition.
+        var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
+        using var signer = new DeliverySigner(pair);
+        var package = signer.SignPackage(DeliveryBuilder.Build(SampleEvidence(), Request()));
+
+        var r = DeliveryVerifier.Verify(package, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
+        Assert.True(r.AuthenticAndReproducing, r.Reason);
+        Assert.DoesNotContain("surveyFit", System.Text.Encoding.UTF8.GetString(CanonicalJson.Canonicalize(package.Payload)));
+    }
+
+    [Fact]
+    public void SurveyFit_survives_the_full_sign_reparse_verify_round_trip()
+    {
+        var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
+        using var signer = new DeliverySigner(pair);
+        var package = signer.SignPackage(
+            DeliveryBuilder.Build(SampleEvidence() with { SurveyFit = SampleFit() }, Request()));
+
+        var reparsed = DeliveryPackage.Parse(package.ToJson());
+        var r = DeliveryVerifier.Verify(reparsed, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
+
+        Assert.True(r.AuthenticAndReproducing, r.Reason);
+        Assert.Equal(5, reparsed.Payload.Evidence.SurveyFit!.DepthFired);
+        Assert.Equal("HIGH", reparsed.Payload.Evidence.SurveyFit.Band);
+    }
+
+    [Fact]
+    public void Editing_surveyFit_after_signing_breaks_the_signature() // tamper-evidence covers it too
+    {
+        var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
+        using var signer = new DeliverySigner(pair);
+        var package = signer.SignPackage(
+            DeliveryBuilder.Build(SampleEvidence() with { SurveyFit = SampleFit() }, Request()));
+
+        // Flattering the clarity figure after the fact must invalidate the artifact, exactly like editing a score.
+        var tampered = package with
+        {
+            Payload = package.Payload with
+            {
+                Evidence = package.Payload.Evidence with
+                {
+                    SurveyFit = SampleFit() with { DepthFired = 8, Explanation = "8 of 8 resolved." },
+                },
+            },
+        };
+
+        var r = DeliveryVerifier.Verify(tampered, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
+        Assert.False(r.AuthenticAndReproducing);
+    }
+
     [Fact]
     public void Descriptive_metrics_survive_the_full_sign_reparse_verify_round_trip()
     {

@@ -144,6 +144,17 @@
           "type": "string",
           "description": "DESCRIPTIVE, non-scored key-person-risk summary (producer-worded, e.g. \"2 of 11 devs\"); echoed verbatim, NEVER a scored dimension. Absent => consumer shows \"Not assessed\"."
         },
+        "surveyFit": {
+          "type": "object",
+          "description": "DESCRIPTIVE, non-scored survey clarity (FIT): how much of the survey actually resolved on this codebase. Echoed verbatim, NEVER folded into the CAI \u2014 a thin survey is not a bad codebase. Carried because a score from a thin survey and a score from a complete one are different claims, and without it they look identical. Absent => consumer shows no clarity figure.",
+          "properties": {
+            "depthApplicable": { "type": "integer", "minimum": 0, "description": "Domain/architecture lenses that applied to this codebase at all (a lens that does not apply is not counted, so it is never held against the repo)." },
+            "depthFired": { "type": "integer", "minimum": 0, "description": "Applicable lenses that actually resolved; the gap to depthApplicable is this survey's blind spots." },
+            "languageApplicability": { "type": ["integer", "null"], "minimum": 0, "maximum": 10, "description": "The producer catalogue's curated 0-10 applicability rating for the scanned language." },
+            "band": { "type": ["string", "null"], "description": "The producer's own band label, echoed verbatim." },
+            "explanation": { "type": ["string", "null"], "description": "The producer's one-line explanation, echoed verbatim." }
+          }
+        },
         "dimensions": {
           "type": "array",
           "items": {

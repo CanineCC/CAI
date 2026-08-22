@@ -11,6 +11,22 @@ move a score for unchanged evidence mints a new rubric version (see
 ## [Unreleased]
 
 ### Added
+- **A signed delivery now carries how complete the survey behind it was (`evidence.surveyFit`).** A CAI is a fold of
+  the evidence that was produced, and the artifact said nothing about how much of the survey actually resolved — so a
+  headline over ten resolved lenses and the same headline over four were indistinguishable to the party holding the
+  report. They are different claims. The bundle now carries the producer's per-scan survey clarity: `depthApplicable`
+  (domain/architecture lenses that applied to this codebase at all), `depthFired` (those that resolved), and the
+  optional `languageApplicability`, `band` and `explanation` the producer publishes. The gap between the first two is
+  the survey's blind spots. Note what the denominator does: a lens that does not APPLY to a repository is not counted
+  in it, so "not applicable" stops being the same silence as "applicable but blind" — the first was never held against
+  the repo and now visibly isn't.
+  **It is descriptive and non-scored, permanently.** `CaiScorer` reads none of it and a test pins that the worst
+  possible clarity — every applicable lens blind — cannot cost a repository a single point. That is deliberate: a thin
+  survey is not a bad codebase, and scoring it as one would be the exact confusion the figure exists to prevent. It
+  rides inside the signed payload like `rebuildCost`/`busFactor`/`topology` (verbatim, tamper-evident, omitted from the
+  canonical form when absent), so every signature already in someone's hands is unaffected, and no rubric version is
+  minted — it cannot move a score for unchanged evidence.
+
 - **Thirteen historical rubric catalogs published, closing the archive's back-gap.** Production runs
   referenced `rubric-2026.06.0`–`.5`, `.7`, `.10`, `.11`, `.17`, `rubric-2026.08.10`, `.11` and `.13`,
   but the archive had never held them — so a report naming one could not be verified by the party it

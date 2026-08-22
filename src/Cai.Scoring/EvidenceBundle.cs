@@ -82,6 +82,18 @@ public sealed record EvidenceBundle
     /// omitted from the canonical form, so old packages are unaffected.</summary>
     [JsonPropertyName("topology")] public JsonNode? Topology { get; init; }
 
+    /// <summary>DESCRIPTIVE, NON-SCORED survey clarity — "FIT": how complete a reading this scan actually got of this
+    /// codebase. It answers "how much of the survey resolved?", NEVER "how good is this code?", and it is carried for
+    /// exactly one reason: <b>a score from a thin survey and a score from a complete one are different claims, and
+    /// without this they look identical.</b> A headline of 70 over ten resolved lenses and a headline of 70 over four
+    /// is not the same statement, and until now the signed artifact could not tell a reader which it was holding.
+    /// <para>Like <see cref="RebuildCost"/>, <see cref="BusFactor"/> and <see cref="Topology"/> this is carried VERBATIM
+    /// through the signed package for a downstream consumer to ECHO. It is NEVER folded into the CAI and can NEVER move
+    /// the headline (<see cref="CaiScorer"/> reads none of it) — deliberately, because a thin survey is not a bad
+    /// codebase, and scoring it as one would be the exact confusion this field exists to prevent. Absent ⇒ consumer
+    /// shows no clarity figure; omitted from the canonical form, so old packages are unaffected.</para></summary>
+    [JsonPropertyName("surveyFit")] public SurveyFit? SurveyFit { get; init; }
+
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -144,3 +156,46 @@ public readonly record struct LensInput(
     [property: JsonPropertyName("lens")] string Lens,
     [property: JsonPropertyName("score")] double Score,
     [property: JsonPropertyName("owaWeight")] double OwaWeight);
+
+/// <summary>
+/// DESCRIPTIVE, NON-SCORED survey clarity for one scan — see <see cref="EvidenceBundle.SurveyFit"/>. Reports how much
+/// of the survey resolved, so a reader can tell a thin reading from a complete one.
+/// <para>The producer owns these numbers; CAI neither computes nor validates them beyond shape, and never folds them.
+/// Two independent limits are reported rather than one blended figure, because they fail for opposite reasons and a
+/// reader needs to know which one bit: a rich codebase surveyed by a frontend that cannot resolve it, and a
+/// fully-supported language surveying a codebase with little structure to find, both produce a thin reading.</para>
+/// </summary>
+public sealed record SurveyFit
+{
+    /// <summary>Domain/architecture lenses that APPLIED to this codebase at all — the denominator. This is the
+    /// applicability determination: a lens that does not apply (no UI, no domain model) is not counted here, so it is
+    /// never held against the repository. 0 ⇒ nothing applied and no clarity figure can be stated.</summary>
+    [JsonPropertyName("depthApplicable")] public int DepthApplicable { get; init; }
+
+    /// <summary>Applicable lenses that actually RESOLVED and returned a result — the numerator. The gap between this
+    /// and <see cref="DepthApplicable"/> is this survey's blind spots: lenses that applied and came back empty.</summary>
+    [JsonPropertyName("depthFired")] public int DepthFired { get; init; }
+
+    /// <summary>The producer catalogue's curated 0–10 applicability rating for the scanned LANGUAGE — how much of the
+    /// lens catalogue can be brought to bear on that language at all. Null when the producer does not publish one;
+    /// a consumer then reads <see cref="DepthFired"/>/<see cref="DepthApplicable"/> alone, which is the
+    /// codebase-specific half.</summary>
+    [JsonPropertyName("languageApplicability")] public int? LanguageApplicability { get; init; }
+
+    /// <summary>The producer's own band label for the clarity figure (its vocabulary, echoed verbatim — CAI does not
+    /// derive or check it). Null when the producer publishes none.</summary>
+    [JsonPropertyName("band")] public string? Band { get; init; }
+
+    /// <summary>The producer's one-line explanation in the reader's terms (e.g. "5 of 8 applicable domain and
+    /// architecture lenses resolved on this codebase"). Echoed verbatim; null when none was supplied.</summary>
+    [JsonPropertyName("explanation")] public string? Explanation { get; init; }
+
+    /// <summary>Applicable lenses that could not resolve what they needed — this survey's blind spots
+    /// (<see cref="DepthApplicable"/> − <see cref="DepthFired"/>, floored at 0). Derived, never on the wire.</summary>
+    [JsonIgnore] public int Abstained => Math.Max(0, DepthApplicable - DepthFired);
+
+    /// <summary>The resolved fraction of the applicable lenses (0–1), or null when nothing applied — a clarity of zero
+    /// and a clarity that could not be computed are different claims, and only the first says anything about the
+    /// survey. Derived, never on the wire.</summary>
+    [JsonIgnore] public double? Depth => DepthApplicable > 0 ? (double)DepthFired / DepthApplicable : null;
+}
