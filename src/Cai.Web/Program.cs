@@ -9,6 +9,8 @@ using Cai.Web.Noise;
 using Cai.Web.Registry;
 using FluentValidation;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -115,6 +117,11 @@ builder.Services.AddSingleton<IRegistryStore, SqliteRegistryStore>();
 builder.Services.AddSingleton<INoiseStore, SqliteNoiseStore>();
 builder.Services.AddSingleton<TrustedKeyProvider>();
 builder.Services.AddHealthChecks().AddCheck<RegistryHealthCheck>("registry");
+
+// ★★ THE STANDARD ITSELF, AS A READINESS POINT. /health was green for two days while every noise endpoint
+// returned 500 — see NoiseStandardHealthCheck for why. This forces the lazily-initialised corpus load, so a
+// probe fails at the same moment the API does rather than whenever somebody next looks.
+builder.Services.AddHealthChecks().AddCheck<Cai.Web.Noise.NoiseStandardHealthCheck>("noise-standard");
 
 // Behind the dgx1 nginx reverse proxy: trust X-Forwarded-* so the rate limiter partitions by the REAL client IP.
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
@@ -228,6 +235,54 @@ app.UseAuthorization();
 // Readiness probe (P2): /health is 200 only when the rubric catalog store has versions to serve. Exempt from the API
 // rate limiter (it is not under /api). The deploy workflow polls this before swapping the live app.
 app.MapHealthChecks("/health").AllowAnonymous();
+
+// ★★ THE DETAILED PROBE — one traffic light PER MEASURING POINT, for the operator dashboard.
+// `/health` answers a single word, which is the right shape for a deploy gate and the wrong shape for a
+// human asking "how is the standard doing?". This lists every check with its own status, the words that
+// say what it means, and the data it measured — so a dashboard can show WHICH point is amber rather than
+// that something, somewhere, is.
+//
+// ★ Anonymous and cheap on purpose: it is polled by the operator console, and a probe that needs a
+//   credential is one that stops being polled.
+app.MapHealthChecks("/api/health/detail", new HealthCheckOptions
+{
+    ResponseWriter = static async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            status = report.Status.ToString(),
+            // ★ The traffic light, computed here rather than in every consumer. Three consumers deriving
+            //   "is this red?" from a status string is three chances to disagree about amber.
+            light = report.Status switch
+            {
+                HealthStatus.Healthy => "green",
+                HealthStatus.Degraded => "amber",
+                _ => "red",
+            },
+            totalDurationMs = report.TotalDuration.TotalMilliseconds,
+            checkedAt = DateTimeOffset.UtcNow,
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                light = e.Value.Status switch
+                {
+                    HealthStatus.Healthy => "green",
+                    HealthStatus.Degraded => "amber",
+                    _ => "red",
+                },
+                // ★★ THE SENTENCE MATTERS MORE THAN THE STATUS. "unhealthy" sends somebody to the logs;
+                //    "the corpus signature does not verify — re-run the deploy, which re-signs on the box"
+                //    sends them to the fix.
+                description = e.Value.Description,
+                exception = e.Value.Exception?.GetType().Name,
+                durationMs = e.Value.Duration.TotalMilliseconds,
+                data = e.Value.Data,
+            }),
+        }).ConfigureAwait(false);
+    },
+}).AllowAnonymous();
 
 // ── The standard API (what the Watchdog surveyor and anyone else calls) ───────────────────────────────────────────
 // The whole API is intentionally public (a read-only, rate-limited standard). Each endpoint opts out of the default-deny
