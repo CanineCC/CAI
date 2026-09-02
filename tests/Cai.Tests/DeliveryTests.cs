@@ -47,6 +47,29 @@ public sealed class DeliveryTests
     }
 
     [Fact]
+    public void The_rubric_content_digest_rides_inside_the_signature_and_null_omits_the_field()
+    {
+        // W5 §7.3: a request carrying the published digest produces a payload that witnesses the
+        // rubric's CONTENT — inside the canonical bytes, so the signature covers it.
+        var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
+        using var signer = new DeliverySigner(pair);
+        var keys = new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] };
+
+        var with = signer.SignPackage(DeliveryBuilder.Build(
+            SampleEvidence(), Request() with { RubricContentHash = "sha256:abc123" }));
+        Assert.Equal("sha256:abc123", with.Payload.RubricContentHash);
+        Assert.Contains("rubricContentHash", with.ToJson());
+        Assert.True(DeliveryVerifier.Verify(with, keys).AuthenticAndReproducing);
+
+        // And the pre-field wire shape is untouched: a null digest omits the field entirely, so
+        // nothing minted before the field existed changes by a byte.
+        var without = signer.SignPackage(DeliveryBuilder.Build(SampleEvidence(), Request()));
+        Assert.Null(without.Payload.RubricContentHash);
+        Assert.DoesNotContain("rubricContentHash", without.ToJson());
+        Assert.True(DeliveryVerifier.Verify(without, keys).AuthenticAndReproducing);
+    }
+
+    [Fact]
     public void Signed_package_verifies_and_reproduces()
     {
         var (package, keys) = SignedSample();

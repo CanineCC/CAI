@@ -24,6 +24,12 @@ public sealed record DeliveryBuildRequest
 
     /// <summary>The issuer name stamped into the payload (defaults to cai).</summary>
     public string IssuerName { get; init; } = "codeassuranceindex.info";
+
+    /// <summary>The published content digest of the rubric version the evidence scored under
+    /// (<c>sha256:…</c>, see <see cref="RubricDigest"/>), carried into the signed payload so the
+    /// artifact witnesses the rubric's CONTENT and not just its name. Null omits the field —
+    /// evidence predating the digest keeps its exact pre-field wire shape.</summary>
+    public string? RubricContentHash { get; init; }
 }
 
 /// <summary>
@@ -58,6 +64,7 @@ public static class DeliveryBuilder
             Producer = request.Producer,
             Subject = request.Subject with { Commit = request.Subject.Commit ?? evidence.Commit },
             RubricVersion = evidence.RubricVersion,
+            RubricContentHash = request.RubricContentHash,
             QualityBar = evidence.QualityBar,
             Measurement = measurement,
             Verdict = ToVerdict(score),
