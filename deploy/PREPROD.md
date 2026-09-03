@@ -31,6 +31,7 @@ other's register.
 | The kennel preprod tier cannot reach the live standard | `deploy/preprod/provision-preprod.sh` in the kennel repo blanks `Kennel__Cai__NoiseApiUrl`, and the `set-preprod-noise-api` action refuses the live hostname outright |
 | It cannot mint the corpus signing key | the deploy fails if production's key is absent, rather than generating one |
 | It cannot rewrite the published corpus | the workflow has `contents: read`; only the production deploy commits the public key back |
+| A delivery it accepts is signed by **preprod's** key, not production's | `Registry__KeysPath` on the preprod unit points at a key set holding only `kennel-preprod` — the public half of the key `provision-preprod.sh` mints for the preprod kennel tier |
 
 ★ **The kennel-side leak this closed.** `deploy-preprod.yml` in the kennel repo writes
 `Kennel__Cai__NoiseApiUrl=https://api.codeassuranceindex.info` into the **production** env files, and says in
@@ -39,6 +40,20 @@ publication". But `provision-preprod.sh` derived the preprod env by **copying th
 `CaiRegistry` and SMTP — so the override was defeated by the copy it was written to survive. It had not yet
 fired (checked 2026-08-21: both preprod env files carried zero entries, because they were provisioned before
 that deploy step landed), and it would have fired on the next `provision`.
+
+★ **The registry could not accept anything at all until 2026-09-03.** `TrustedKeyProvider` reads
+`Registry:KeysPath`, and an unset path yields an EMPTY key set — so every publish was rejected. That is the
+right failure mode for a box that has not been provisioned yet, and it is deliberately *Degraded, not
+Unhealthy*, so a fresh slot still passes the deploy gate. The cost is that it looks like a tier waiting to be
+finished rather than one that is broken, and nothing says which: `cai-web-preprod.service` had simply never
+carried the line, while `cai-web.service` had carried it since standup. The health detail said so in as many
+words — "no ACTIVE trusted signing key is configured — every publish is rejected" — on every read, for as
+long as the tier had existed. A rehearsal of a submit would have failed at the ingest gate, which is
+precisely the step this tier exists to prove.
+
+The key it trusts is **preprod's own** (`kennel-preprod`), never `cai-ed25519-2026-07`. Trusting production's
+signing key here would let the preprod register accept production-signed deliveries — the same identity
+confusion the separate key was minted to prevent, pointed the other way.
 
 ## Standing it up
 

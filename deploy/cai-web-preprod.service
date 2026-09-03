@@ -32,6 +32,20 @@ Environment=Rubrics__Root=/home/jimmy/apps/cai-web-preprod/rubrics
 # ★★ ITS OWN DATABASE, and this is the whole safety property. Anything else here — a shared path, a relative
 #    path resolved against a shared working directory — makes preprod a writer to the production register.
 Environment=Registry__DbPath=/home/jimmy/apps/cai-web-preprod/registry-data/cai-registry.db
+# ★★ ITS OWN TRUSTED KEY SET, AND WITHOUT THIS LINE THE TIER CANNOT REHEARSE THE ONE THING IT EXISTS FOR.
+#    TrustedKeyProvider treats an unset Registry:KeysPath as an EMPTY set and rejects every publish — the
+#    correct failure mode for an unprovisioned box, and indistinguishable from a healthy one unless somebody
+#    reads the health detail. The production unit has carried this line since standup; this one never did, so
+#    preprod sat Degraded ("no ACTIVE trusted signing key is configured — every publish is rejected") and any
+#    rehearsal of a submit would have failed at the gate rather than proving the wiring works.
+#
+# ★ THE KEY IT TRUSTS IS PREPROD'S OWN, not production's. provision-preprod.sh mints kennel-preprod into
+#   ~/.config/kennel/preprod-delivery.keypair.json specifically so a delivery minted on preprod is verifiable
+#   as PREPROD's and cannot be mistaken for a production artifact; this file is the public half of exactly
+#   that key, so the two ends of the rehearsal agree. Trusting cai-ed25519-2026-07 here — the production
+#   signing key — would let the preprod register accept production-signed deliveries, which is the same
+#   confusion pointed the other way. See deploy/PREPROD.md.
+Environment=Registry__KeysPath=/home/jimmy/apps/cai-web-preprod/registry-data/trusted-keys.json
 ExecStart=/usr/bin/dotnet /home/jimmy/apps/cai-web-preprod/app/Cai.Web.dll
 Restart=on-failure
 RestartSec=5
