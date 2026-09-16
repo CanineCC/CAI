@@ -211,9 +211,12 @@ public static class DeliveryVerifier
         if (package.Payload.RubricContentHash is { } witnessed
             && !string.Equals(witnessed, rubric.ContentHash, StringComparison.Ordinal))
         {
+            var supplied = rubric.ContentHash is null
+                ? "the supplied rubric witnesses no published document (it was built in memory)"
+                : $"the supplied catalog digests to {rubric.ContentHash}";
             return new DeliveryVerification(true,
                 "signature valid but the supplied rubric is not the document this package was folded under "
-                + $"(package witnesses {witnessed}, supplied catalog digests to {rubric.ContentHash})",
+                + $"(package witnesses {witnessed}; {supplied})",
                 Reproduced: false, ClaimedCai: claimed);
         }
 
