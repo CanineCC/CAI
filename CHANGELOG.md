@@ -10,6 +10,60 @@ move a score for unchanged evidence mints a new rubric version (see
 
 ## [Unreleased]
 
+### Removed — BREAKING (0.2.0)
+
+- **There is no longer any way to fold a CAI score, or read a band word, without naming the rubric it was
+  computed under.** `CaiScorer.Score(EvidenceBundle)`, `CaiScorer.Verify(EvidenceBundle, double)` and
+  `Bands.For(double)` are DELETED, and `catalog` is non-nullable on what remains.
+
+  Why removed rather than deprecated: `1d557c3` let a catalog pin the fold's constants and the cutlines,
+  and four of the five call sites in the system kept calling the overload that silently substitutes
+  `ScoringParameters.Default` — including `DeliveryBuilder`, the mint-time trust gate, and
+  `DeliveryVerifier`, the consumer's reproducibility check. `[Obsolete]` is a warning: the build stays
+  green and the wrong number still ships. For a VERIFIER that is the worst failure mode available — the
+  caller believes they reproduced a headline when they re-folded it under their own build's constants. A
+  compile error is strictly better than a confidently wrong verdict.
+
+  **The fallback survives, because it is not the defect.** A catalog publishing no `scoring` block still
+  resolves to `ScoringParameters.Default`, and one predating `category` still folds on the bundle's own —
+  which is what keeps all 38 published rubric versions verifying to the same number. "This catalog pins
+  nothing" is a fact about a rubric; "I fetched no catalog" was a fact about the caller. Only the second
+  is now unrepresentable.
+
+- `DeliveryBuildRequest.RubricContentHash`. The builder DERIVES the digest from the rubric it folded
+  under; accepting one from the caller let a payload witness one document while its number came from
+  another — the single thing a content digest exists to prevent.
+
+- `DeliveryVerifier.Verify(..., bool reproduce, ...)`. A flag that silently changed what "verified" means.
+  Split into `VerifySignature` (authenticity alone, folds nothing) and `Verify` (rubric required, always
+  reproduces, and REFUSES a rubric whose version or digest is not the one the package witnesses).
+
+### Fixed
+
+- **The registry's two rubric endpoints disagreed about what a version contains — for all 38 published
+  versions.** `/api/rubrics/{v}/digest` hashes the RAW archived document; `/api/rubrics/{v}/catalog`
+  serves `RubricCatalog.ToJson()`. `CatalogDimension.DeepScan` was a non-nullable bool, so `ToJson()`
+  added `"deepScan": false` to every dimension the catalog endpoint served while the digest endpoint
+  hashed a document without it. Canonicalization does not rescue that — it normalizes formatting and
+  ordering, not an added field. Any consumer fetching the catalog and checking it against the digest
+  endpoint, or against a delivery's `rubricContentHash`, would have concluded the archive had been
+  tampered with. `DeepScan` is now `bool?`: absent means the catalog does not say, which is the truth —
+  no publisher has ever emitted the field.
+
+- **`ScoringParameters` compared by reference where it promised value semantics.**
+  `QualityBarParameters` holds two dictionaries, and a record's generated equality compares members with
+  `EqualityComparer<T>.Default` — reference equality for a dictionary. Parameters parsed off the wire
+  never equalled the identical parameters in memory, so every check of the form "does this rubric version
+  pin the same rules?" quietly answered "different". Now structural, with an order-independent hash.
+
+- `ResolvedRubric.ContentHash` is nullable, and `FromCatalog` produces null. The digest exists so a holder
+  can re-fetch the named version and prove it was not edited; that check needs something to fetch. A
+  catalog built in memory has no published counterpart, so digesting its serialized form asserted a check
+  nobody can perform — and the result was indistinguishable from a real witness.
+
+- The rubric-mismatch refusal names the in-memory case instead of rendering a blank digest. A guard that
+  aborts correct-looking work and cannot say why is a guard people learn to delete.
+
 ### Added
 - **The rubric catalog now pins the fold's own constants and the band cutlines (`scoring` block), so a
   rubric version selects its scorer semantics.** ADR-0004 requires a catalog to pin every input that can

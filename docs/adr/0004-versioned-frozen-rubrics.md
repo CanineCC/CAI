@@ -53,3 +53,47 @@ scorer resolves against that exact version.
   Catalogs published without the block resolve to `ScoringParameters.Default` — exactly the values the
   scorer has always used — so every already-published version keeps verifying to the same number, and
   the block is omitted from the serialized form so no archived catalog's content digest changes.
+
+## Amendment — 2026-09-16: when the rule became TRUE of the artifacts
+
+The Consequences above were written when the capability shipped (`1d557c3`, 2026-08-22) and read as
+though they described the system. They did not, and the gap is worth recording, because it is the same
+gap this ADR exists to close: **a rule the producer cannot follow is not pinned, it is aspired to.**
+
+What was true on 2026-08-22: a catalog *could* carry a `scoring` block, and `CaiScorer.Score(bundle,
+catalog)` *would* fold under one.
+
+What was NOT true, and stayed untrue for three weeks:
+
+- **No catalog carried a block — 0 of 38 published versions.** Nor could one: the publisher is the
+  kennel engine, and it emitted a hand-rolled three-field record (`rubricVersion`, `lenses`,
+  `dimensions`) of its own rather than `Cai.Scoring.RubricCatalog`. The field did not exist to emit.
+- **The producer could not honour a block if one existed.** The engine pinned `Cai.Scoring 0.1.3-ws-e`,
+  an assembly with no `ScoringParameters` type at all — and no `Score(bundle, catalog)` overload either.
+- **So the dimension→category map was not pinned in practice either**, though this ADR states it is
+  "from `rubric-2026.08.18`". That is true of `Cai.Web`, which passes a catalog. The engine could not:
+  it folded on the categories it had produced itself. Self-consistent, therefore never wrong — and
+  unverifiable against the frozen map, which is precisely the hole the paragraph above claims to close.
+- **Four of the five scoring call sites in the system passed no catalog**, including `DeliveryBuilder`
+  (the mint-time trust gate) and `DeliveryVerifier` (the consumer's reproducibility check).
+
+What is true from 2026-09-16 (`Cai.Scoring` 0.2.0):
+
+- There is no way to fold a score, or read a band word, without naming the rubric it came from:
+  `Score(EvidenceBundle)`, `Verify(EvidenceBundle, double)` and `Bands.For(double)` are DELETED and the
+  catalog is non-nullable on what remains.
+- The engine folds under the catalog and EMITS `Cai.Scoring.RubricCatalog` from the same declared source,
+  so the published document and the number cannot describe different parameters.
+- The band cutlines are read off the rubric rather than from four hand-written copies of 90/70/50/25.
+- `ResolvedRubric` binds a catalog to the digest of the document it came from, and `DeliveryBuilder`
+  derives the payload's `rubricContentHash` from the rubric it folded under instead of accepting one.
+
+What is STILL not true, stated so the next reader is not misled the same way:
+
+- **No published rubric version pins its own constants yet.** Every version resolves to
+  `ScoringParameters.Default`. Minting one is a release decision, not a code change.
+- **The kennel PRODUCT still bands under the defaults.** Unlike the engine — whose analyzer image tag IS
+  its rubric version — the product renders many repositories at once, each free to pin a different
+  version, so the correct source is the catalog resolved per repository. Until that lands, a published
+  block whose values DIFFER from the defaults would band public pages under one set of cutlines while the
+  signed verdict folded under another. That constraint is enforced by a test, not by this sentence.
