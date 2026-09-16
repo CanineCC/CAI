@@ -78,7 +78,7 @@ public sealed record DeliveryVerification(
     double? ClaimedCai = null)
 {
     /// <summary>
-    /// True only when the signature is authentic AND (if evidence was folded) the headline reproduced.
+    /// True only when the signature is authentic AND the headline actually reproduced.
     /// </summary>
     /// <remarks>
     /// Named for the two facts it conjoins, NOT "Trustworthy", which it was called until 2026-08-07. Whitepaper W3
@@ -86,8 +86,12 @@ public sealed record DeliveryVerification(
     /// safe, or fit to buy — it establishes that this document is ours, unedited, and internally consistent. An
     /// unqualified trust label invites exactly the over-reading the paper warns against, and the /verify page's own
     /// copy already said "Authentic and reproducing" while the field underneath said "trustworthy".
+    /// <para>The conjunction is on <c>Reproduced == true</c>, not <c>!= false</c>. Until 2026-09-16 an ABSENT
+    /// reproduction — a signature-only check, which folds nothing — read as a passing one, so a verification that had
+    /// not reproduced anything still answered true to the question "did this reproduce?". An unmeasured property
+    /// defaults to the benign answer only if you let it.</para>
     /// </remarks>
-    public bool AuthenticAndReproducing => SignatureValid && Reproduced != false;
+    public bool AuthenticAndReproducing => SignatureValid && Reproduced == true;
 }
 
 /// <summary>
@@ -99,10 +103,13 @@ public sealed record DeliveryVerification(
 /// </summary>
 public static class DeliveryVerifier
 {
-    /// <summary>Verify a package (parsed) against a key set. <paramref name="reproduce"/> also re-folds the evidence and
-    /// checks it reproduces the verdict headline within <paramref name="tolerance"/>.</summary>
-    public static DeliveryVerification Verify(
-        DeliveryPackage package, DeliveryPublicKeySet keys, bool reproduce = true, double tolerance = 0.5)
+    /// <summary>
+    /// Check AUTHENTICITY alone: that this package is the issuer's, unedited. It folds nothing, so it says nothing
+    /// about whether the headline is the number the evidence produces — <see cref="DeliveryVerification.Reproduced"/>
+    /// stays null and <see cref="DeliveryVerification.AuthenticAndReproducing"/> is false. Use
+    /// <see cref="Verify(DeliveryPackage, DeliveryPublicKeySet, ResolvedRubric, double)"/> for the full check.
+    /// </summary>
+    public static DeliveryVerification VerifySignature(DeliveryPackage package, DeliveryPublicKeySet keys)
     {
         ArgumentNullException.ThrowIfNull(package);
         ArgumentNullException.ThrowIfNull(keys);
@@ -157,24 +164,71 @@ public static class DeliveryVerifier
             return new DeliveryVerification(false, "signature does not verify (tampered payload or wrong key)");
         }
 
-        if (!reproduce)
+        return new DeliveryVerification(true, null);
+    }
+
+    /// <summary>
+    /// The full check: the package is the issuer's AND its headline reproduces from the embedded evidence, folded under
+    /// the rubric the package NAMES.
+    ///
+    /// <para><paramref name="rubric"/> is required, and that is the point. A re-fold is only evidence of anything if it
+    /// runs the criteria the artifact was computed under; a verifier that substitutes its own build's constants
+    /// confirms nothing and can contradict the issuer the moment a rubric version pins its own. The package witnesses
+    /// which document those criteria came from (<see cref="DeliveryPayload.RubricContentHash"/>), so a rubric that is
+    /// not that document is refused rather than quietly folded under.</para>
+    /// </summary>
+    /// <param name="package">The parsed package.</param>
+    /// <param name="keys">The issuer key set.</param>
+    /// <param name="rubric">The resolved catalog for <see cref="DeliveryPayload.RubricVersion"/>.</param>
+    /// <param name="tolerance">Permitted absolute difference between the recomputed and claimed headline.</param>
+    public static DeliveryVerification Verify(
+        DeliveryPackage package, DeliveryPublicKeySet keys, ResolvedRubric rubric, double tolerance = 0.5)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        ArgumentNullException.ThrowIfNull(keys);
+        ArgumentNullException.ThrowIfNull(rubric);
+
+        var authentic = VerifySignature(package, keys);
+        if (!authentic.SignatureValid)
         {
-            return new DeliveryVerification(true, null);
+            return authentic;
         }
 
-        // Independent reproducibility check: fold the embedded evidence and compare to the stated headline.
+        var claimed = package.Payload.Verdict.Cai;
+
+        // The rubric handed in must BE the one the artifact names. Version first: it is present on every package,
+        // including those minted before the digest field existed.
+        if (!string.Equals(package.Payload.RubricVersion, rubric.RubricVersion, StringComparison.Ordinal))
+        {
+            return new DeliveryVerification(true,
+                $"signature valid but the supplied rubric is '{rubric.RubricVersion}' and the package names "
+                + $"'{package.Payload.RubricVersion}'",
+                Reproduced: false, ClaimedCai: claimed);
+        }
+
+        // Then content: a package that witnesses a digest must be verified against THAT document, not merely against
+        // something sharing its version string — which is exactly the substitution the digest exists to detect.
+        if (package.Payload.RubricContentHash is { } witnessed
+            && !string.Equals(witnessed, rubric.ContentHash, StringComparison.Ordinal))
+        {
+            return new DeliveryVerification(true,
+                "signature valid but the supplied rubric is not the document this package was folded under "
+                + $"(package witnesses {witnessed}, supplied catalog digests to {rubric.ContentHash})",
+                Reproduced: false, ClaimedCai: claimed);
+        }
+
+        // Independent reproducibility check: fold the embedded evidence UNDER THE NAMED RUBRIC and compare.
         double computed;
         try
         {
-            computed = CaiScorer.Score(package.Payload.Evidence).Headline;
+            computed = CaiScorer.Score(package.Payload.Evidence, rubric.Catalog).Headline;
         }
         catch (Exception e)
         {
             return new DeliveryVerification(true, $"signature valid but evidence could not be scored: {e.Message}",
-                Reproduced: false, ClaimedCai: package.Payload.Verdict.Cai);
+                Reproduced: false, ClaimedCai: claimed);
         }
 
-        var claimed = package.Payload.Verdict.Cai;
         var reproduced = Math.Abs(computed - claimed) <= tolerance;
         return new DeliveryVerification(
             true,

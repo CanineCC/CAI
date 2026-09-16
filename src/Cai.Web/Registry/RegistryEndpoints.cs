@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Cai.Delivery;
+using Cai.Scoring;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
@@ -66,7 +67,8 @@ public static class RegistryEndpoints
     // 201 stored · 200 identical re-push (idempotent) · 400 malformed/schema-invalid · 409 id already holds a
     // DIFFERENT artifact · 422 trust rejection (unknown/retired key, bad signature, unsupported MAJOR, non-reproducing)
     private static async Task<IResult> PublishAsync(
-        HttpContext http, IRegistryStore store, TrustedKeyProvider trusted, ILogger<RegistryEndpoints.Log> log)
+        HttpContext http, IRegistryStore store, TrustedKeyProvider trusted, RubricCatalogStore rubrics,
+        ILogger<RegistryEndpoints.Log> log)
     {
         string ownerOrgId;
         string rawPackage;
@@ -132,7 +134,16 @@ public static class RegistryEndpoints
         // (authenticity: tampered/unsigned/wrong-key ⇒ reject) AND the verdict reproduces from the embedded evidence
         // (honesty: a signed-but-dishonest number is refused distribution). Cai.Scoring is used to CHECK the number,
         // never to change it — the stored artifact stays byte-for-byte the producer's.
-        var verification = DeliveryVerifier.Verify(package, trusted.Keys, reproduce: true);
+        var rubric = ResolvedRubric.FromStore(rubrics, package.Payload.RubricVersion);
+        if (rubric is null)
+        {
+            log.LogWarning("Registry publish rejected: unservable rubric {Version}", package.Payload.RubricVersion);
+            return UnprocessableEntity(
+                $"rubric version '{package.Payload.RubricVersion}' is not published by this archive — the verdict "
+                + "cannot be checked against the criteria it claims");
+        }
+
+        var verification = DeliveryVerifier.Verify(package, trusted.Keys, rubric);
         if (!verification.SignatureValid)
         {
             log.LogWarning("Registry publish rejected: {Reason}", verification.Reason);

@@ -79,10 +79,6 @@ public static class CaiScorer
 
     private const double ShippedWeightTolerance = 0.02;
 
-    /// <summary>Score an evidence bundle. Folds dimensions + meta-dimensions when present (the primary path); falls back
-    /// to pre-computed lens scores for a thin bundle.</summary>
-    public static CaiScore Score(EvidenceBundle bundle) => Score(bundle, catalog: null);
-
     /// <summary>
     /// Score an evidence bundle against a PUBLISHED rubric catalog — the version-pinned form of the fold.
     /// <para>The catalog is the authority on which category each dimension folds into, because that assignment moves
@@ -91,17 +87,22 @@ public static class CaiScorer
     /// otherwise, the bundle is REJECTED rather than scored under either map — the producer's map has drifted from the
     /// rubric it says it measured under, and a number folded under an unpublished map would be unverifiable by anyone
     /// holding the catalog.</para>
-    /// <para>Pass <paramref name="catalog"/> as null (or a catalog that predates the category field) and the bundle's
-    /// own categories are used, exactly as before — so every previously-published rubric version keeps verifying.</para>
+    /// <para>The catalog is REQUIRED. There is no overload that folds without one, because there is no honest answer
+    /// to "what did this score mean" that does not name the rules it was computed under; a scorer that substitutes its
+    /// own build's constants produces a number nobody can reproduce from the archive, and contradicts the standard the
+    /// moment a rubric version pins its own. A catalog that PREDATES a pinned input is a different thing entirely and
+    /// stays fully supported: no <c>scoring</c> block resolves to <see cref="ScoringParameters.Default"/> and no
+    /// <c>category</c> folds on the bundle's own, exactly as those versions were computed — which is what keeps every
+    /// already-published rubric verifying.</para>
     /// </summary>
     /// <param name="bundle">The evidence to fold.</param>
-    /// <param name="catalog">The published catalog for <see cref="EvidenceBundle.RubricVersion"/>, or null to fold on
-    /// the bundle's declared categories alone.</param>
+    /// <param name="catalog">The published catalog for <see cref="EvidenceBundle.RubricVersion"/>.</param>
     /// <exception cref="ArgumentException">The bundle contradicts the catalog's frozen dimension→category map, or the
     /// catalog names a category this scorer does not implement.</exception>
-    public static CaiScore Score(EvidenceBundle bundle, RubricCatalog? catalog)
+    public static CaiScore Score(EvidenceBundle bundle, RubricCatalog catalog)
     {
         ArgumentNullException.ThrowIfNull(bundle);
+        ArgumentNullException.ThrowIfNull(catalog);
         if (bundle.Dimensions.Count > 0 || bundle.MetaDimensions.Count > 0)
         {
             return ScoreFromEvidence(bundle, catalog);
@@ -109,14 +110,14 @@ public static class CaiScorer
 
         if (bundle.Lenses.Count > 0)
         {
-            return ScoreFromLensScores(bundle, catalog?.Scoring ?? ScoringParameters.Default);
+            return ScoreFromLensScores(bundle, catalog.Scoring ?? ScoringParameters.Default);
         }
 
         throw new ArgumentException("Evidence bundle carries no dimensions, meta-dimensions or lens scores.", nameof(bundle));
     }
 
     /// <summary>The category a dimension folds into: the published catalog's assignment when this rubric version
-    /// freezes one, else the bundle's own. A disagreement is fatal — see <see cref="Score(EvidenceBundle, RubricCatalog?)"/>.
+    /// freezes one, else the bundle's own. A disagreement is fatal — see <see cref="Score(EvidenceBundle, RubricCatalog)"/>.
     /// <para>
     /// The category is OPTIONAL on the wire when the named rubric publishes one for the dimension. It is derivable —
     /// the catalog is the authority and already froze the answer — so requiring the producer to restate it made every
@@ -160,14 +161,14 @@ public static class CaiScorer
         new Dictionary<string, DimensionCategory>(StringComparer.Ordinal);
 
     /// <summary>The full fold: dimensions → categories → lenses (with the architecture surface floor) → headline.</summary>
-    private static CaiScore ScoreFromEvidence(EvidenceBundle bundle, RubricCatalog? catalog)
+    private static CaiScore ScoreFromEvidence(EvidenceBundle bundle, RubricCatalog catalog)
     {
         Validate(bundle);
-        var frozen = catalog?.CategoryMap() ?? EmptyCategoryMap;
+        var frozen = catalog.CategoryMap();
 
         // The rubric's own score-moving constants when it publishes them; otherwise the values the scorer has always
         // used — so a catalog minted before the block existed folds exactly as it did (ADR-0004).
-        var p = catalog?.Scoring ?? ScoringParameters.Default;
+        var p = catalog.Scoring ?? ScoringParameters.Default;
 
         // ── Stage 1: per-category confidence-weighted roll-up (0–100). Advisory dimensions are kept out of the number.
         // gatedDimsByLens records the critical (<4.0 effective) contributors so a lens with one can cap its band.
@@ -289,17 +290,14 @@ public static class CaiScorer
         return new CaiScore(headline, p.Bands.For(headline), bundle.RubricVersion, results, [], 0.0, null, "");
     }
 
-    /// <summary>Reproduce a published headline from its evidence — recompute and compare to the claimed
-    /// <see cref="EvidenceBundle.HeadlineScore"/> within <paramref name="tolerance"/> (default ±0.5).</summary>
-    public static VerifyResult Verify(EvidenceBundle bundle, double tolerance = 0.5) =>
-        Verify(bundle, catalog: null, tolerance);
-
-    /// <summary>Reproduce a published headline against a PUBLISHED rubric catalog — the version-pinned form of
-    /// <see cref="Verify(EvidenceBundle, double)"/>. The catalog's frozen dimension→category map governs the fold; see
-    /// <see cref="Score(EvidenceBundle, RubricCatalog?)"/>.</summary>
-    public static VerifyResult Verify(EvidenceBundle bundle, RubricCatalog? catalog, double tolerance = 0.5)
+    /// <summary>Reproduce a published headline from its evidence against the PUBLISHED rubric catalog it names —
+    /// recompute and compare to the claimed <see cref="EvidenceBundle.HeadlineScore"/> within
+    /// <paramref name="tolerance"/> (default ±0.5). The catalog governs the fold; see
+    /// <see cref="Score(EvidenceBundle, RubricCatalog)"/>.</summary>
+    public static VerifyResult Verify(EvidenceBundle bundle, RubricCatalog catalog, double tolerance = 0.5)
     {
         ArgumentNullException.ThrowIfNull(bundle);
+        ArgumentNullException.ThrowIfNull(catalog);
         if (bundle.HeadlineScore is not { } claimed)
         {
             throw new ArgumentException("Evidence bundle carries no headlineScore to verify against.", nameof(bundle));

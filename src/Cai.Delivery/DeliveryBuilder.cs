@@ -25,11 +25,6 @@ public sealed record DeliveryBuildRequest
     /// <summary>The issuer name stamped into the payload (defaults to cai).</summary>
     public string IssuerName { get; init; } = "codeassuranceindex.info";
 
-    /// <summary>The published content digest of the rubric version the evidence scored under
-    /// (<c>sha256:…</c>, see <see cref="RubricDigest"/>), carried into the signed payload so the
-    /// artifact witnesses the rubric's CONTENT and not just its name. Null omits the field —
-    /// evidence predating the digest keeps its exact pre-field wire shape.</summary>
-    public string? RubricContentHash { get; init; }
 }
 
 /// <summary>
@@ -40,14 +35,21 @@ public sealed record DeliveryBuildRequest
 /// </summary>
 public static class DeliveryBuilder
 {
-    /// <summary>Fold the evidence and assemble the (unsigned) payload. The verdict is cai's own computation; the rubric
-    /// version, quality bar and surface metrics are echoed from the evidence so the artifact is self-contained.</summary>
-    public static DeliveryPayload Build(EvidenceBundle evidence, DeliveryBuildRequest request)
+    /// <summary>Fold the evidence UNDER <paramref name="rubric"/> and assemble the (unsigned) payload. The verdict is
+    /// cai's own computation under the rubric the artifact names; the quality bar and surface metrics are echoed from
+    /// the evidence so the artifact is self-contained.
+    /// <para>The payload's <c>rubricContentHash</c> is DERIVED from the rubric folded under, never accepted from the
+    /// caller: the artifact witnesses the document cai actually used, so the digest and the number cannot disagree.</para></summary>
+    /// <param name="evidence">The evidence to fold.</param>
+    /// <param name="rubric">The resolved catalog the fold runs under, with the digest of the document it came from.</param>
+    /// <param name="request">Producer-supplied provenance.</param>
+    public static DeliveryPayload Build(EvidenceBundle evidence, ResolvedRubric rubric, DeliveryBuildRequest request)
     {
         ArgumentNullException.ThrowIfNull(evidence);
+        ArgumentNullException.ThrowIfNull(rubric);
         ArgumentNullException.ThrowIfNull(request);
 
-        var score = CaiScorer.Score(evidence);
+        var score = CaiScorer.Score(evidence, rubric.Catalog);
 
         var measurement = request.Measurement ?? new DeliveryMeasurement
         {
@@ -64,7 +66,7 @@ public static class DeliveryBuilder
             Producer = request.Producer,
             Subject = request.Subject with { Commit = request.Subject.Commit ?? evidence.Commit },
             RubricVersion = evidence.RubricVersion,
-            RubricContentHash = request.RubricContentHash,
+            RubricContentHash = rubric.ContentHash,
             QualityBar = evidence.QualityBar,
             Measurement = measurement,
             Verdict = ToVerdict(score),

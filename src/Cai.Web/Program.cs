@@ -448,7 +448,7 @@ api.MapPost("/verify", [AllowAnonymous] async (HttpRequest req, HttpContext http
 // runs both checks — authenticity (Ed25519 over the canonical payload, against the published key set) and
 // reproducibility (re-fold the embedded evidence) — for anyone, anonymously.
 api.MapPost("/verify-delivery", [AllowAnonymous] async (
-    HttpRequest req, HttpContext http, TrustedKeyProvider keys, ILogger<Program> log) =>
+    HttpRequest req, HttpContext http, TrustedKeyProvider keys, RubricCatalogStore store, ILogger<Program> log) =>
 {
     ApiAccess.EnsureAllowed(http);
     try
@@ -456,7 +456,19 @@ api.MapPost("/verify-delivery", [AllowAnonymous] async (
         using var reader = new StreamReader(req.Body);
         var package = DeliveryPackage.Parse(await reader.ReadToEndAsync().ConfigureAwait(false));
 
-        var result = DeliveryVerifier.Verify(package, keys.Keys);
+        // A re-fold only means something under the criteria the artifact names. An unservable version is refused
+        // rather than folded under this build's defaults, which would "verify" the number against rules it was never
+        // computed with.
+        var rubric = ResolvedRubric.FromStore(store, package.Payload.RubricVersion);
+        if (rubric is null)
+        {
+            return Results.UnprocessableEntity(new
+            {
+                error = $"cannot verify: this archive does not serve rubric version '{package.Payload.RubricVersion}'",
+            });
+        }
+
+        var result = DeliveryVerifier.Verify(package, keys.Keys, rubric);
         var payload = package.Payload;
 
         return Results.Ok(new

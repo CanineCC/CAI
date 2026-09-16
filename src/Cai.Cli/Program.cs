@@ -27,15 +27,20 @@ if (args.Length < 1 || !commands.Contains(args[0]))
 
         Scoring (open, reproducible fold):
           cai score  <evidence.json>                    compute the CAI from an evidence bundle
-          cai verify <evidence.json> [--expect N]       reproduce the published headline (exit 1 on mismatch)
+          cai verify <evidence.json> --rubrics DIR [--expect N]       reproduce the published headline (exit 1 on mismatch)
 
         Delivery (signed, shareable evidence artifact — Ed25519):
           cai keygen <keyId> [--out keypair.json]       generate a cai signing key pair (private — keep secret)
-          cai sign   <evidence.json> --key keypair.json --repo NAME [--commit X] [--producer NAME]
-                     [--scanner S] [--id ID] [--issued-at TS] [--out package.json]
+          cai sign   <evidence.json> --key keypair.json --rubrics DIR --repo NAME [--commit X]
+                     [--producer NAME] [--scanner S] [--id ID] [--issued-at TS] [--out package.json]
                                                          recompute + sign a CAI-delivery package
-          cai verify-delivery <package.json> --keys keys.json [--no-reproduce]
+          cai verify-delivery <package.json> --keys keys.json [--rubrics DIR] [--no-reproduce]
                                                          verify signature (+ reproduce headline); exit 1 on failure
+
+          --rubrics DIR is the published rubric archive (the directory holding rubric-<version>/). A score is only
+          meaningful under the criteria it was computed with, so signing folds under the catalog the evidence names
+          and verifying re-folds under the one the package names. --no-reproduce checks the signature ALONE and
+          needs no archive — it then makes no claim about the number.
 
         See codeassuranceindex.info/spec (scoring) and codeassuranceindex.info/spec/delivery (package + registry).
         """);
@@ -69,7 +74,12 @@ async Task<int> RunScore(string[] a, ILogger l)
         return 2;
     }
 
-    var s = CaiScorer.Score(bundle);
+    if (ResolveRubric(a, bundle.RubricVersion, "score") is not { } rubric)
+    {
+        return 2;
+    }
+
+    var s = CaiScorer.Score(bundle, rubric.Catalog);
     l.LogInformation("Scored {Path}: CAI {Headline:0.0} ({Band}) over {LensCount} lens(es)",
         a[1], s.Headline, s.Band.Label(), s.Lenses.Count);
     Console.WriteLine($"CAI {s.Headline:0.0} ({s.Band.Label()})  ·  rubric {Rubric(bundle)}");
@@ -104,12 +114,17 @@ async Task<int> RunVerify(string[] a, ILogger l)
         return 2;
     }
 
-    var v = CaiScorer.Verify(toVerify);
+    if (ResolveRubric(a, toVerify.RubricVersion, "verify") is not { } rubric)
+    {
+        return 2;
+    }
+
+    var v = CaiScorer.Verify(toVerify, rubric.Catalog);
     l.LogInformation("Verified {Path}: reproduced={Reproduced} computed={Computed:0.00} claimed={Claimed:0.00}",
         a[1], v.Reproduced, v.Computed, v.Claimed);
     if (v.Reproduced)
     {
-        Console.WriteLine($"✓ reproduced: CAI {v.Computed:0} ({Bands.For(v.Computed).Label()}) under rubric {Rubric(bundle)} (claimed {v.Claimed:0}, Δ{v.Delta:0.00})");
+        Console.WriteLine($"✓ reproduced: CAI {v.Computed:0} ({(rubric.Catalog.Scoring?.Bands ?? ScoringParameters.Default.Bands).For(v.Computed).Label()}) under rubric {Rubric(bundle)} (claimed {v.Claimed:0}, Δ{v.Delta:0.00})");
         return 0;
     }
 
@@ -181,7 +196,25 @@ async Task<int> RunSign(string[] a, ILogger l)
         },
     };
 
-    var payload = DeliveryBuilder.Build(bundle, request);
+    var rubricsRoot = ParseString(a, "--rubrics");
+    if (rubricsRoot is null)
+    {
+        Console.Error.WriteLine(
+            "error: sign needs --rubrics <dir> (the published rubric archive). cai signs only a number it folded "
+            + "under the rubric the evidence names; without the catalog there is nothing to fold under.");
+        return 2;
+    }
+
+    var rubric = ResolvedRubric.FromStore(new RubricCatalogStore(rubricsRoot), bundle.RubricVersion);
+    if (rubric is null)
+    {
+        Console.Error.WriteLine(
+            $"error: rubric version '{bundle.RubricVersion}' is not published under {rubricsRoot} — refusing to sign "
+            + "a verdict folded under a substitute.");
+        return 2;
+    }
+
+    var payload = DeliveryBuilder.Build(bundle, rubric, request);
     using var signer = new DeliverySigner(pair);
     var package = signer.SignPackage(payload);
     var json = package.ToJson();
@@ -218,9 +251,35 @@ async Task<int> RunVerifyDelivery(string[] a, ILogger l)
 
     var package = DeliveryPackage.Parse(await File.ReadAllTextAsync(a[1]).ConfigureAwait(false));
     var keys = DeliveryPublicKeySet.Parse(await File.ReadAllTextAsync(keysPath).ConfigureAwait(false));
-    var reproduce = !a.Contains("--no-reproduce");
+    DeliveryVerification r;
+    if (a.Contains("--no-reproduce"))
+    {
+        // Authenticity alone. It folds nothing, so it says nothing about the number — and now reports that honestly
+        // rather than letting an absent reproduction read as a passing one.
+        r = DeliveryVerifier.VerifySignature(package, keys);
+    }
+    else
+    {
+        var rubricsRoot = ParseString(a, "--rubrics");
+        if (rubricsRoot is null)
+        {
+            Console.Error.WriteLine(
+                "error: verify-delivery needs --rubrics <dir> (the published rubric archive) to re-fold the evidence, "
+                + "or --no-reproduce to check the signature alone.");
+            return 2;
+        }
 
-    var r = DeliveryVerifier.Verify(package, keys, reproduce);
+        var rubric = ResolvedRubric.FromStore(new RubricCatalogStore(rubricsRoot), package.Payload.RubricVersion);
+        if (rubric is null)
+        {
+            Console.Error.WriteLine(
+                $"error: rubric version '{package.Payload.RubricVersion}' is not published under {rubricsRoot} — the "
+                + "verdict cannot be checked against the criteria it claims.");
+            return 2;
+        }
+
+        r = DeliveryVerifier.Verify(package, keys, rubric);
+    }
     l.LogInformation("Verified delivery {Id}: signatureValid={Valid} reproduced={Reproduced}",
         package.Payload.DeliveryId, r.SignatureValid, r.Reproduced);
 
@@ -288,3 +347,26 @@ static string? ParseString(string[] args, string flag)
 
 static double? ParseDouble(string[] args, string flag) =>
     ParseString(args, flag) is { } s && double.TryParse(s, out var n) ? n : null;
+
+// Resolve the published catalog an evidence bundle names, or explain why we will not fold without one. A CAI number is
+// meaningless apart from the criteria it was computed under, so there is no default and no silent fallback: the archive
+// either serves that version or the command refuses.
+static ResolvedRubric? ResolveRubric(string[] a, string rubricVersion, string command)
+{
+    var root = ParseString(a, "--rubrics");
+    if (root is null)
+    {
+        Console.Error.WriteLine(
+            $"error: {command} needs --rubrics <dir> (the published rubric archive). A CAI number is only meaningful "
+            + "under the rubric it was computed with, so there is nothing to fold under without it.");
+        return null;
+    }
+
+    var resolved = ResolvedRubric.FromStore(new RubricCatalogStore(root), rubricVersion);
+    if (resolved is null)
+    {
+        Console.Error.WriteLine($"error: rubric version '{rubricVersion}' is not published under {root}.");
+    }
+
+    return resolved;
+}

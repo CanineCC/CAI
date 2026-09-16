@@ -43,7 +43,7 @@ public sealed class CalculatorSampleTests
     {
         var bundle = EvidenceBundle.Parse(CalculatorSample.Json);
 
-        var score = CaiScorer.Score(bundle, SampleCatalog());
+        var score = Fold.Score(bundle, SampleCatalog());
 
         Assert.InRange(score.Headline, 0.0, 100.0);
         Assert.NotEmpty(score.Lenses);
@@ -107,8 +107,8 @@ public sealed class CalculatorSampleTests
         };
 
         Assert.Equal(
-            CaiScorer.Score(stated, catalog).Headline,
-            CaiScorer.Score(omitted, catalog).Headline,
+            Fold.Score(stated, catalog).Headline,
+            Fold.Score(omitted, catalog).Headline,
             10);
     }
 
@@ -131,7 +131,7 @@ public sealed class CalculatorSampleTests
             Dimensions = [new DimensionScore("D1", "", 7.0, 1.0)],
         };
 
-        var boom = Assert.Throws<ArgumentException>(() => CaiScorer.Score(bundle, older));
+        var boom = Assert.Throws<ArgumentException>(() => Fold.Score(bundle, older));
 
         Assert.Contains("D1", boom.Message, StringComparison.Ordinal);
         Assert.Contains(older.RubricVersion, boom.Message, StringComparison.Ordinal);

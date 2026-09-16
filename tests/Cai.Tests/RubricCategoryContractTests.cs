@@ -114,7 +114,7 @@ public sealed class RubricCategoryContractTests
         var catalog = Latest();
         var bundle = BundleFrom(catalog);
 
-        var score = CaiScorer.Score(bundle, catalog);
+        var score = Fold.Score(bundle, catalog);
 
         var expected = Scored(catalog)
             .GroupBy(d => Categories.Parse(d.Category!))
@@ -138,8 +138,8 @@ public sealed class RubricCategoryContractTests
         var catalog = Latest();
         var bundle = BundleFrom(catalog);
 
-        var pinned = CaiScorer.Score(bundle, catalog);
-        var legacy = CaiScorer.Score(bundle);
+        var pinned = Fold.Score(bundle, catalog);
+        var legacy = Fold.Score(bundle);
 
         Assert.Equal(legacy.Headline, pinned.Headline, 10);
         Assert.Equal(legacy.Band, pinned.Band);
@@ -167,7 +167,7 @@ public sealed class RubricCategoryContractTests
             Dimensions = [new DimensionScore(moved.Id, "security-compliance", 7.0, 1.0)],
         };
 
-        var boom = Assert.Throws<ArgumentException>(() => CaiScorer.Score(bundle, catalog));
+        var boom = Assert.Throws<ArgumentException>(() => Fold.Score(bundle, catalog));
 
         Assert.Contains(moved.Id, boom.Message, StringComparison.Ordinal);
         Assert.Contains("security-compliance", boom.Message, StringComparison.Ordinal);
@@ -194,7 +194,7 @@ public sealed class RubricCategoryContractTests
             Dimensions = [new DimensionScore("D1", "code-quality", 7.0, 1.0)],
         };
 
-        var boom = Assert.Throws<ArgumentException>(() => CaiScorer.Score(bundle, catalog));
+        var boom = Assert.Throws<ArgumentException>(() => Fold.Score(bundle, catalog));
 
         Assert.Contains("vibes", boom.Message, StringComparison.Ordinal);
         Assert.Contains("rubric-2099.01.1", boom.Message, StringComparison.Ordinal);
@@ -224,7 +224,7 @@ public sealed class RubricCategoryContractTests
         };
 
         Assert.Empty(older.CategoryMap());
-        Assert.Equal(CaiScorer.Score(bundle).Headline, CaiScorer.Score(bundle, older).Headline, 10);
+        Assert.Equal(Fold.Score(bundle).Headline, Fold.Score(bundle, older).Headline, 10);
     }
 
     [Fact]

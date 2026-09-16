@@ -182,7 +182,7 @@ public sealed class RegistryApiTests(RegistryApiFixture fx) : IClassFixture<Regi
     private DeliveryPackage Mint(string deliveryId, string repository, string commit = "3f9a1c2", DeliveryKeyPair? key = null,
         Func<DeliveryPayload, DeliveryPayload>? mutateBeforeSigning = null)
     {
-        var payload = DeliveryBuilder.Build(SampleEvidence(commit), new DeliveryBuildRequest
+        var payload = DeliveryTestHelp.Build(SampleEvidence(commit), new DeliveryBuildRequest
         {
             DeliveryId = deliveryId,
             IssuedAt = "2026-07-02T09:00:00Z",
@@ -423,7 +423,7 @@ public sealed class RegistryApiTests(RegistryApiFixture fx) : IClassFixture<Regi
         // byte-for-byte what the producer published — and it still verifies offline
         var text = await response.Content.ReadAsStringAsync(Ct);
         Assert.Equal(package.ToJson(), text);
-        Assert.True(DeliveryVerifier.Verify(DeliveryPackage.Parse(text), fx.TrustedKeys).AuthenticAndReproducing);
+        Assert.True(DeliveryTestHelp.Verify(DeliveryPackage.Parse(text), fx.TrustedKeys).AuthenticAndReproducing);
     }
 
     [Fact]

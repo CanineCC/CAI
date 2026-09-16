@@ -11,17 +11,19 @@ public class ScoringBenchmarks
 {
     private EvidenceBundle _bundle = null!;
     private string _json = null!;
+    private RubricCatalog _catalog = null!;
 
     [GlobalSetup]
     public void Setup()
     {
         _bundle = SampleBundle();
         _json = _bundle.ToJson();
+        _catalog = new RubricCatalog { RubricVersion = _bundle.RubricVersion };
     }
 
     /// <summary>The headline fold: dimensions → categories → lenses → headline (the work every score does).</summary>
     [Benchmark]
-    public double Score() => CaiScorer.Score(_bundle).Headline;
+    public double Score() => CaiScorer.Score(_bundle, _catalog).Headline;
 
     /// <summary>Parsing an evidence bundle off the wire — the other per-request cost.</summary>
     [Benchmark]

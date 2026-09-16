@@ -41,39 +41,55 @@ public sealed class DeliveryTests
     private static (DeliveryPackage Package, DeliveryPublicKeySet Keys) SignedSample()
     {
         var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
-        var payload = DeliveryBuilder.Build(SampleEvidence(), Request());
+        var payload = DeliveryTestHelp.Build(SampleEvidence(), Request());
         using var signer = new DeliverySigner(pair);
         return (signer.SignPackage(payload), new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
     }
 
     [Fact]
-    public void The_rubric_content_digest_rides_inside_the_signature_and_null_omits_the_field()
+    public void The_rubric_content_digest_rides_inside_the_signature_and_is_the_one_cai_folded_under()
     {
-        // W5 §7.3: a request carrying the published digest produces a payload that witnesses the
-        // rubric's CONTENT — inside the canonical bytes, so the signature covers it.
+        // W5 §7.3: the payload witnesses the rubric's CONTENT, inside the canonical bytes, so the signature covers it.
+        //
+        // The digest is DERIVED from the rubric the fold ran under, never supplied by the caller. Until 2026-09-16 it
+        // came off the build request, which let the artifact claim one document while the number was folded from
+        // another — the single thing the digest exists to make impossible.
         var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
         using var signer = new DeliverySigner(pair);
         var keys = new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] };
+        var rubric = TestRubric.For(SampleEvidence());
 
-        var with = signer.SignPackage(DeliveryBuilder.Build(
-            SampleEvidence(), Request() with { RubricContentHash = "sha256:abc123" }));
-        Assert.Equal("sha256:abc123", with.Payload.RubricContentHash);
-        Assert.Contains("rubricContentHash", with.ToJson());
-        Assert.True(DeliveryVerifier.Verify(with, keys).AuthenticAndReproducing);
+        var package = signer.SignPackage(DeliveryBuilder.Build(SampleEvidence(), rubric, Request()));
 
-        // And the pre-field wire shape is untouched: a null digest omits the field entirely, so
-        // nothing minted before the field existed changes by a byte.
-        var without = signer.SignPackage(DeliveryBuilder.Build(SampleEvidence(), Request()));
-        Assert.Null(without.Payload.RubricContentHash);
-        Assert.DoesNotContain("rubricContentHash", without.ToJson());
-        Assert.True(DeliveryVerifier.Verify(without, keys).AuthenticAndReproducing);
+        Assert.Equal(rubric.ContentHash, package.Payload.RubricContentHash);
+        Assert.Contains("rubricContentHash", package.ToJson());
+        Assert.True(DeliveryVerifier.Verify(package, keys, rubric).AuthenticAndReproducing);
+    }
+
+    [Fact]
+    public void A_package_minted_before_the_digest_field_existed_still_verifies()
+    {
+        // The pre-field wire shape keeps working: such a package carries no digest, so there is nothing to check it
+        // against, and verification proceeds on version + reproduction alone. Backward compatibility is a property of
+        // packages ALREADY ISSUED — which cannot be recalled — not a mode new mints may choose.
+        var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
+        using var signer = new DeliverySigner(pair);
+        var keys = new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] };
+        var rubric = TestRubric.For(SampleEvidence());
+
+        var preField = DeliveryBuilder.Build(SampleEvidence(), rubric, Request()) with { RubricContentHash = null };
+        var package = signer.SignPackage(preField);
+
+        Assert.Null(package.Payload.RubricContentHash);
+        Assert.DoesNotContain("rubricContentHash", package.ToJson());
+        Assert.True(DeliveryVerifier.Verify(package, keys, rubric).AuthenticAndReproducing);
     }
 
     [Fact]
     public void Signed_package_verifies_and_reproduces()
     {
         var (package, keys) = SignedSample();
-        var r = DeliveryVerifier.Verify(package, keys);
+        var r = DeliveryTestHelp.Verify(package, keys);
 
         Assert.True(r.SignatureValid);
         Assert.True(r.Reproduced);
@@ -86,8 +102,8 @@ public sealed class DeliveryTests
     {
         // Even if evidence carries a bogus headlineScore, the signed verdict is cai's own fold.
         var evidence = SampleEvidence() with { HeadlineScore = 5.0 };
-        var payload = DeliveryBuilder.Build(evidence, Request());
-        var expected = CaiScorer.Score(evidence).Headline;
+        var payload = DeliveryTestHelp.Build(evidence, Request());
+        var expected = Fold.Score(evidence).Headline;
 
         Assert.Equal(Math.Round(expected, 2), payload.Verdict.Cai, 2);
         Assert.NotEqual(5.0, payload.Verdict.Cai);
@@ -108,7 +124,7 @@ public sealed class DeliveryTests
         var (package, keys) = SignedSample();
         var tampered = package with { Payload = package.Payload with { Verdict = package.Payload.Verdict with { Cai = 99.0 } } };
 
-        var r = DeliveryVerifier.Verify(tampered, keys);
+        var r = DeliveryTestHelp.Verify(tampered, keys);
         Assert.False(r.SignatureValid);
         Assert.False(r.AuthenticAndReproducing);
     }
@@ -120,7 +136,7 @@ public sealed class DeliveryTests
         var (package, keys) = SignedSample();
         var reparsed = DeliveryPackage.Parse(package.ToJson());
 
-        Assert.True(DeliveryVerifier.Verify(reparsed, keys).SignatureValid);
+        Assert.True(DeliveryTestHelp.Verify(reparsed, keys).SignatureValid);
     }
 
     [Fact]
@@ -132,14 +148,14 @@ public sealed class DeliveryTests
             Keys = [DeliveryKeyPair.Generate(package.Signature.KeyId).ToPublicKey()], // same id, different key
         };
 
-        Assert.False(DeliveryVerifier.Verify(package, otherKeys).SignatureValid);
+        Assert.False(DeliveryTestHelp.Verify(package, otherKeys).SignatureValid);
     }
 
     [Fact]
     public void An_unknown_key_id_is_reported()
     {
         var (package, _) = SignedSample();
-        var r = DeliveryVerifier.Verify(package, new DeliveryPublicKeySet { Keys = [] });
+        var r = DeliveryTestHelp.Verify(package, new DeliveryPublicKeySet { Keys = [] });
 
         Assert.False(r.SignatureValid);
         Assert.Contains("no public key", r.Reason);
@@ -149,12 +165,12 @@ public sealed class DeliveryTests
     public void A_retired_key_still_verifies_old_deliveries()
     {
         var pair = DeliveryKeyPair.Generate("cai-ed25519-old");
-        var payload = DeliveryBuilder.Build(SampleEvidence(), Request());
+        var payload = DeliveryTestHelp.Build(SampleEvidence(), Request());
         using var signer = new DeliverySigner(pair);
         var package = signer.SignPackage(payload);
 
         var retired = pair.ToPublicKey() with { Status = "retired" };
-        Assert.True(DeliveryVerifier.Verify(package, new DeliveryPublicKeySet { Keys = [retired] }).SignatureValid);
+        Assert.True(DeliveryTestHelp.Verify(package, new DeliveryPublicKeySet { Keys = [retired] }).SignatureValid);
     }
 
     [Fact]
@@ -163,7 +179,7 @@ public sealed class DeliveryTests
         var (package, keys) = SignedSample();
         var future = package with { Payload = package.Payload with { SchemaVersion = "2.0" } };
 
-        var r = DeliveryVerifier.Verify(future, keys);
+        var r = DeliveryTestHelp.Verify(future, keys);
         Assert.False(r.SignatureValid);
         Assert.Contains("MAJOR", r.Reason);
     }
@@ -174,12 +190,12 @@ public sealed class DeliveryTests
         // Sign a payload whose verdict headline was hand-altered away from what the evidence folds to. The signature is
         // valid over that (dishonest) payload, but the independent reproduce check catches the mismatch.
         var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
-        var payload = DeliveryBuilder.Build(SampleEvidence(), Request());
+        var payload = DeliveryTestHelp.Build(SampleEvidence(), Request());
         var dishonest = payload with { Verdict = payload.Verdict with { Cai = payload.Verdict.Cai + 20.0 } };
         using var signer = new DeliverySigner(pair);
         var package = signer.SignPackage(dishonest);
 
-        var r = DeliveryVerifier.Verify(package, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
+        var r = DeliveryTestHelp.Verify(package, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
         Assert.True(r.SignatureValid);
         Assert.False(r.Reproduced);
         Assert.False(r.AuthenticAndReproducing);
@@ -202,7 +218,7 @@ public sealed class DeliveryTests
         var package = DeliveryPackage.Parse(File.ReadAllText(Path.Combine(root, "examples", "cai-delivery.sample.json")));
         var keys = DeliveryPublicKeySet.Parse(File.ReadAllText(Path.Combine(root, "examples", "cai-delivery.keys.json")));
 
-        var r = DeliveryVerifier.Verify(package, keys);
+        var r = DeliveryTestHelp.Verify(package, keys);
         Assert.True(r.SignatureValid, r.Reason);
         Assert.True(r.Reproduced, r.Reason);
     }
@@ -284,7 +300,7 @@ public sealed class DeliveryTests
             BusFactor = "2 of 11 devs",
         };
 
-        var payload = DeliveryBuilder.Build(evidence, Request());
+        var payload = DeliveryTestHelp.Build(evidence, Request());
 
         Assert.Equal("2 of 11 devs", payload.Evidence.BusFactor);
         Assert.NotNull(payload.Evidence.RebuildCost);
@@ -301,8 +317,8 @@ public sealed class DeliveryTests
             BusFactor = "2 of 11 devs",
         };
 
-        var a = CaiScorer.Score(without);
-        var b = CaiScorer.Score(with);
+        var a = Fold.Score(without);
+        var b = Fold.Score(with);
 
         // Bit-for-bit identical: the scorer reads none of these fields, so the headline (and band) cannot shift.
         Assert.Equal(a.Headline, b.Headline);
@@ -315,11 +331,11 @@ public sealed class DeliveryTests
         // BACKWARD COMPAT: an evidence bundle predating these fields signs, verifies, and never emits the members into
         // the canonical (signed) bytes — so an old package's signature is wholly unaffected by the schema addition.
         var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
-        var payload = DeliveryBuilder.Build(SampleEvidence(), Request()); // no rebuildCost / busFactor
+        var payload = DeliveryTestHelp.Build(SampleEvidence(), Request()); // no rebuildCost / busFactor
         using var signer = new DeliverySigner(pair);
         var package = signer.SignPackage(payload);
 
-        var r = DeliveryVerifier.Verify(package, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
+        var r = DeliveryTestHelp.Verify(package, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
         Assert.True(r.AuthenticAndReproducing, r.Reason);
 
         var canonical = System.Text.Encoding.UTF8.GetString(CanonicalJson.Canonicalize(package.Payload));
@@ -377,15 +393,15 @@ public sealed class DeliveryTests
         var without = SampleEvidence();
         var with = without with { SurveyFit = SampleFit() };
 
-        var a = CaiScorer.Score(without);
-        var b = CaiScorer.Score(with);
+        var a = Fold.Score(without);
+        var b = Fold.Score(with);
 
         // The whole point: a thin survey is not a bad codebase. Reporting the clarity must not score it.
         Assert.Equal(a.Headline, b.Headline);
         Assert.Equal(a.Band, b.Band);
 
         // Nor may the WORST case — a survey that resolved nothing — cost the repository a single point.
-        var blind = CaiScorer.Score(without with { SurveyFit = new SurveyFit { DepthApplicable = 9, DepthFired = 0 } });
+        var blind = Fold.Score(without with { SurveyFit = new SurveyFit { DepthApplicable = 9, DepthFired = 0 } });
         Assert.Equal(a.Headline, blind.Headline);
         Assert.Equal(a.Band, blind.Band);
     }
@@ -393,7 +409,7 @@ public sealed class DeliveryTests
     [Fact]
     public void DeliveryBuilder_carries_surveyFit_into_the_signed_payload()
     {
-        var payload = DeliveryBuilder.Build(SampleEvidence() with { SurveyFit = SampleFit() }, Request());
+        var payload = DeliveryTestHelp.Build(SampleEvidence() with { SurveyFit = SampleFit() }, Request());
 
         Assert.NotNull(payload.Evidence.SurveyFit);
         Assert.Equal(8, payload.Evidence.SurveyFit!.DepthApplicable);
@@ -412,9 +428,9 @@ public sealed class DeliveryTests
         // somebody's hands is wholly unaffected by this addition.
         var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
         using var signer = new DeliverySigner(pair);
-        var package = signer.SignPackage(DeliveryBuilder.Build(SampleEvidence(), Request()));
+        var package = signer.SignPackage(DeliveryTestHelp.Build(SampleEvidence(), Request()));
 
-        var r = DeliveryVerifier.Verify(package, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
+        var r = DeliveryTestHelp.Verify(package, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
         Assert.True(r.AuthenticAndReproducing, r.Reason);
         Assert.DoesNotContain("surveyFit", System.Text.Encoding.UTF8.GetString(CanonicalJson.Canonicalize(package.Payload)));
     }
@@ -425,10 +441,10 @@ public sealed class DeliveryTests
         var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
         using var signer = new DeliverySigner(pair);
         var package = signer.SignPackage(
-            DeliveryBuilder.Build(SampleEvidence() with { SurveyFit = SampleFit() }, Request()));
+            DeliveryTestHelp.Build(SampleEvidence() with { SurveyFit = SampleFit() }, Request()));
 
         var reparsed = DeliveryPackage.Parse(package.ToJson());
-        var r = DeliveryVerifier.Verify(reparsed, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
+        var r = DeliveryTestHelp.Verify(reparsed, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
 
         Assert.True(r.AuthenticAndReproducing, r.Reason);
         Assert.Equal(5, reparsed.Payload.Evidence.SurveyFit!.DepthFired);
@@ -441,7 +457,7 @@ public sealed class DeliveryTests
         var pair = DeliveryKeyPair.Generate("cai-ed25519-test");
         using var signer = new DeliverySigner(pair);
         var package = signer.SignPackage(
-            DeliveryBuilder.Build(SampleEvidence() with { SurveyFit = SampleFit() }, Request()));
+            DeliveryTestHelp.Build(SampleEvidence() with { SurveyFit = SampleFit() }, Request()));
 
         // Flattering the clarity figure after the fact must invalidate the artifact, exactly like editing a score.
         var tampered = package with
@@ -455,7 +471,7 @@ public sealed class DeliveryTests
             },
         };
 
-        var r = DeliveryVerifier.Verify(tampered, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
+        var r = DeliveryTestHelp.Verify(tampered, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
         Assert.False(r.AuthenticAndReproducing);
     }
 
@@ -469,11 +485,11 @@ public sealed class DeliveryTests
             BusFactor = "2 of 11 devs",
         };
         using var signer = new DeliverySigner(pair);
-        var package = signer.SignPackage(DeliveryBuilder.Build(evidence, Request()));
+        var package = signer.SignPackage(DeliveryTestHelp.Build(evidence, Request()));
 
         // Round-trip through the pretty-printed wire form, then verify signature + reproduce.
         var reparsed = DeliveryPackage.Parse(package.ToJson());
-        var r = DeliveryVerifier.Verify(reparsed, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
+        var r = DeliveryTestHelp.Verify(reparsed, new DeliveryPublicKeySet { Keys = [pair.ToPublicKey()] });
 
         Assert.True(r.AuthenticAndReproducing, r.Reason);
         Assert.Equal("2 of 11 devs", reparsed.Payload.Evidence.BusFactor);

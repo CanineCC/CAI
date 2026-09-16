@@ -37,16 +37,21 @@ public sealed class ScoringParametersTests
         new() { RubricVersion = "rubric-test", Scoring = scoring };
 
     [Fact]
-    public void A_catalog_without_a_scoring_block_folds_exactly_as_the_scorer_always_did()
+    public void A_catalog_without_a_scoring_block_folds_under_the_documented_defaults()
     {
         // BACKWARD COMPAT, and the whole reason the fallback exists: every rubric version published before the block
         // must keep reproducing its original number.
-        var noCatalog = CaiScorer.Score(Evidence());
-        var emptyCatalog = CaiScorer.Score(Evidence(), Catalog(null));
+        //
+        // Stated as an identity against an EXPLICIT Default block rather than against a catalog-less fold, which no
+        // longer exists — and which would have made this tautological anyway once it did. What has to be true is that
+        // the fallback IS ScoringParameters.Default, provably, and not merely some fixed constants that happen to
+        // resemble it.
+        var blockLess = CaiScorer.Score(Evidence(), Catalog(null));
+        var explicitDefaults = CaiScorer.Score(Evidence(), Catalog(ScoringParameters.Default));
 
-        Assert.Equal(noCatalog.Headline, emptyCatalog.Headline);
-        Assert.Equal(noCatalog.Band, emptyCatalog.Band);
-        Assert.Equal(noCatalog.Lenses.Count, emptyCatalog.Lenses.Count);
+        Assert.Equal(explicitDefaults.Headline, blockLess.Headline);
+        Assert.Equal(explicitDefaults.Band, blockLess.Band);
+        Assert.Equal(explicitDefaults.Lenses.Count, blockLess.Lenses.Count);
     }
 
     [Fact]

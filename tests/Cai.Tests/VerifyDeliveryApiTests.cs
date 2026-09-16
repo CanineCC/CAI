@@ -44,7 +44,7 @@ public sealed class VerifyDeliveryApiTests(RegistryApiFixture fx) : IClassFixtur
         string commit = "3f9a1c2",
         Func<DeliveryPayload, DeliveryPayload>? mutateBeforeSigning = null)
     {
-        var payload = DeliveryBuilder.Build(Evidence(commit), new DeliveryBuildRequest
+        var payload = DeliveryTestHelp.Build(Evidence(commit), new DeliveryBuildRequest
         {
             DeliveryId = "dlv_verify_" + Guid.NewGuid().ToString("N")[..8],
             IssuedAt = "2026-07-02T09:00:00Z",
