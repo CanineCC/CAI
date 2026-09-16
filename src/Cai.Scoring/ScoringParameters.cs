@@ -117,6 +117,42 @@ public sealed record QualityBarParameters
     /// <summary>Lowest cutline the shift may reach.</summary>
     [JsonPropertyName("poorFloor")] public double PoorFloor { get; init; } = 5.0;
 
+    /// <summary>
+    /// Value equality over the TABLES, not their references.
+    ///
+    /// <para>A record promises value semantics, and "does this rubric version pin the same parameters?" is asked by
+    /// comparing them. But the generated equality compares each member with <c>EqualityComparer&lt;T&gt;.Default</c>,
+    /// which for <see cref="IReadOnlyDictionary{TKey,TValue}"/> is REFERENCE equality — so a catalog parsed off the
+    /// wire never equalled the identical parameters in memory, and every such check quietly answered "different".
+    /// The dictionaries are the only members that needed this; the rest are doubles.</para>
+    /// </summary>
+    /// <param name="other">The parameters to compare with.</param>
+    public bool Equals(QualityBarParameters? other) =>
+        other is not null
+        && ExemplaryCeiling.Equals(other.ExemplaryCeiling)
+        && PoorFloor.Equals(other.PoorFloor)
+        && SameTable(Offsets, other.Offsets)
+        && SameTable(LensGroupFactors, other.LensGroupFactors);
+
+    /// <inheritdoc />
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(ExemplaryCeiling);
+        hash.Add(PoorFloor);
+        // Order-independent: a dictionary has no defined order, so the hash must not depend on one.
+        var tables = 0;
+        foreach (var (key, value) in Offsets) tables ^= HashCode.Combine(key, value);
+        foreach (var (key, value) in LensGroupFactors) tables ^= HashCode.Combine(key, value, 1);
+        hash.Add(tables);
+        return hash.ToHashCode();
+    }
+
+    private static bool SameTable(
+        IReadOnlyDictionary<string, double> left, IReadOnlyDictionary<string, double> right) =>
+        left.Count == right.Count
+        && left.All(entry => right.TryGetValue(entry.Key, out var value) && entry.Value.Equals(value));
+
     /// <summary>The offset for a bar tier as written on the wire (aliases normalised); 0 when unlisted.</summary>
     public double OffsetFor(string? barTier) =>
         Offsets.TryGetValue(QualityBarTiers.Canonical(barTier), out var o) ? o : 0.0;
