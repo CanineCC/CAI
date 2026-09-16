@@ -20,7 +20,7 @@ namespace Cai.Delivery;
 /// </summary>
 public sealed record ResolvedRubric
 {
-    private ResolvedRubric(RubricCatalog catalog, string contentHash)
+    private ResolvedRubric(RubricCatalog catalog, string? contentHash)
     {
         Catalog = catalog;
         ContentHash = contentHash;
@@ -29,8 +29,16 @@ public sealed record ResolvedRubric
     /// <summary>The rules the fold runs under.</summary>
     public RubricCatalog Catalog { get; }
 
-    /// <summary>The content digest of the document <see cref="Catalog"/> was read from, as <c>sha256:&lt;base64url&gt;</c>.</summary>
-    public string ContentHash { get; }
+    /// <summary>
+    /// The content digest of the PUBLISHED document <see cref="Catalog"/> was read from, as
+    /// <c>sha256:&lt;base64url&gt;</c> — or null when there is no published document.
+    ///
+    /// <para>Null is not a missing value, it is the truthful one. The digest exists so a holder of an artifact can
+    /// re-fetch the named version and prove it was not edited under its own name; that check needs something to
+    /// fetch. A catalog built in memory (<see cref="FromCatalog"/>) has no such counterpart, so witnessing a digest
+    /// of it would assert a check nobody can perform — and would look exactly like a real one.</para>
+    /// </summary>
+    public string? ContentHash { get; }
 
     /// <summary>The rubric version this resolves; echoed from the catalog.</summary>
     public string RubricVersion => Catalog.RubricVersion;
@@ -61,14 +69,16 @@ public sealed record ResolvedRubric
     }
 
     /// <summary>
-    /// Resolve from a catalog held in memory — for a producer that BUILT the catalog (the engine emitting its own
-    /// version) and for tests. The digest describes this catalog's serialized form; it is not a claim about any
-    /// archived document, so never use this to verify an artifact against a published version.
+    /// Resolve from a catalog held in memory — for a producer that BUILT the catalog, for a delivery whose "rubric"
+    /// is not a published CAI version at all (an internal contract framework), and for tests.
+    ///
+    /// <para><see cref="ContentHash"/> is NULL for these: there is no published document to witness, so the payload
+    /// omits the field exactly as it did before the field existed. Folding still happens under the catalog given.</para>
     /// </summary>
     /// <param name="catalog">The catalog to fold under.</param>
     public static ResolvedRubric FromCatalog(RubricCatalog catalog)
     {
         ArgumentNullException.ThrowIfNull(catalog);
-        return new ResolvedRubric(catalog, RubricDigest.Of(catalog.ToJson()));
+        return new ResolvedRubric(catalog, contentHash: null);
     }
 }

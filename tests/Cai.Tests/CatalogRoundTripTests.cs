@@ -51,15 +51,27 @@ public sealed class CatalogRoundTripTests
     }
 
     [Fact]
-    public void Resolving_a_catalog_from_its_document_and_from_its_parsed_form_agree_on_the_digest()
+    public void A_round_trip_does_not_change_what_the_document_digests_to()
     {
-        // The consequence that actually bites: FromPublished digests the DOCUMENT, FromCatalog digests the parsed
-        // model. If the model does not round-trip, these disagree — and a verifier handed the parsed form would
-        // refuse an artifact that is perfectly sound.
+        // The consequence that actually bites. The registry serves /catalog as ToJson() and /digest over the raw
+        // file, so a model that does not round-trip makes those two endpoints describe different documents — and a
+        // consumer checking one against the other concludes the archive was tampered with.
         var fromDocument = ResolvedRubric.FromPublished(Published);
-        var fromParsed = ResolvedRubric.FromCatalog(RubricCatalog.Parse(Published));
+        var fromServedForm = ResolvedRubric.FromPublished(RubricCatalog.Parse(Published).ToJson());
 
-        Assert.Equal(fromDocument.ContentHash, fromParsed.ContentHash);
+        Assert.Equal(fromDocument.ContentHash, fromServedForm.ContentHash);
+        Assert.NotNull(fromDocument.ContentHash);
+    }
+
+    [Fact]
+    public void A_catalog_built_in_memory_witnesses_no_document()
+    {
+        // There is nothing to fetch and re-digest, so claiming a content hash would assert a check nobody can
+        // perform — and it would look exactly like a real one. Folding still happens under the catalog given.
+        var local = ResolvedRubric.FromCatalog(RubricCatalog.Parse(Published));
+
+        Assert.Null(local.ContentHash);
+        Assert.Equal("rubric-2026.09.12", local.RubricVersion);
     }
 
     [Fact]

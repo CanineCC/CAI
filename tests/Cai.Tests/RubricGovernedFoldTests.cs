@@ -43,15 +43,16 @@ public sealed class RubricGovernedFoldTests
     };
 
     /// <summary>A catalog carrying no block — the shape of all 38 already-published versions.</summary>
-    private static ResolvedRubric BlockLess() => ResolvedRubric.FromCatalog(new RubricCatalog { RubricVersion = "rubric-test" });
+    private static ResolvedRubric BlockLess() =>
+        ResolvedRubric.FromPublished(new RubricCatalog { RubricVersion = "rubric-test" }.ToJson());
 
     /// <summary>A catalog whose block genuinely moves the fold: a much sharper across-lens decay makes the weakest
     /// lens dominate the headline, which no re-labelling can imitate.</summary>
-    private static ResolvedRubric Governing() => ResolvedRubric.FromCatalog(new RubricCatalog
+    private static ResolvedRubric Governing() => ResolvedRubric.FromPublished(new RubricCatalog
     {
         RubricVersion = "rubric-test",
         Scoring = ScoringParameters.Default with { AcrossLensQ = 0.05, WithinLensQ = 0.05 },
-    });
+    }.ToJson());
 
     [Fact]
     public void The_mint_gate_folds_under_the_catalogs_block_and_not_the_scorers_defaults()
