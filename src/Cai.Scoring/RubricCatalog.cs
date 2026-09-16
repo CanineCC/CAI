@@ -33,8 +33,18 @@ public sealed record CatalogDimension
     [JsonPropertyName("family")] public string Family { get; init; } = "dimension";
     /// <summary>The strongest enforcement rung this dimension can reach (Documented / Verified / Prevented).</summary>
     [JsonPropertyName("ceilingRung")] public string? CeilingRung { get; init; }
-    /// <summary>True when the dimension is only measured under a deep scan (off in a standard run).</summary>
-    [JsonPropertyName("deepScan")] public bool DeepScan { get; init; }
+    /// <summary>
+    /// True when the dimension is only measured under a deep scan (off in a standard run); null when the catalog does
+    /// not say.
+    ///
+    /// <para>NULLABLE deliberately. As a plain <c>bool</c> this asserted <c>false</c> — "not deep-scan-only" — for
+    /// every dimension of every catalog, a claim no publisher has ever made: no published catalog carries the field
+    /// and nothing in this repository writes it. Worse, because a non-nullable bool always serializes, parsing a
+    /// published catalog and re-serializing it GAINED a field, so the model did not round-trip and
+    /// <see cref="ToJson"/> produced a document nobody published — which a content digest then describes. An absent
+    /// measurement must read as absent, not as the benign value.</para>
+    /// </summary>
+    [JsonPropertyName("deepScan")] public bool? DeepScan { get; init; }
     /// <summary>How the dimension's 0–10 score is arrived at — "deduction" (start at 10, deduct for findings) or
     /// "credit". Descriptive metadata the engine emits; modelled so serving a catalog round-trips it instead of
     /// silently dropping it.</summary>
