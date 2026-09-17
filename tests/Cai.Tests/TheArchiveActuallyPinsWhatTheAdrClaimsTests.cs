@@ -22,16 +22,24 @@ public sealed class TheArchiveActuallyPinsWhatTheAdrClaimsTests
     /// <summary>
     /// The first rubric version required to carry a <c>scoring</c> block, or null while none does.
     ///
-    /// <para>NULL TODAY, and that is a recorded gap rather than an exemption: ADR-0004's rule is not yet true of the
-    /// fold's constants, because no release has minted a version that pins them. The mechanism is in place — the
-    /// engine emits whatever it publishes and folds under the same source — so this becomes a version string on the
-    /// day of that release, and this test then enforces the rule FORWARD: every version from it onward must pin.</para>
+    /// <para>Set on 2026-09-17, when <c>rubric-2026.09.13</c> became the first version to pin the fold's own
+    /// constants and the band cutlines. Its values EQUAL <c>ScoringParameters.Default</c>, so no published number and
+    /// no published word moved — what changed is that the criteria are now readable off the archive instead of
+    /// inferred from a scorer build. From here the rule is enforced FORWARD: every version from this one onward must
+    /// pin, and a later one that stops is a rubric whose numbers stop being reproducible from the archive.</para>
     ///
     /// <para>Do not "fix" a failure here by editing this constant to match what the archive happens to contain. The
     /// constant records a DECISION about when the standard started pinning; the archive is evidence about whether the
     /// decision was carried out.</para>
     /// </summary>
-    private const string? FirstVersionRequiredToPin = null;
+    private const string? FirstVersionRequiredToPin = "rubric-2026.09.13";
+
+    /// <summary>Year, month, then the sequence AS A NUMBER — see the note in <c>RubricCatalogStore</c>.</summary>
+    private static (int Year, int Month, int Sequence) Sequence(string version)
+    {
+        var parts = version["rubric-".Length..].Split('.');
+        return (int.Parse(parts[0]), int.Parse(parts[1]), int.Parse(parts[2]));
+    }
 
     private static RubricCatalogStore Archive()
     {
@@ -96,9 +104,12 @@ public sealed class TheArchiveActuallyPinsWhatTheAdrClaimsTests
         }
 
         var (_, notPinning) = Split();
-        var regressed = notPinning
-            .Where(v => string.CompareOrdinal(v, FirstVersionRequiredToPin) >= 0)
-            .ToList();
+
+        // By SEQUENCE, not by string. This guard shipped with `string.CompareOrdinal` and its first encounter with a
+        // real release reported eight versions as "published from rubric-2026.09.13 onward" — .09.2 through .09.9,
+        // every one of them OLDER — because '9' > '1'. The same trap it exists to catch, in the catching.
+        var floor = Sequence(FirstVersionRequiredToPin);
+        var regressed = notPinning.Where(v => Sequence(v).CompareTo(floor) >= 0).ToList();
 
         Assert.True(
             regressed.Count == 0,

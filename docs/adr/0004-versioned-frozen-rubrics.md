@@ -90,10 +90,15 @@ What is true from 2026-09-16 (`Cai.Scoring` 0.2.0):
 
 What is STILL not true, stated so the next reader is not misled the same way:
 
-- **No published rubric version pins its own constants yet.** Every version resolves to
-  `ScoringParameters.Default`. Minting one is a release decision, not a code change.
-- **The kennel PRODUCT still bands under the defaults.** Unlike the engine — whose analyzer image tag IS
-  its rubric version — the product renders many repositories at once, each free to pin a different
-  version, so the correct source is the catalog resolved per repository. Until that lands, a published
-  block whose values DIFFER from the defaults would band public pages under one set of cutlines while the
-  signed verdict folded under another. That constraint is enforced by a test, not by this sentence.
+- ~~No published rubric version pins its own constants yet.~~ **Closed 2026-09-17**: `rubric-2026.09.13` is
+  the first version to carry a `scoring` block. Its values equal `ScoringParameters.Default`, so no published
+  number and no published word moved — what changed is that the criteria are now readable off the archive
+  rather than inferred from whichever scorer build is running. From that version onward the rule is enforced
+  forward by `TheArchiveActuallyPinsWhatTheAdrClaimsTests`.
+- **The kennel product resolves per repository for a REPOSITORY's own band** (closed 2026-09-17: the band is
+  decided once at ingestion from the cutlines of the rubric that run was measured under, and every per-repo
+  surface displays that stored word). What remains is AGGREGATE surfaces — a corpus median, an embed scale —
+  which are computed across repositories that may pin different versions and therefore have no single set of
+  cutlines to be read through. They band under the defaults, which is correct exactly while every published
+  version shares them. So a published block may still not carry values that DIFFER from
+  `ScoringParameters.Default`, and that constraint is enforced by a test, not by this sentence.
