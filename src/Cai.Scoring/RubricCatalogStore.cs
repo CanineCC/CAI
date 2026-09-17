@@ -31,7 +31,7 @@ public sealed class RubricCatalogStore
     public IReadOnlyList<string> Versions() =>
         PublishedDirectories()
             .Where(IsAttested)
-            .OrderByDescending(Sequence)
+            .OrderByDescending(v => v, RubricVersionOrder.Comparer)
             .ToList();
 
     /// <summary>Published directories whose catalog declares a version other than the directory name, newest first,
@@ -40,36 +40,9 @@ public sealed class RubricCatalogStore
     public IReadOnlyList<(string Directory, string Declares)> UnattestedVersions() =>
         PublishedDirectories()
             .Where(n => !IsAttested(n))
-            .OrderByDescending(Sequence)
+            .OrderByDescending(v => v, RubricVersionOrder.Comparer)
             .Select(n => (n, DeclaredVersion(n) ?? "(unreadable)"))
             .ToList();
-
-    /// <summary>
-    /// A version's sort key: year, month, then the SEQUENCE AS A NUMBER.
-    ///
-    /// <para>★ The last segment counts rubric changes within a month, so it passes 9. Ordered as text,
-    /// <c>rubric-2026.09.9</c> sorts ABOVE <c>rubric-2026.09.13</c> because '9' > '1' — which made
-    /// <see cref="Latest"/>, the first element of this ordering, return the wrong version from the day
-    /// <c>rubric-2026.09.10</c> was published. Every consumer resolving "latest" got a stale rubric, and nothing
-    /// reported it, because a stale-but-valid version verifies perfectly well.</para>
-    ///
-    /// <para>An unparseable name sorts LAST rather than throwing: this ordering is used to serve an archive, and one
-    /// malformed directory must not take the whole listing down. It is already excluded from
-    /// <see cref="Versions"/> by attestation.</para>
-    /// </summary>
-    private static (int Year, int Month, int Sequence) Sequence(string version)
-    {
-        var parts = version.StartsWith("rubric-", StringComparison.Ordinal)
-            ? version["rubric-".Length..].Split('.')
-            : [];
-
-        return parts.Length == 3
-               && int.TryParse(parts[0], out var year)
-               && int.TryParse(parts[1], out var month)
-               && int.TryParse(parts[2], out var sequence)
-            ? (year, month, sequence)
-            : (int.MinValue, int.MinValue, int.MinValue);
-    }
 
     private IEnumerable<string> PublishedDirectories()
     {
