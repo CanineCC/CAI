@@ -3,7 +3,10 @@
     "standard": "WCAG2AA",
     "timeout": 30000,
     "wait": 500,
-    "runners": ["axe", "htmlcs"]
+    "runners": [
+      "axe",
+      "htmlcs"
+    ]
   },
   "urls": [
     "http://127.0.0.1:8090/",
@@ -15,6 +18,9 @@
     "http://127.0.0.1:8090/verify",
     "http://127.0.0.1:8090/registry",
     "http://127.0.0.1:8090/api-reference",
-    "http://127.0.0.1:8090/badge"
+    "http://127.0.0.1:8090/badge",
+    "http://127.0.0.1:8090/noise/mark",
+    "http://127.0.0.1:8090/noise/rate",
+    "http://127.0.0.1:8090/noise/record"
   ]
 }

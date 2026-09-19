@@ -10,7 +10,31 @@ move a score for unchanged evidence mints a new rubric version (see
 
 ## [Unreleased]
 
+### Security
+- **A traversing rubric version could serve a catalog from outside the archive.** `rubricVersion` reaches
+  `Path.Combine` from three anonymous sources — the `/api/rubrics/{version}` routes and the `rubricVersion` inside
+  an uploaded evidence bundle on `/api/score` and `/api/verify` — and the only check was `IsNullOrWhiteSpace`.
+  Attestation did not contain it: `IsAttested` compares the document's own declared version against the requested
+  string, so a catalog placed outside the root declaring that traversal satisfied every check. `RubricCatalogStore`
+  now gates `Get`, `RawCatalogJson` and `DeclaredVersion` on `RubricVersionOrder.IsWellFormed` before touching the
+  filesystem. The same guard closes an unbounded attestation cache that a stranger could grow one row per request.
+  Covered by a regression test that fails without it.
+- **The publish workflow interpolated untrusted values and a secret into `run:` scripts.** The dispatch input, the
+  laundered `steps.ver.outputs.version` and `secrets.GITHUB_TOKEN` are now bound via `env:` and read as shell
+  variables, and the resolved version is validated against a semantic-version pattern before it leaves its step.
+  That job holds the nuget.org publish key.
+- **The SQLite migration helpers quote their identifiers.** `AddColumnIfMissing` in both stores quotes table and
+  column names with SQLite's own delimiter (doubling any embedded one) and holds the column definition to the
+  narrow shape those files emit. DDL takes no parameters, so this is what "parameterise it" means here.
+- The `api` and `app` vhosts redirect to their own literal hostname rather than echoing `$host`; Dependabot waits
+  7 days before proposing a newly published version; the a11y workflow runs on Node 22 rather than EOL Node 20.
+
 ### Changed
+- **Every production project groups its files by role** — `Domain/`, `Infrastructure/`, `Endpoints/`, `Pages/` —
+  with the convention and what each project's shape claims written down in `docs/architecture.md`. Namespaces are
+  declared explicitly and do not follow the folders, so this moved files and nothing else. `Cai.Web.Noise` was a
+  flat 28-file folder mixing the standard's rules, its SQLite store and its HTTP surface; `Cai.Scoring` now shows
+  ADR-0002's determinism claim in the tree, with one file in `Infrastructure/` and eleven in `Domain/`.
 - **The registry and the Noise Standard are their own projects** — `src/Cai.Web.Registry` and
   `src/Cai.Web.Noise`, mapped into `Cai.Web` rather than living inside it
   ([ADR-0011](docs/adr/0011-one-project-per-standard-under-the-web-host.md)). The namespaces already
