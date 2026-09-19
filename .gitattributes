@@ -1,0 +1,13 @@
+# Provenance, not suppression.
+#
+# examples/cai-delivery.*.json are EMITTED by tools/resign-sample, not authored by hand: it mints a keypair,
+# re-signs the sample package with it, and writes the sample, the public key set it verifies against, and
+# (historically) the private seed. Declaring that provenance keeps secret scanners from reading a published
+# Ed25519 PUBLIC key as a leaked credential, and marks the files as machine output in diffs and language stats.
+#
+# Nothing here is or ever was a live credential: production does not trust key id `cai-ed25519-sample`, the seed
+# it names appears nowhere else in this repository or its deploys, and the tool now writes the private half
+# outside the tree entirely. See examples/README.md.
+examples/cai-delivery.keys.json linguist-generated=true
+examples/cai-delivery.sample.json linguist-generated=true
+examples/cai-delivery.sample-key.json linguist-generated=true

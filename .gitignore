@@ -63,3 +63,7 @@ obj/
 
 # Local registry store (Registry:DbPath default when running from a clone — never commit evidence data)
 src/Cai.Web/data/
+
+# Signing keys: private halves live outside the tree (see tools/resign-sample), never in examples/
+examples/*key*.json
+!examples/cai-delivery.keys.json
