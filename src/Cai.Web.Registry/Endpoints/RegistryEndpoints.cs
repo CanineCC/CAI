@@ -360,8 +360,15 @@ public static class RegistryEndpoints
             RevokedAt: null);
 
         store.InsertGrant(record);
+
+        // ★★ THE GRANT ID, NEVER THE ADDRESS. An email grantee is personal data about someone who is not our
+        //    user — they were invited, they did not sign up — and a log line is the worst place for it: it ships
+        //    to journald and to the OTLP collector, it is retained on a schedule nobody ties to the grant, and it
+        //    survives the revocation that is supposed to end the relationship. The id points at the record that
+        //    holds the address, so an operator who needs it can still get there, through the store's own access
+        //    rules rather than out of a log.
         log.LogInformation("Registry grant {Id} created: {Owner} -> {Grantee} ({Scope}: {Refs})",
-            record.GrantId, org, granteeOrg ?? granteeEmail, record.Scope, string.Join(",", refs));
+            record.GrantId, org, granteeOrg ?? "pending-email-invite", record.Scope, string.Join(",", refs));
         return Results.Created($"/api/registry/grants/{record.GrantId}", GrantView(record));
     }
 
