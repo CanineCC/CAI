@@ -510,7 +510,7 @@ app.MapGet("/llms.txt", [AllowAnonymous] (RubricCatalogStore store) =>
         $"- {l.DisplayName} ({l.Key}) — {(l.Core ? "core, always on" : "model-aware")}"));
 
     var text =
-$@"# CAI — the Codebase Assurance Index
+$@"# CAI — the Code Assurance Index
 
 > CAI is an open, reproducible 0–100 standard for the health of a C#/.NET codebase. Same evidence in, same score out — a measurement anyone can verify, not an opinion. The method is open and free; the independent, signed survey (the deductions and what to do about them) is a service from the surveyor, watchdog.canine.dev. Stewarded by Watchdog.
 

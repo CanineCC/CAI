@@ -1,6 +1,6 @@
 # CAI — Architecture
 
-CAI (the Codebase Assurance Index) is an open, reproducible 0–100 standard for the health of a
+CAI (the Code Assurance Index) is an open, reproducible 0–100 standard for the health of a
 .NET codebase: **same evidence in, same score out**. This document sketches the high-level shape;
 the decisions behind it are recorded as [ADRs](adr/README.md).
 

@@ -1,4 +1,4 @@
-# CAI — the Codebase Assurance Index
+# CAI — the Code Assurance Index
 
 **An open, reproducible 0–100 standard for the health of a C#/.NET codebase. Same code in, same score out.**
 

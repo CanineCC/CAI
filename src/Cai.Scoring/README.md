@@ -1,6 +1,6 @@
 # Cai.Scoring
 
-The open reference scorer for the **CAI (Codebase Assurance Index)** standard — [codeassuranceindex.info](https://codeassuranceindex.info).
+The open reference scorer for the **CAI (Code Assurance Index)** standard — [codeassuranceindex.info](https://codeassuranceindex.info).
 
 Producing an evidence bundle (measuring the code) is an analyzer's job; **scoring** that bundle is this library's, and it is the single, reproducible authority: the same evidence under the same rubric yields the same number, on anyone's machine.
 

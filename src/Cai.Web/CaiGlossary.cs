@@ -17,7 +17,7 @@ internal static class CaiGlossary
     // the bands (scorer/Cai.Scoring/Band.cs), and the README (method open / judgment sold).
     public static readonly IReadOnlyList<Term> Terms =
     [
-        new("cai", "Codebase Assurance Index (CAI)", "energimærke for software",
+        new("cai", "Code Assurance Index (CAI)", "energimærke for software",
             "An open, reproducible 0–100 score for the health of a codebase, computed deterministically from evidence under a frozen, versioned rubric. Same evidence and rubric version always yield the same number — a measurement, not an opinion."),
         new("lens", "Lens", null,
             "A grouping of related dimensions (for example Code Health, Architecture, Security & Compliance). Five lenses are core and always scored; the rest are model-aware and light up only when the architecture calls for them."),
@@ -65,7 +65,7 @@ internal static class CaiGlossary
         {
             ["@context"] = "https://schema.org",
             ["@type"] = "DefinedTermSet",
-            ["name"] = "Codebase Assurance Index (CAI) glossary",
+            ["name"] = "Code Assurance Index (CAI) glossary",
             ["description"] = "The canonical vocabulary of the CAI standard — the open reference for the CAI and its companion terms.",
             ["url"] = "https://codeassuranceindex.info/glossary.jsonld",
             ["hasDefinedTerm"] = terms,

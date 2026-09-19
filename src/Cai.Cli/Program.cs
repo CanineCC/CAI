@@ -23,7 +23,7 @@ if (args.Length < 1 || !commands.Contains(args[0]))
 {
     Console.Error.WriteLine(
         """
-        cai — the Codebase Assurance Index reference tools
+        cai — the Code Assurance Index reference tools
 
         Scoring (open, reproducible fold):
           cai score  <evidence.json>                    compute the CAI from an evidence bundle

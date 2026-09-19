@@ -1,6 +1,6 @@
 # Cai.Delivery
 
-The reference signer and verifier for the **CAI-delivery package** — the signed, tamper-evident, portable form of a CAI verdict. Part of the **CAI (Codebase Assurance Index)** standard, [codeassuranceindex.info](https://codeassuranceindex.info).
+The reference signer and verifier for the **CAI-delivery package** — the signed, tamper-evident, portable form of a CAI verdict. Part of the **CAI (Code Assurance Index)** standard, [codeassuranceindex.info](https://codeassuranceindex.info).
 
 It sits on top of [`Cai.Scoring`](https://www.nuget.org/packages/Cai.Scoring), which stays a pure, crypto-free, deterministic fold. Signing lives here so a consumer can verify a delivery **offline, with the same code the producer used to mint it**.
 
