@@ -10,7 +10,40 @@ move a score for unchanged evidence mints a new rubric version (see
 
 ## [Unreleased]
 
+### Changed
+- **The registry and the Noise Standard are their own projects** — `src/Cai.Web.Registry` and
+  `src/Cai.Web.Noise`, mapped into `Cai.Web` rather than living inside it
+  ([ADR-0011](docs/adr/0011-one-project-per-standard-under-the-web-host.md)). The namespaces already
+  layered this way; now the compiler enforces it, so neither standard can drift into the other or into
+  the site by proximity. Files moved, namespaces did not; `NoiseStandardHealthCheck` is public because
+  registering it from `Program.cs` now crosses an assembly boundary. `dotnet publish src/Cai.Web` is
+  unchanged and pulls both libraries in.
+- **`INoiseStore` is now six role interfaces** — `INoiseSubmissionStore`, `INoiseJudgingStore`,
+  `INoisePublicationStore`, `INoiseDisputeStore`, `INoiseFindingStore`, `INoiseCostStore` — with `INoiseStore`
+  composing them for the few readers that genuinely span the record. Twenty-eight members on one interface meant
+  every handler and page declared a dependency on all of them; seventeen call sites now declare the one role they
+  use, so the cost endpoint can no longer record a verdict. `AddNoiseStandard()` registers the single store under
+  every role, so the narrowing changes what a caller may reach for, not which store it gets.
+- **The web projects are internal by default.** `Cai.Web.Noise` exposes two types where it exposed a hundred and
+  fourteen, `Cai.Web.Registry` thirteen where it exposed seventeen, and `Cai.Web` one. The Noise Standard's three
+  Blazor pages moved into `Cai.Web.Noise` beside the store they read, which is what let its data model stop being
+  public; the host tells the router about the second assembly. The two published libraries, `Cai.Scoring` and
+  `Cai.Delivery`, are untouched — their surface IS the product.
+
+### Removed
+- **`examples/cai-delivery.sample-key.json`.** The sample's private seed was published deliberately, but
+  verifying the example only ever needed the public half in `examples/cai-delivery.keys.json`, and
+  regenerating it runs `tools/resign-sample`, which mints a fresh keypair anyway. A committed private key
+  reads as a leak to every scanner and every reader, whichever it is. The tool now writes the seed outside
+  the repository and prints where.
+
 ### Removed — BREAKING (0.2.0)
+
+- **`DeliverySigner.Sign(DeliveryPayload)` is no longer public.** Signing a delivery has one entry point,
+  `SignPackage`, which stamps the payload with this signer's key id and signs *that*. A detached signature handed
+  out on its own is only ever correct for the payload it was taken over, and nothing in the system asked for one —
+  the method had no caller outside the class. Keeping it public invited signing one payload and shipping another,
+  which is the case `SignPackage` exists to make unrepresentable.
 
 - **There is no longer any way to fold a CAI score, or read a band word, without naming the rubric it was
   computed under.** `CaiScorer.Score(EvidenceBundle)`, `CaiScorer.Verify(EvidenceBundle, double)` and
@@ -39,6 +72,17 @@ move a score for unchanged evidence mints a new rubric version (see
   reproduces, and REFUSES a rubric whose version or digest is not the one the package witnesses).
 
 ### Fixed
+- **`tools/resign-sample` wrote a sample the registry would reject.** It serialized the package with its own
+  `WriteIndented` options instead of the library's `ToJson()`, so null-valued properties survived — and
+  `"surveyFit": null` fails the versioned package schema, which types that field as an object and reads ABSENT as
+  "no clarity figure". The tool now writes every file through the type's own `ToJson()`, which is the point of
+  having those methods. It had also stopped compiling against `DeliveryVerifier.Verify`, which now requires the
+  rubric; it resolves one from the published archive and proves the sample re-folds before claiming anything.
+- **`examples/cai-delivery.sample.json` and `.keys.json` regenerated** by that tool: the same payload, minted
+  under a fresh `cai-ed25519-sample` keypair and written in the library's wire form (no null-valued properties).
+  The seed that was published alongside earlier samples now corresponds to nothing that ships.
+- A `<see cref="ToJson"/>` on `CatalogDimension.DeepScan` pointed at a member of a different type; it now names
+  `RubricCatalog.ToJson`.
 
 - **The registry's two rubric endpoints disagreed about what a version contains — for all 38 published
   versions.** `/api/rubrics/{v}/digest` hashes the RAW archived document; `/api/rubrics/{v}/catalog`
