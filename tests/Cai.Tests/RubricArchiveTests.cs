@@ -117,6 +117,70 @@ public sealed class RubricArchiveTests
         Assert.Null(store.Latest());
     }
 
+    /// <summary>
+    /// ★★ A VERSION NAME IS COMPOSED INTO A PATH, and every string that reaches this store is attacker-supplied:
+    /// `/api/rubrics/{version}/catalog` passes the route segment straight through, and `/api/score` and
+    /// `/api/verify` pass the rubricVersion out of an uploaded evidence bundle. A traversing name escapes the
+    /// archive root, and attestation does NOT save us — the document it lands on can declare that same traversing
+    /// string as its own version, which is all `IsAttested` compares. The refusal has to be the name's shape.
+    /// </summary>
+    [Fact]
+    public void A_traversing_version_name_cannot_serve_a_catalog_from_outside_the_archive()
+    {
+        using var tmp = new TempArchive();
+        tmp.Write("rubric-2026.01.01", declaring: "rubric-2026.01.01");
+
+        // A catalog OUTSIDE the archive root, declaring the very traversal that reaches it — so every check the
+        // store makes about the document itself passes, and only the shape of the name stands between the two.
+        var outside = Path.Combine(Path.GetDirectoryName(tmp.Root.TrimEnd(Path.DirectorySeparatorChar))!,
+            "cai-outside-" + Guid.NewGuid().ToString("N"));
+        var escape = "../" + Path.GetFileName(outside);
+        Directory.CreateDirectory(outside);
+        try
+        {
+            File.WriteAllText(Path.Combine(outside, "rubric-catalog.json"), new RubricCatalog
+            {
+                RubricVersion = escape,
+                Lenses = [new CatalogLens("code_health", "Code Health")],
+                Dimensions = [new CatalogDimension { Id = "D1", Name = "Complexity", Lens = "code_health", Evaluator = "tool" }],
+            }.ToJson());
+
+            var store = new RubricCatalogStore(tmp.Root);
+
+            Assert.Null(store.Get(escape));
+            Assert.Null(store.RawCatalogJson(escape));
+            Assert.Equal(["rubric-2026.01.01"], store.Versions());
+        }
+        finally
+        {
+            Directory.Delete(outside, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// The same refusal for names that are merely not versions. ★ Beyond the null, the point is that nothing is
+    /// recorded for them: the attestation cache is keyed by the caller's string, so a store that looked these up
+    /// before rejecting them would grow a row per distinct request — unbounded memory on an anonymous endpoint.
+    /// </summary>
+    [Theory]
+    [InlineData("..")]
+    [InlineData("/etc/passwd")]
+    [InlineData("rubric-2026.01.01/../../secrets")]
+    [InlineData("latest")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void A_name_that_is_not_a_rubric_version_is_refused(string hostile)
+    {
+        using var tmp = new TempArchive();
+        tmp.Write("rubric-2026.01.01", declaring: "rubric-2026.01.01");
+
+        var store = new RubricCatalogStore(tmp.Root);
+
+        Assert.Null(store.Get(hostile));
+        Assert.Null(store.RawCatalogJson(hostile));
+        Assert.Equal(["rubric-2026.01.01"], store.Versions());
+    }
+
     [Fact]
     public void An_unparseable_catalog_is_withheld_rather_than_thrown()
     {
