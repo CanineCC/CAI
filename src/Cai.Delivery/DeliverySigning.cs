@@ -39,8 +39,14 @@ public sealed class DeliverySigner : IDisposable
     /// <summary>The key id this signer stamps into the signature (and the issuer).</summary>
     public string KeyId => _keyId;
 
-    /// <summary>Sign a payload — canonicalize it, sign the bytes, and return the detached signature.</summary>
-    public DeliverySignature Sign(DeliveryPayload payload)
+    /// <summary>Canonicalize a payload, sign the bytes, and return the detached signature.</summary>
+    /// <remarks>
+    /// ★ PRIVATE, so signing has ONE public entry point. A detached signature is only ever correct for the payload
+    /// this signer has already stamped with its own key id — handed out on its own it invites a caller to sign a
+    /// payload and then package a different one, which is the single thing <see cref="SignPackage"/> exists to make
+    /// impossible. Nothing outside this class called it.
+    /// </remarks>
+    private DeliverySignature Sign(DeliveryPayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
         var canonical = CanonicalJson.Canonicalize(payload);
