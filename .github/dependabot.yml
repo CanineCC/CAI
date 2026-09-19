@@ -9,9 +9,19 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # A version published minutes ago has had no time to be found malicious or broken. Wait a week before
+    # proposing it — the supply-chain attacks this repository attests against (ADR-0006) are typically caught
+    # within days of publication, and nothing here needs a dependency the week it ships.
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # A version published minutes ago has had no time to be found malicious or broken. Wait a week before
+    # proposing it — the supply-chain attacks this repository attests against (ADR-0006) are typically caught
+    # within days of publication, and nothing here needs a dependency the week it ships.
+    cooldown:
+      default-days: 7

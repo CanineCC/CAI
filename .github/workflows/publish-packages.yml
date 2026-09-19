@@ -38,24 +38,38 @@ jobs:
 
       - name: Resolve version
         id: ver
+        # ★★ BOTH SOURCES ARE ATTACKER-CHOSEN. A dispatch input is whatever was typed, and a tag name only has
+        #    to satisfy git's ref rules, which permit `$`, a backtick, `;`, `|` and `&`. Actions expands ${{ }}
+        #    BEFORE the shell exists, so interpolating either one into this script would write those characters
+        #    in as code, in a job that holds the publish keys. Bound to env: instead, read as shell variables.
+        env:
+          DISPATCH_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            v="${{ github.event.inputs.version }}"
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            v="$DISPATCH_VERSION"
           else
             v="${GITHUB_REF_NAME#*-v}"
           fi
-          if [ -z "$v" ]; then echo "::error::could not resolve a version"; exit 1; fi
+          # ★ And validated to a shape before it leaves this step, so every later step consumes a known token
+          #   rather than an arbitrary string that merely travelled through $GITHUB_OUTPUT.
+          if ! printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::could not resolve a semantic version (got '$v')"; exit 1
+          fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "Publishing version $v"
 
       - name: Verify the packaged version matches the csproj
         # Guards the failure mode this workflow exists to fix: shipping a package whose version does not
         # correspond to any source the public can read.
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
+          set -euo pipefail
           for p in src/Cai.Scoring/Cai.Scoring.csproj src/Cai.Delivery/Cai.Delivery.csproj; do
             declared=$(grep -oPm1 '(?<=<Version>)[^<]+' "$p")
-            if [ "$declared" != "${{ steps.ver.outputs.version }}" ]; then
-              echo "::error::$p declares <Version>$declared</Version> but the tag asks for ${{ steps.ver.outputs.version }}."
+            if [ "$declared" != "$VERSION" ]; then
+              echo "::error::$p declares <Version>$declared</Version> but the tag asks for $VERSION."
               exit 1
             fi
           done
@@ -64,9 +78,12 @@ jobs:
         run: dotnet test tests/Cai.Tests/Cai.Tests.csproj -c Release --nologo
 
       - name: Pack
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          dotnet pack src/Cai.Scoring/Cai.Scoring.csproj  -c Release -o nupkg -p:Version=${{ steps.ver.outputs.version }}
-          dotnet pack src/Cai.Delivery/Cai.Delivery.csproj -c Release -o nupkg -p:Version=${{ steps.ver.outputs.version }}
+          set -euo pipefail
+          dotnet pack src/Cai.Scoring/Cai.Scoring.csproj  -c Release -o nupkg "-p:Version=$VERSION"
+          dotnet pack src/Cai.Delivery/Cai.Delivery.csproj -c Release -o nupkg "-p:Version=$VERSION"
 
       - name: Push to nuget.org (anonymous-readable)
         env:
@@ -82,11 +99,17 @@ jobs:
             --skip-duplicate
 
       - name: Push to GitHub Packages (mirror)
-        run: >
-          dotnet nuget push "nupkg/*.nupkg"
-          --source "https://nuget.pkg.github.com/CanineCC/index.json"
-          --api-key ${{ secrets.GITHUB_TOKEN }}
-          --skip-duplicate
+        # ★★ The token reaches the process as DATA. Interpolated into the script it would be written literally
+        #    into the step's script file on the runner's disk, and would surface in any shell trace, `ps`
+        #    listing or echoed failing command — none of which log masking covers.
+        env:
+          GH_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          dotnet nuget push "nupkg/*.nupkg" \
+            --source "https://nuget.pkg.github.com/CanineCC/index.json" \
+            --api-key "$GH_PACKAGES_TOKEN" \
+            --skip-duplicate
 
       - name: Upload packages as build artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
