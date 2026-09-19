@@ -15,11 +15,19 @@ Producing an evidence bundle (measuring the code) is an analyzer's job; **scorin
 ```csharp
 using Cai.Scoring;
 
-var bundle = EvidenceBundle.Parse(json);   // or build it in code
-CaiScore score = CaiScorer.Score(bundle);
+var bundle  = EvidenceBundle.Parse(bundleJson);    // or build it in code
+var catalog = RubricCatalog.Parse(catalogJson);    // the rubric version the bundle names
+
+CaiScore score = CaiScorer.Score(bundle, catalog);
 Console.WriteLine($"{score.Headline:0.0} ({score.Band.Label()})");
 ```
 
+The catalog is **required**, not a convenience: it pins the fold's constants and the band cutlines, so a number is only meaningful beside the rubric version it was computed under. There is deliberately no overload that folds without one.
+
+## Serializing
+
+`Parse(string json)` and `ToJson()` live on the types that are **documents on the wire** — here `EvidenceBundle` and `RubricCatalog`, and in `Cai.Delivery` the package and the key files. Their parts (`CatalogDimension`, `DimensionScore`, `LensInput`, …) deliberately carry neither: a dimension on its own is not something anyone publishes, and giving each part its own entry point invites round-tripping a fragment whose meaning depends on the document around it. Serialize a part by serializing the document that contains it.
+
 Deterministic, dependency-free, and auditable — the headline reconstructs from the lens contributions. See the spec at [codeassuranceindex.info/spec](https://codeassuranceindex.info/spec).
 
-MIT-licensed.
+Apache-2.0, matching the [repository licence](https://github.com/CanineCC/CAI/blob/main/LICENSE).

@@ -24,7 +24,7 @@
     <RepositoryUrl>https://github.com/CanineCC/CAI</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <!-- MUST match the repository LICENSE (Apache-2.0). A standard whose reference implementation carries
-         contradictory licence metadata is not credibly open — see ADR-0011. -->
+         contradictory licence metadata is not credibly open. -->
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageTags>cai;codebase-assurance-index;scoring;code-quality;rubric;owa</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>

@@ -23,9 +23,11 @@
     <PackageProjectUrl>https://codeassuranceindex.info</PackageProjectUrl>
     <RepositoryUrl>https://github.com/CanineCC/CAI</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <!-- MUST match the repository LICENSE (Apache-2.0) — see ADR-0011. -->
+    <!-- MUST match the repository LICENSE (Apache-2.0): a standard whose reference implementation carries
+         contradictory licence metadata is not credibly open. -->
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageTags>cai;delivery;ed25519;signature;evidence;attestation</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>
@@ -35,6 +37,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
     <!-- Ship the licence text inside the package (see Cai.Scoring.csproj). -->
     <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
   </ItemGroup>

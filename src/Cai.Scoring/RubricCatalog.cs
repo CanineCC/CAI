@@ -41,7 +41,7 @@ public sealed record CatalogDimension
     /// every dimension of every catalog, a claim no publisher has ever made: no published catalog carries the field
     /// and nothing in this repository writes it. Worse, because a non-nullable bool always serializes, parsing a
     /// published catalog and re-serializing it GAINED a field, so the model did not round-trip and
-    /// <see cref="ToJson"/> produced a document nobody published — which a content digest then describes. An absent
+    /// <see cref="RubricCatalog.ToJson"/> produced a document nobody published — which a content digest then describes. An absent
     /// measurement must read as absent, not as the benign value.</para>
     /// </summary>
     [JsonPropertyName("deepScan")] public bool? DeepScan { get; init; }
