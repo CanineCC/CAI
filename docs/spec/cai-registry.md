@@ -3,7 +3,7 @@
 - Status: **Implemented (v1, closed-loop)** — this document IS the wire contract; the kennel client is built against it 1:1.
 - Base URL: `https://api.codeassuranceindex.info` (the registry endpoints live in the cai app under `/api/registry`).
 - Companion to: [CAI-delivery package format](cai-delivery-package.md), [ADR-0010](../adr/0010-signed-cai-delivery-package-and-registry.md)
-  (incl. its v1 addendum), reference implementation `src/Cai.Web/Registry/`, contract tests `tests/Cai.Tests/RegistryApiTests.cs`.
+  (incl. its v1 addendum), reference implementation `src/Cai.Web.Registry/`, contract tests `tests/Cai.Tests/RegistryApiTests.cs`.
 - Backs mockup 5: `~/watchdog-mock-5-access-sharing.html` (seller "Del bevis" / buyer "Anmod om adgang") — the grant flows.
 
 The registry is cai's role as **the binding middle** (`00-architecture.md`): the producer (Watchdog) pushes signed

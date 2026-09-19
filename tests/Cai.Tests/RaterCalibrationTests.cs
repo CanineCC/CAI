@@ -39,13 +39,15 @@ public sealed class RaterCalibrationTests
         Assert.Null(RaterCalibration.ParseSource("obvious"));
     }
 
+    // ★ Named rather than typed: HoneypotSource is internal to the Noise project, and an xUnit theory parameter
+    // has to be at least as accessible as the (public) test method. The enum's own name is the assertion.
     [Theory]
-    [InlineData("upstream-fix-merged", HoneypotSource.UpstreamFixMerged)]
-    [InlineData("vendor-withdrew", HoneypotSource.VendorWithdrew)]
-    [InlineData("advisory-retracted", HoneypotSource.AdvisoryRetracted)]
-    public void An_external_settlement_earns_it(string wire, HoneypotSource expected)
+    [InlineData("upstream-fix-merged", nameof(HoneypotSource.UpstreamFixMerged))]
+    [InlineData("vendor-withdrew", nameof(HoneypotSource.VendorWithdrew))]
+    [InlineData("advisory-retracted", nameof(HoneypotSource.AdvisoryRetracted))]
+    public void An_external_settlement_earns_it(string wire, string expected)
     {
-        Assert.Equal(expected, RaterCalibration.ParseSource(wire));
+        Assert.Equal(expected, RaterCalibration.ParseSource(wire)?.ToString());
     }
 
     /// <summary>

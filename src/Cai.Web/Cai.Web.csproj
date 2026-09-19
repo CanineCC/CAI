@@ -11,32 +11,16 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Cai.Tests" />
   </ItemGroup>
+  <!-- The host: the calculator UI and the shared API edge. The registry and the Noise Standard each live in their
+       own project and are mapped in here, so neither grows into the other by proximity. -->
   <ItemGroup>
     <ProjectReference Include="..\Cai.Scoring\Cai.Scoring.csproj" />
     <ProjectReference Include="..\Cai.Delivery\Cai.Delivery.csproj" />
-  </ItemGroup>
-  <!-- The registry validates inbound deliveries against the VERSIONED package schema. The schema ships INSIDE the
-       binary (embedded resource) so a deployed registry validates against exactly the schema revision it was built
-       with — no runtime file path to misconfigure. -->
-  <ItemGroup>
-    <EmbeddedResource Include="..\..\schemas\cai-delivery-1.0.schema.json" LogicalName="Cai.Web.Registry.cai-delivery-1.0.schema.json" />
-    <!-- ★★ THE SIGNED CORPUS, embedded as BYTES. The signature covers the manifest file's exact bytes, so it
-         must reach the runtime unmodified — a build step that reformatted or re-encoded it would break
-         verification, which is the behaviour signing is for. -->
-    <EmbeddedResource Include="Noise\corpus\noise-corpus-1.0.json" LogicalName="Cai.Web.Noise.corpus.noise-corpus-1.0.json" />
-    <EmbeddedResource Include="Noise\corpus\noise-corpus-1.0.json.sig" LogicalName="Cai.Web.Noise.corpus.noise-corpus-1.0.json.sig" />
-    <!-- ★★ GLOB, not a fixed name: the public key is written by the deploy under the manifest's own keyId, so a
-         hard-coded filename here would have to be edited in lockstep with a key rotation and would silently ship
-         the old key if it were not. -->
-    <EmbeddedResource Include="Noise\corpus\*.pub.pem" LogicalName="Cai.Web.Noise.corpus.%(Filename)%(Extension)" />
+    <ProjectReference Include="..\Cai.Web.Registry\Cai.Web.Registry.csproj" />
+    <ProjectReference Include="..\Cai.Web.Noise\Cai.Web.Noise.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="12.1.1" />
-    <PackageReference Include="JsonSchema.Net" Version="9.2.2" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
-    <!-- Direct override: Microsoft.Data.Sqlite 10.0.9 pulls bundle 2.1.11, whose native e_sqlite3 has a known high
-         vulnerability (NU1903 / GHSA-2m69-gcr7-jv3q); 3.x carries the patched SQLite. -->
-    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />

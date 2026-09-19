@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Cai.Web.Noise</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Minimal APIs and health checks, without the app-hosting machinery: the Noise Standard is mapped into a host
+       by Cai.Web rather than started on its own. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <!-- The Web SDK folds these into its implicit usings; this is a class library under the plain SDK, so the same
+       set is named here rather than repeated at the top of every endpoint file. -->
+  <ItemGroup>
+    <Using Include="System.Net.Http.Json" />
+    <Using Include="Microsoft.AspNetCore.Builder" />
+    <Using Include="Microsoft.AspNetCore.Hosting" />
+    <Using Include="Microsoft.AspNetCore.Http" />
+    <Using Include="Microsoft.AspNetCore.Routing" />
+    <Using Include="Microsoft.Extensions.Configuration" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Extensions.Hosting" />
+    <Using Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Cai.Tests" />
+  </ItemGroup>
+  <!-- The Noise Standard reads the registry's access rules and delivery types; the dependency runs this way only. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Cai.Web.Registry\Cai.Web.Registry.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- ★★ THE SIGNED CORPUS, embedded as BYTES. The signature covers the manifest file's exact bytes, so it
+         must reach the runtime unmodified — a build step that reformatted or re-encoded it would break
+         verification, which is the behaviour signing is for. -->
+    <EmbeddedResource Include="corpus\noise-corpus-1.0.json" LogicalName="Cai.Web.Noise.corpus.noise-corpus-1.0.json" />
+    <EmbeddedResource Include="corpus\noise-corpus-1.0.json.sig" LogicalName="Cai.Web.Noise.corpus.noise-corpus-1.0.json.sig" />
+    <!-- ★★ GLOB, not a fixed name: the public key is written by the deploy under the manifest's own keyId, so a
+         hard-coded filename here would have to be edited in lockstep with a key rotation and would silently ship
+         the old key if it were not. -->
+    <EmbeddedResource Include="corpus\*.pub.pem" LogicalName="Cai.Web.Noise.corpus.%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <!-- Direct override: Microsoft.Data.Sqlite 10.0.9 pulls bundle 2.1.11, whose native e_sqlite3 has a known high
+         vulnerability (NU1903 / GHSA-2m69-gcr7-jv3q); 3.x carries the patched SQLite. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+  </ItemGroup>
+</Project>

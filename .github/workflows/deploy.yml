@@ -78,17 +78,17 @@ jobs:
       - name: Publish the signing key this host generated
         run: |
           set -euo pipefail
-          if git diff --quiet -- src/Cai.Web/Noise/corpus/'*.pub.pem'; then
+          if git diff --quiet -- src/Cai.Web.Noise/corpus/'*.pub.pem'; then
             echo "public key unchanged — nothing to commit"
             exit 0
           fi
           git config user.name  "cai-deploy"
           git config user.email "deploy@codeassuranceindex.info"
-          git add src/Cai.Web/Noise/corpus/*.pub.pem src/Cai.Web/Noise/corpus/*.json.sig
+          git add src/Cai.Web.Noise/corpus/*.pub.pem src/Cai.Web.Noise/corpus/*.json.sig
           git commit -m "chore(corpus): publish the signing key this host generated [skip ci]"
           if ! git push origin HEAD:main; then
             echo "::warning::could not push the new public key — the SITE is signed correctly, but the "\
-                 "repository copy is stale. Re-run this workflow or commit src/Cai.Web/Noise/corpus/ by hand."
+                 "repository copy is stale. Re-run this workflow or commit src/Cai.Web.Noise/corpus/ by hand."
           fi
 
       # ★★ THE OTHER HALF OF THE SEPARATION. deploy-preprod.yml rewrites the corpus in ITS checkout to a
@@ -103,7 +103,7 @@ jobs:
       - name: The corpus about to ship is the PUBLISHED one, not preprod's
         run: |
           set -euo pipefail
-          id=$(python3 -c 'import json;print(json.load(open("src/Cai.Web/Noise/corpus/noise-corpus-1.0.json"))["keyId"])')
+          id=$(python3 -c 'import json;print(json.load(open("src/Cai.Web.Noise/corpus/noise-corpus-1.0.json"))["keyId"])')
           echo "corpus keyId: $id"
           case "$id" in
             *preprod*) echo "::error::production is about to ship the PREPROD corpus ('$id'). Refusing."; exit 1 ;;

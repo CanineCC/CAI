@@ -6,7 +6,7 @@ namespace Cai.Web;
 /// dimension's whatItMeasures, no over-claim) — NOT invented. A dimension with no entry shows nothing rather than a
 /// fabricated claim.
 /// </summary>
-public static class CaiDimConsequences
+internal static class CaiDimConsequences
 {
     public static string? For(string id) => ById.TryGetValue(id, out var s) ? s : null;
 

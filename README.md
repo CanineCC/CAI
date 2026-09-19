@@ -23,7 +23,8 @@ Bands: **Exemplary** 90–100 · **Strong** 70–89 · **Adequate** 50–69 · *
 ## Repository layout
 
 ```
-src/          production code  — Cai.Web (the site + JSON API), Cai.Scoring (the library), Cai.Cli (the `cai` tool)
+src/          production code  — Cai.Web (the site + JSON API host), Cai.Web.Registry (the delivery registry),
+              Cai.Web.Noise (the Noise Standard), Cai.Scoring (the library), Cai.Cli (the `cai` tool)
 tests/        Cai.Tests        — xUnit suite over the scorer (determinism, banding, the fold, verify)
 benchmarks/   Cai.Benchmarks   — BenchmarkDotNet micro-benchmarks for the scoring hot paths
 rubrics/      frozen, versioned rubric catalogs (owned and served by Cai.Web)

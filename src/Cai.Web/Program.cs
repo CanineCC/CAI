@@ -111,17 +111,13 @@ builder.Services.AddCors(options => options.AddPolicy(CaiCors.PolicyName, policy
 // ── The registry (ADR-0010): store + trusted signing keys + health, all bound from the Registry config section. ──
 builder.Services.Configure<RegistryOptions>(builder.Configuration.GetSection(RegistryOptions.Section));
 builder.Services.AddSingleton<IRegistryStore, SqliteRegistryStore>();
-// ★★ The submission register and the verdict record. Both were in-memory: a restart forgot that a vendor had
-// submitted (the hole the no-withdrawal rule exists to close) and no judging was recorded at all, so 01's
-// "open judging" promise had nothing behind it. Same database file as the registry — one thing to back up.
-builder.Services.AddSingleton<INoiseStore, SqliteNoiseStore>();
 builder.Services.AddSingleton<TrustedKeyProvider>();
 builder.Services.AddHealthChecks().AddCheck<RegistryHealthCheck>("registry");
 
-// ★★ THE STANDARD ITSELF, AS A READINESS POINT. /health was green for two days while every noise endpoint
-// returned 500 — see NoiseStandardHealthCheck for why. This forces the lazily-initialised corpus load, so a
-// probe fails at the same moment the API does rather than whenever somebody next looks.
-builder.Services.AddHealthChecks().AddCheck<Cai.Web.Noise.NoiseStandardHealthCheck>("noise-standard");
+// ── The Noise Standard (ADR-0011): its store, the roles that store fills, and its readiness check. The host asks
+// for the standard; which database the submission register and the verdict record live in is that project's own
+// decision. Same database file as the registry — one thing to back up.
+builder.Services.AddNoiseStandard();
 
 // Behind the dgx1 nginx reverse proxy: trust X-Forwarded-* so the rate limiter partitions by the REAL client IP.
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
@@ -624,7 +620,11 @@ app.MapGet("/robots.txt", [AllowAnonymous] () => Results.Text(
     "text/plain; charset=utf-8"));
 
 // The standard's UI (static-SSR Blazor). Public — opt out of the default-deny fallback policy (C2).
-app.MapRazorComponents<App>().AllowAnonymous();
+// ★ The Noise Standard's pages live in its own project (ADR-0011), so their routes are discovered from that
+// assembly too — the host maps them, it does not own them.
+app.MapRazorComponents<App>()
+    .AddAdditionalAssemblies(typeof(Cai.Web.Noise.NoiseStandardEndpoints).Assembly)
+    .AllowAnonymous();
 
 // Anything else is genuinely absent — say so. Without an endpoint here the fallback POLICY turns every typo and every
 // retired URL into a 401, which is how /robots.txt came to answer "present a registry bearer token".
@@ -685,13 +685,13 @@ static string[] ReadCorsOrigins(IConfiguration cfg)
 /// <summary>Marker for <c>WebApplicationFactory</c> — lets the integration tests boot this exact app in-process.</summary>
 public partial class Program;
 
-public static partial class CaiCors
+internal static partial class CaiCors
 {
     public const string PolicyName = "cai-public-islands";
 }
 
 /// <summary>The first-party origins the island CORS policy trusts, bound so the rate limiter can read the same list.</summary>
-public sealed class PublicCorsOptions
+internal sealed class PublicCorsOptions
 {
     /// <summary>Absolute origins (scheme + host + optional port), exactly as a browser sends <c>Origin</c>.</summary>
     public string[] AllowedOrigins { get; set; } = [];

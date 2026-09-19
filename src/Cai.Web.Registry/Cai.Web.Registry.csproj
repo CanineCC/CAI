@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Cai.Web.Registry</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Minimal APIs and health checks, without the app-hosting machinery: this is the registry's library half,
+       mapped into a host by Cai.Web rather than started on its own. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <!-- The Web SDK folds these into its implicit usings; this is a class library under the plain SDK, so the same
+       set is named here rather than repeated at the top of every endpoint file. -->
+  <ItemGroup>
+    <Using Include="System.Net.Http.Json" />
+    <Using Include="Microsoft.AspNetCore.Builder" />
+    <Using Include="Microsoft.AspNetCore.Hosting" />
+    <Using Include="Microsoft.AspNetCore.Http" />
+    <Using Include="Microsoft.AspNetCore.Routing" />
+    <Using Include="Microsoft.Extensions.Configuration" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Extensions.Hosting" />
+    <Using Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Cai.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Cai.Scoring\Cai.Scoring.csproj" />
+    <ProjectReference Include="..\Cai.Delivery\Cai.Delivery.csproj" />
+  </ItemGroup>
+  <!-- The registry validates inbound deliveries against the VERSIONED package schema. The schema ships INSIDE the
+       binary (embedded resource) so a deployed registry validates against exactly the schema revision it was built
+       with — no runtime file path to misconfigure. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\schemas\cai-delivery-1.0.schema.json" LogicalName="Cai.Web.Registry.cai-delivery-1.0.schema.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" Version="9.2.2" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <!-- Direct override: Microsoft.Data.Sqlite 10.0.9 pulls bundle 2.1.11, whose native e_sqlite3 has a known high
+         vulnerability (NU1903 / GHSA-2m69-gcr7-jv3q); 3.x carries the patched SQLite. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+  </ItemGroup>
+</Project>

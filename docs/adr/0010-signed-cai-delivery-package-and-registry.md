@@ -81,7 +81,7 @@ and tests covering sign→verify, reproduce, tamper, wrong/unknown/retired key, 
 
 ## Addendum — the registry as implemented (2026-07-02)
 
-The registry is now built (`src/Cai.Web/Registry/`, contract in [the registry spec](../spec/cai-registry.md), which is
+The registry is now built (`src/Cai.Web.Registry/`, contract in [the registry spec](../spec/cai-registry.md), which is
 the authoritative wire document). Two decisions refine this ADR:
 
 1. **Producer-minted, registry-verified (v1).** The original text placed the mint (recompute-then-sign) inside the

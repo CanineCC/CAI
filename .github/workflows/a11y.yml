@@ -6,7 +6,7 @@ name: Accessibility
 on:
   push:
     branches: [main]
-    paths: ["src/Cai.Web/**", ".pa11yci", ".github/workflows/a11y.yml"]
+    paths: ["src/Cai.Web/**", "src/Cai.Web.Registry/**", "src/Cai.Web.Noise/**", ".pa11yci", ".github/workflows/a11y.yml"]
   pull_request:
     branches: [main]
   workflow_dispatch:

@@ -19,7 +19,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DIR="$ROOT/src/Cai.Web/Noise/corpus"
+DIR="$ROOT/src/Cai.Web.Noise/corpus"
 MANIFEST="$DIR/noise-corpus-1.0.json"
 SIG="$MANIFEST.sig"
 

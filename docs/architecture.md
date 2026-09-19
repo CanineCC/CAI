@@ -58,6 +58,12 @@ flowchart TD
 - **`Cai.Web`** — a Blazor static-SSR site that documents the standard and a minimal HTTP API
   (`/api/rubrics`, `/api/score`, `/api/verify`) plus `/llms.txt` and a JSON-LD glossary. The public
   API is rate-limited; `/score` and `/verify` validate inbound evidence before folding.
+- **`Cai.Web.Registry`** — the signed-delivery registry: its endpoints, store, access rules and the
+  embedded package schema. A library the host maps in, so it does not grow into the site by proximity
+  ([ADR-0010](adr/0010-signed-cai-delivery-package-and-registry.md)).
+- **`Cai.Web.Noise`** — the Noise Standard: its endpoints, store, signed corpus, judging pipeline and
+  the three Blazor pages that read that store (`/noise/mark`, `/noise/rate`, `/noise/record`). Likewise
+  a library, mapped into the same host; it reads the registry, never the other way round.
 - **`rubrics/`** — the versioned, frozen rubric catalogs codeassuranceindex.info owns
   ([ADR-0004](adr/0004-versioned-frozen-rubrics.md)).
 
@@ -68,7 +74,8 @@ Production code lives under `src/`, tests under `tests/`, and performance benchm
 ([ADR-0009](adr/0009-conventional-src-tests-layout.md)):
 
 ```
-src/Cai.Scoring  src/Cai.Delivery  src/Cai.Cli  src/Cai.Web   production code
+src/Cai.Scoring  src/Cai.Delivery  src/Cai.Cli     production code: the folds and the tool
+src/Cai.Web  src/Cai.Web.Registry  src/Cai.Web.Noise   the host and the two standards it serves
 tests/Cai.Tests                                  xUnit suite over the fold
 benchmarks/Cai.Benchmarks                        BenchmarkDotNet hot-path benchmarks
 rubrics/  examples/  schemas/  docs/  deploy/    data, samples, schema, docs, ops

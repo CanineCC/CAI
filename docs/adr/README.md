@@ -21,6 +21,7 @@ old one rather than editing history.
 | [0008](0008-api-access-control.md) | Default-deny authorization with an open public API | Accepted |
 | [0009](0009-conventional-src-tests-layout.md) | Conventional `src/` and `tests/` repository layout | Accepted |
 | [0010](0010-signed-cai-delivery-package-and-registry.md) | The signed CAI-delivery package and the registry | Accepted |
+| [0011](0011-one-project-per-standard-under-the-web-host.md) | One project per standard, under a thin web host | Accepted |
 
 See [../architecture.md](../architecture.md) for the high-level shape these decisions produce.
 Package/registry design details live under [../spec/](../spec).

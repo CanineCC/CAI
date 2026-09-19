@@ -7,7 +7,7 @@ namespace Cai.Web;
 /// catalog); this adds the protective rationale. A lens with no entry (e.g. performance) shows no claim rather than a
 /// fabricated one.
 /// </summary>
-public static class CaiLensProse
+internal static class CaiLensProse
 {
     public static readonly IReadOnlyDictionary<string, string> Protects =
         new Dictionary<string, string>(StringComparer.Ordinal)

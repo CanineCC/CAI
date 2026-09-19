@@ -13,7 +13,7 @@ namespace Cai.Web;
 /// reproduce it" failed on this project's own example, and every bundle a reader wrote from it was rejected too.
 /// <c>CalculatorSampleTests</c> folds this string on every build, so it cannot rot back into an example that does not work.
 /// </remarks>
-public static class CalculatorSample
+internal static class CalculatorSample
 {
     /// <summary>The rubric the sample names. Must be a version whose catalog publishes the dimension→category map, so
     /// the sample also demonstrates that the category is derivable and need not be restated by hand.</summary>

@@ -133,10 +133,10 @@ jobs:
         if: steps.guard.outputs.go == 'yes'
         run: |
           set -euo pipefail
-          id=$(python3 -c 'import json;print(json.load(open("src/Cai.Web/Noise/corpus/noise-corpus-1.0.json"))["keyId"])')
+          id=$(python3 -c 'import json;print(json.load(open("src/Cai.Web.Noise/corpus/noise-corpus-1.0.json"))["keyId"])')
           echo "corpus keyId: $id"
           [ "$id" = "cai-corpus-preprod" ] || { echo "::error::preprod is about to build corpus '$id', not the preprod one. Refusing."; exit 1; }
-          test -f src/Cai.Web/Noise/corpus/cai-corpus-preprod.pub.pem \
+          test -f src/Cai.Web.Noise/corpus/cai-corpus-preprod.pub.pem \
             || { echo "::error::the preprod public key is not in the tree, so the artifact could not verify itself."; exit 1; }
 
       - name: Verify build (Release)

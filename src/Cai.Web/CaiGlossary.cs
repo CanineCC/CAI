@@ -9,7 +9,7 @@ namespace Cai.Web;
 /// fixed meaning (the "referenceable" pillar). Terms are grounded in /spec, /lenses, the bands, and the reference
 /// scorer — not invented. Served at /glossary.jsonld and embedded inline on the home page head.
 /// </summary>
-public static class CaiGlossary
+internal static class CaiGlossary
 {
     public sealed record Term(string Key, string En, string? Da, string Gloss);
 
