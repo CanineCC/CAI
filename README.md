@@ -1,3 +1,15 @@
+> ## This repository has moved
+>
+> **The Code Assurance Index now lives at
+> [`code-assurance-initiative/CodeAssuranceIndex`](https://github.com/code-assurance-initiative/CodeAssuranceIndex).**
+>
+> The standard is held by an organisation in its own name rather than by the company that
+> created it, ahead of its steering group being formed. Issues, pull requests and releases
+> belong there.
+>
+> This repository is **archived, not deleted**: several published papers cite files here at
+> pinned commits, and those citations must keep resolving. Nothing here will change again.
+
 # CAI — the Code Assurance Index
 
 **An open, reproducible 0–100 standard for the health of a C#/.NET codebase. Same code in, same score out.**
