@@ -8,9 +8,11 @@
     <RootNamespace>Cai.Scoring</RootNamespace>
   </PropertyGroup>
 
-  <!-- NuGet package: the open CAI reference scorer. Published to GitHub Packages (CanineCC), free for the public
-       CanineCC/CAI repo, so any analyzer (Watchdog included) folds an evidence bundle through the SAME implementation
-       rather than re-deriving the math. -->
+  <!-- NuGet package: the open CAI reference scorer, so any analyzer (Watchdog included) folds an evidence bundle
+       through the SAME implementation rather than re-deriving the math. NOT PUBLISHED YET: publish-packages.yml has
+       never run and neither package exists on nuget.org or GitHub Packages, so "read our algorithm and check our
+       number" is not yet true for a stranger. nuget.org is the target because GitHub Packages needs an account even
+       for a public feed; it needs the NUGET_API_KEY secret on the repository, which is not set. -->
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>Cai.Scoring</PackageId>
@@ -21,7 +23,7 @@
     <Company>Canine Development</Company>
     <Description>The CAI (Code Assurance Index) open reference scorer: folds an evidence bundle (per-dimension scores + meta-dimensions + surface metrics) through the rubric — confidence-weighted categories, worst-first OWA lenses, the architecture surface floor, quality-bar bands, critical gating and the coherence cap — into the 0–100 headline and ten lens scores. Deterministic and reproducible: same evidence + same rubric ⇒ the same number.</Description>
     <PackageProjectUrl>https://codeassuranceindex.info</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/CanineCC/CAI</RepositoryUrl>
+    <RepositoryUrl>https://github.com/code-assurance-initiative/CodeAssuranceIndex</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <!-- MUST match the repository LICENSE (Apache-2.0). A standard whose reference implementation carries
          contradictory licence metadata is not credibly open. -->

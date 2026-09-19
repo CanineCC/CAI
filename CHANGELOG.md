@@ -30,6 +30,17 @@ move a score for unchanged evidence mints a new rubric version (see
   7 days before proposing a newly published version; the a11y workflow runs on Node 22 rather than EOL Node 20.
 
 ### Changed
+- **The repository's canonical home is `code-assurance-initiative/CodeAssuranceIndex`.** The standard is moving to an
+  organisation held in its own name rather than the company's, ahead of the steering group being formed. Every
+  reference in this repository now points there: both packages' `RepositoryUrl`, the GitHub Packages source, the
+  issue and security-advisory links in `docs/CHALLENGE.md`, the systemd `Documentation=` lines, the deploy and
+  preprod runbooks, the architecture diagram, `/llms.txt`, the site footer and API-reference links, and the
+  changelog's own compare links. `CanineCC/kennel.canine.dev` references are unchanged — that repository is not
+  moving — as are the historical mentions of `CanineCC/RETIRED.watchdog.canine.dev`.
+
+  The new repository is a copy, not a transfer, so GitHub serves no redirect from the old URL. Until the old
+  repository is retired both exist; this one is the one to follow.
+
 - **Every production project groups its files by role** — `Domain/`, `Infrastructure/`, `Endpoints/`, `Pages/` —
   with the convention and what each project's shape claims written down in `docs/architecture.md`. Namespaces are
   declared explicitly and do not follow the folders, so this moved files and nothing else. `Cai.Web.Noise` was a
@@ -219,7 +230,8 @@ move a score for unchanged evidence mints a new rubric version (see
 - **The archive now serves only catalogs it can attest.** `RubricCatalogStore` enforces that a catalog's declared
   `rubricVersion` matches the directory it is published under; mismatched or unparseable catalogs are withheld from
   `Versions()`/`Get()` and reported by the new `UnattestedVersions()` so the gap is visible rather than silent.
-- **`Cai.Scoring` and `Cai.Delivery` are published to nuget.org at 0.1.3**, with GitHub Packages kept as a mirror.
+- **`Cai.Scoring` and `Cai.Delivery` gained a publish pipeline targeting nuget.org**, with GitHub Packages kept as a
+  mirror. NOTE, added later: the pipeline has never run and neither package is on either feed — see Unreleased.
   The shipped scorer was never actually public: consumers used `0.1.3-ws-e` vendored as a file, while the only
   published artifact was `0.1.0` on GitHub Packages — which requires a GitHub account even for public feeds, so
   "read our algorithm and check our number" was not true for an anonymous third party. `Cai.Delivery` had no publish
@@ -301,5 +313,5 @@ move a score for unchanged evidence mints a new rubric version (see
 - `cai.canine.dev`: the standard's UI, the rubric + scoring JSON API, an in-browser calculator, a
   public registry view, `/llms.txt`, and a schema.org JSON-LD glossary.
 
-[Unreleased]: https://github.com/CanineCC/CAI/compare/scoring-v0.1.0...HEAD
-[scoring-v0.1.0]: https://github.com/CanineCC/CAI/releases/tag/scoring-v0.1.0
+[Unreleased]: https://github.com/code-assurance-initiative/CodeAssuranceIndex/compare/scoring-v0.1.0...HEAD
+[scoring-v0.1.0]: https://github.com/code-assurance-initiative/CodeAssuranceIndex/releases/tag/scoring-v0.1.0

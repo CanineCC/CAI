@@ -43,7 +43,7 @@ Port 80 serves the ACME challenge + redirects to 443; port 443 terminates SSL an
 [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) — on push to `main`, a **self-hosted runner on wrx1**
 verifies the build + scorer tests, publishes to `/home/jimmy/apps/cai-web/app` (keeping `app.prev`), bounces the
 service, health-checks `127.0.0.1:8090/api/rubrics`, and rolls back on failure. **Requires a self-hosted Actions runner
-registered for `CanineCC/CAI` on wrx1** (register with a repo runner token, same as the watchdog/unfold runners).
+registered for `code-assurance-initiative/CodeAssuranceIndex` on wrx1** (register with a repo runner token, same as the watchdog/unfold runners).
 
 ## The domains
 

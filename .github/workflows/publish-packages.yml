@@ -107,7 +107,7 @@ jobs:
         run: |
           set -euo pipefail
           dotnet nuget push "nupkg/*.nupkg" \
-            --source "https://nuget.pkg.github.com/CanineCC/index.json" \
+            --source "https://nuget.pkg.github.com/code-assurance-initiative/index.json" \
             --api-key "$GH_PACKAGES_TOKEN" \
             --skip-duplicate
 

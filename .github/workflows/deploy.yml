@@ -4,7 +4,7 @@ name: Deploy codeassuranceindex.info
 # /home/jimmy/apps/cai-web, then bounces cai-web.service (~1s). VERIFY before stopping anything, so a broken build is a
 # safe no-op. SSL is terminated by nginx on canine-dgx1 (unchanged by a code deploy).
 #
-# Requires a self-hosted runner registered for CanineCC/CAI on canine-wrx1 (label: self-hosted). The systemd unit +
+# Requires a self-hosted runner registered for code-assurance-initiative/CodeAssuranceIndex on canine-wrx1 (label: self-hosted). The systemd unit +
 # nginx vhost live in deploy/ for reference.
 on:
   push:

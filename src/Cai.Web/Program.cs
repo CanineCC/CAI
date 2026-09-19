@@ -527,7 +527,7 @@ The score is deterministic: identical evidence under the same rubric version alw
 {lensLines}
 
 ## Licensing
-- Reference scorer (C#, evidence to CAI): Apache-2.0 at github.com/CanineCC/CAI.
+- Reference scorer (C#, evidence to CAI): Apache-2.0 at github.com/code-assurance-initiative/CodeAssuranceIndex.
 - Spec: versioned, CC-BY. Free to copy, protected to call it CAI — only spec-reproducible results may carry the CAI mark.
 
 ## Pages

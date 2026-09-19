@@ -60,7 +60,7 @@ confusion the separate key was minted to prevent, pointed the other way.
 Once, from anywhere — no LAN needed, the runner is on the box:
 
 ```bash
-gh workflow run "Deploy CAI to preprod" -R CanineCC/CAI -f provision=true
+gh workflow run "Deploy CAI to preprod" -R code-assurance-initiative/CodeAssuranceIndex -f provision=true
 ```
 
 Then point the kennel preprod tier at it. **On the box** (five seconds, and the path an on-prem

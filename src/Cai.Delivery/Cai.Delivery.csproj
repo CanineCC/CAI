@@ -21,7 +21,7 @@
     <Company>Canine Development</Company>
     <Description>The CAI-delivery package: sign, verify and build the signed (Ed25519), tamper-evident, portable CAI evidence artifact. Wraps a recomputed CAI verdict + its evidence bundle + provenance in a package codeassuranceindex.info signs and anyone can verify offline. Builds on Cai.Scoring for the deterministic recompute.</Description>
     <PackageProjectUrl>https://codeassuranceindex.info</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/CanineCC/CAI</RepositoryUrl>
+    <RepositoryUrl>https://github.com/code-assurance-initiative/CodeAssuranceIndex</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <!-- MUST match the repository LICENSE (Apache-2.0): a standard whose reference implementation carries
          contradictory licence metadata is not credibly open. -->

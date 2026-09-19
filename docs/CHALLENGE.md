@@ -14,9 +14,9 @@ falsifiable claim is one you can win an argument against with proof rather than 
 | You think… | That's a dispute about… | Where it goes | Who decides |
 |---|---|---|---|
 | "The number doesn't follow from the evidence." | the **arithmetic** of a published score | reproduce it yourself — [`/verify`](https://codeassuranceindex.info/verify) / `cai verify` | nobody — it's mechanical & falsifiable |
-| "The open scorer disagrees with the published spec." | a **reference-scorer bug** | an issue on [CanineCC/CAI](https://github.com/CanineCC/CAI/issues) | the standard's maintainers, in the open |
+| "The open scorer disagrees with the published spec." | a **reference-scorer bug** | an issue on [code-assurance-initiative/CodeAssuranceIndex](https://github.com/code-assurance-initiative/CodeAssuranceIndex/issues) | the standard's maintainers, in the open |
 | "This finding / deduction mis-measures my code." | a **measurement** in one signed survey | the **issuer** of that survey (e.g. [watchdog.canine.dev](https://watchdog.canine.dev)) | the named human who attested it |
-| "This dimension / weight / formula is unfair." | the **rubric or methodology** | an issue or PR on [CanineCC/CAI](https://github.com/CanineCC/CAI/issues) | the standard's maintainers → a *future* rubric version |
+| "This dimension / weight / formula is unfair." | the **rubric or methodology** | an issue or PR on [code-assurance-initiative/CodeAssuranceIndex](https://github.com/code-assurance-initiative/CodeAssuranceIndex/issues) | the standard's maintainers → a *future* rubric version |
 
 ## 1. "The number doesn't follow from the evidence." — reproduce it
 
@@ -45,7 +45,7 @@ produce exactly the number the [published algorithm](https://codeassuranceindex.
 bundle and get a headline the spec doesn't predict — a lens roll-up, an OWA weight, a critical-gate band, a rounding
 edge that disagrees with the written method — **that is a defect in the standard**, and we want it.
 
-Open an issue on [CanineCC/CAI](https://github.com/CanineCC/CAI/issues) with the **minimal evidence bundle that
+Open an issue on [code-assurance-initiative/CodeAssuranceIndex](https://github.com/code-assurance-initiative/CodeAssuranceIndex/issues) with the **minimal evidence bundle that
 reproduces it**, the rubric version, the number you got, and the number the spec implies. Because the fold is
 deterministic, a reproduction case is complete on its own — anyone can confirm it with `cai score`. Fixes to the scorer
 that change any published number are handled the same disciplined way as any rubric change (§4): the old versions stay
@@ -78,7 +78,7 @@ contributor that capped it ("gated by C1"), never hide behind an anonymous flag.
 If your quarrel is with the **method itself** — a dimension that shouldn't count, an OWA decay that punishes too hard, a
 formula that's volume-biased, a lens that's mis-weighted — then you're challenging the rubric, and that is a first-class,
 welcome contribution to an *open* standard. Open an issue or a PR on
-[CanineCC/CAI](https://github.com/CanineCC/CAI/issues) making the case, ideally with a reproduction bundle showing the
+[code-assurance-initiative/CodeAssuranceIndex](https://github.com/code-assurance-initiative/CodeAssuranceIndex/issues) making the case, ideally with a reproduction bundle showing the
 skew.
 
 Two properties of the standard make this safe to do and safe to accept:
@@ -108,5 +108,5 @@ is self-contained: a reproduction bundle is complete without us, which is the wh
 ## Reporting a security issue
 
 A vulnerability in the site or the reference implementation is not a scoring dispute — please report it privately via
-GitHub Security Advisories on [CanineCC/CAI](https://github.com/CanineCC/CAI/security/advisories/new) rather than a
+GitHub Security Advisories on [code-assurance-initiative/CodeAssuranceIndex](https://github.com/code-assurance-initiative/CodeAssuranceIndex/security/advisories/new) rather than a
 public issue, so it can be fixed before disclosure.

@@ -11,7 +11,7 @@
 # ★ SINGLE INSTANCE, no blue-green: preprod takes the continuous push stream and a two-second restart is not
 #   worth a colour swap. Mirrors kennel-*-preprod on 82x0.
 Description=CAI — PREPROD (the open standard, on its own database)
-Documentation=https://github.com/CanineCC/CAI
+Documentation=https://github.com/code-assurance-initiative/CodeAssuranceIndex
 After=network-online.target
 Wants=network-online.target
 

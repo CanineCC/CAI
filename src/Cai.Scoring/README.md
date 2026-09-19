@@ -30,4 +30,4 @@ The catalog is **required**, not a convenience: it pins the fold's constants and
 
 Deterministic, dependency-free, and auditable — the headline reconstructs from the lens contributions. See the spec at [codeassuranceindex.info/spec](https://codeassuranceindex.info/spec).
 
-Apache-2.0, matching the [repository licence](https://github.com/CanineCC/CAI/blob/main/LICENSE).
+Apache-2.0, matching the [repository licence](https://github.com/code-assurance-initiative/CodeAssuranceIndex/blob/main/LICENSE).

@@ -24,7 +24,7 @@ surveyor's product) is the defining boundary — see [ADR-0003](adr/0003-free-pa
 
 ```mermaid
 flowchart TD
-    subgraph repo["CanineCC/CAI"]
+    subgraph repo["code-assurance-initiative/CodeAssuranceIndex"]
         rubrics["rubrics/<br/>versioned, frozen catalogs"]
         scoring["src/Cai.Scoring<br/>(library) — deterministic OWA fold"]
         delivery["src/Cai.Delivery<br/>(library) — Ed25519 signed delivery package"]

@@ -33,6 +33,6 @@ That is not an omission. A payload on its own is not a document anyone publishes
 
 ## The sample
 
-[`examples/`](https://github.com/CanineCC/CAI/tree/main/examples) carries a signature-valid package and the public key set it verifies against, so you can check the format against a real artifact before minting your own.
+[`examples/`](https://github.com/code-assurance-initiative/CodeAssuranceIndex/tree/main/examples) carries a signature-valid package and the public key set it verifies against, so you can check the format against a real artifact before minting your own.
 
-Apache-2.0, matching the [repository licence](https://github.com/CanineCC/CAI/blob/main/LICENSE).
+Apache-2.0, matching the [repository licence](https://github.com/code-assurance-initiative/CodeAssuranceIndex/blob/main/LICENSE).
