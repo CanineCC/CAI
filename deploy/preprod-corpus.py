@@ -25,7 +25,7 @@ import pathlib
 import sys
 
 MANIFEST = pathlib.Path(sys.argv[1] if len(sys.argv) > 1
-                        else "src/Cai.Web/Noise/corpus/noise-corpus-1.0.json")
+                        else "src/Cai.Web.Noise/corpus/noise-corpus-1.0.json")
 
 PREPROD_KEY_ID = "cai-corpus-preprod"
 
