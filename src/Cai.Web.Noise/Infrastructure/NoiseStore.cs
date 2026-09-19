@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Cai.Web.Registry;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
@@ -501,11 +502,24 @@ internal sealed class SqliteNoiseStore : INoiseStore
     }
 
     /// <summary>Idempotent ALTER TABLE … ADD COLUMN, checked via PRAGMA table_info.</summary>
+    // ★★ DDL TAKES NO PARAMETERS. Not the table name, not the column, not the definition — the statement has to
+    //    be planned before a bound value could be known, so the safety here cannot come from binding. It comes
+    //    from the inputs being ours: every caller above passes a literal. These guards make that a property of
+    //    the METHOD rather than a habit of its callers. Identifiers are quoted the way SQLite quotes them, with
+    //    any embedded delimiter doubled; the column definition is syntax rather than a value, so it cannot be
+    //    quoted at all and is instead held to the narrow shape this file actually emits.
     private static void AddColumnIfMissing(SqliteConnection conn, string table, string column, string def)
     {
+        var quotedTable = QuoteIdentifier(table);
+        var quotedColumn = QuoteIdentifier(column);
+        if (!ColumnDefinition.IsMatch(def))
+        {
+            throw new ArgumentException($"unsupported column definition: '{def}'", nameof(def));
+        }
+
         using (var check = conn.CreateCommand())
         {
-            check.CommandText = $"PRAGMA table_info({table})";
+            check.CommandText = $"PRAGMA table_info({quotedTable})";
             using var reader = check.ExecuteReader();
             while (reader.Read())
             {
@@ -517,9 +531,25 @@ internal sealed class SqliteNoiseStore : INoiseStore
         }
 
         using var alter = conn.CreateCommand();
-        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {def}";
+        alter.CommandText = $"ALTER TABLE {quotedTable} ADD COLUMN {quotedColumn} {def}";
         alter.ExecuteNonQuery();
     }
+
+    /// <summary>A plain identifier, quoted as SQLite quotes one — embedded delimiters doubled, so a name can
+    /// never close its own quoting and be read on as statement structure.</summary>
+    private static string QuoteIdentifier(string identifier)
+    {
+        if (identifier.Length == 0 || !identifier.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
+        {
+            throw new ArgumentException($"not a plain SQL identifier: '{identifier}'", nameof(identifier));
+        }
+
+        return $"\"{identifier.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+    }
+
+    /// <summary>The column definitions this store migrates with: a type, its nullability, and a literal default.</summary>
+    private static readonly Regex ColumnDefinition = new(
+        @"^(TEXT|INTEGER|REAL|BLOB)( NOT)? NULL( DEFAULT (-?\d+(\.\d+)?|''))?$", RegexOptions.CultureInvariant);
 
     /// <inheritdoc />
     public bool TryRecordSubmission(

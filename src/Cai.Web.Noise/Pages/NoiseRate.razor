@@ -140,7 +140,7 @@
     {
         var e = offer.Evidence;
 
-        <h2>Should this finding have fired?</h2>
+        <h2 id="rate-question">Should this finding have fired?</h2>
 
         <div class="item">
             <p class="where">
@@ -180,7 +180,10 @@
                the answer — and a rater who scrolls looking for a submit button is a rater who leaves. *@
             <p class="hint">Pick one. It records straight away and hands you the next finding.</p>
 
-            <fieldset class="choices">
+            @* ★ NAMED BY THE QUESTION ITSELF, not by a legend of its own. The six buttons ARE the answer to the
+               h2 above them, so aria-labelledby points there: a screen reader announces the group as "Should this
+               finding have fired?", and the page does not grow a second caption saying the same thing twice. *@
+            <fieldset class="choices" aria-labelledby="rate-question">
                 @foreach (var verdict in Enum.GetValues<NoiseVerdict>())
                 {
                     <button class="choice" type="submit" name="Verdict" value="@verdict.Wire()">

@@ -84,6 +84,27 @@ rubrics/  examples/  schemas/  docs/  deploy/    data, samples, schema, docs, op
 All projects are referenced by one solution file, `Cai.slnx`, so Roslyn-based tooling loads the whole
 graph ([ADR-0007](adr/0007-repository-solution-file.md)).
 
+### Layers inside a project
+
+Each production project groups its files by **role**, in folders that say which layer a file belongs to.
+Namespaces are declared explicitly and do not follow the folders, so these are labels for readers and
+tools, not part of the API:
+
+| Folder | What lives there |
+|--------|------------------|
+| `Domain/` | The rules and the model. Pure: no I/O, no clock, no ambient state. |
+| `Infrastructure/` | The edges that touch something outside the process — SQLite, the file system, embedded resources, configuration binding, authentication handlers. |
+| `Endpoints/` | The HTTP surface a host maps in, and the health checks it exposes. |
+| `Pages/` | Blazor static-SSR components. |
+
+The shape of a project is therefore readable from its folders. `Cai.Delivery` has only `Domain/`, which
+is a claim, not an accident: signing and verifying a delivery touch nothing outside themselves, which is
+what lets a consumer verify one offline. `Cai.Scoring` has a `Domain/` of eleven files and an
+`Infrastructure/` of one — `RubricCatalogStore`, the only thing in the fold's project that reads a disk —
+which is [ADR-0002](adr/0002-deterministic-reproducible-scoring.md)'s determinism claim, visible in the
+tree. `Cai.Web.Noise` is mostly `Domain/`: the Noise Standard is a set of rules, and its store and its
+endpoints are how those rules are reached, not what they are.
+
 ## Runtime & deployment
 
 `Cai.Web` runs as a single systemd service (`cai-web.service`) on a self-hosted host, behind nginx
