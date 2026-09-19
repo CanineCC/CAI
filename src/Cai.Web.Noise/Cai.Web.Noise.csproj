@@ -43,9 +43,12 @@
     <EmbeddedResource Include="corpus\*.pub.pem" LogicalName="Cai.Web.Noise.corpus.%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
-    <!-- Direct override: Microsoft.Data.Sqlite 10.0.9 pulls bundle 2.1.11, whose native e_sqlite3 has a known high
-         vulnerability (NU1903 / GHSA-2m69-gcr7-jv3q); 3.x carries the patched SQLite. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <!-- Direct override, kept deliberately. It was added because Microsoft.Data.Sqlite 10.0.9 pulled bundle 2.1.11,
+         whose native e_sqlite3 carried a known high vulnerability (NU1903 / GHSA-2m69-gcr7-jv3q). 10.0.12 now pulls
+         2.1.12, which is patched — restoring without this pin is clean — so the override is no longer load-bearing
+         for that advisory; it holds the newer 3.x native SQLite instead. Drop it if you would rather track whatever
+         Microsoft.Data.Sqlite ships. -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
   </ItemGroup>
 </Project>
